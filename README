@@ -10,3 +10,14 @@ use scapy, because it's fun ?
 use python.
 
 http://www.hsc.fr/ressources/outils/passe-partout/index.html.fr
+
+
+Bringing volatility to Linux
+http://dfsforensics.blogspot.com/2011/03/bringing-linux-support-to-volatility.html
+
+Extracting truecrypt keys from memory
+http://jessekornblum.com/tools/volatility/cryptoscan.py
+
+python-ptrace ( hey, haypo again)
+https://bitbucket.org/haypo/python-ptrace/wiki/Home
+https://bitbucket.org/haypo/python-ptrace/wiki/Documentation
