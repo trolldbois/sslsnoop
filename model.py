@@ -7,8 +7,42 @@
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
 import ctypes
+from ptrace.debugger.memory_mapping import readProcessMappings
 import logging
 log=logging.getLogger('model')
+
+
+''' returns if the address of the struct is in the mapping area
+'''
+def is_valid_address(obj,mappings):
+  '''static int is_valid_address(unsigned long addr, mappings_t *mappings) {'''
+  # check for null pointers
+  addr=getaddress(obj)
+  if addr == 0:
+    return False
+  for m in mappings:
+    if addr in m:
+      return True
+  return False
+
+''' returns the address of the struct
+'''
+def getaddress(obj):
+  # check for null pointers
+  if bool(obj):
+    return ctypes.addressof(obj.contents)
+  else:
+    return 0  
+
+def sstr(obj):
+  print obj, ctypes.addressof(obj),
+  if bool(obj):
+    print obj.contents
+    return str(obj.contents)
+  else:
+    print None
+    return "NULL"
+
 
 class mapping:
   '''  struct _mapping *next;
@@ -45,12 +79,31 @@ class BIGNUM(ctypes.Structure):
   ('neg',ctypes.c_int),
   ('flags',ctypes.c_int)
   ]
-  def isValid(self):
+  def loadMembers(self,process):
+    ''' 
+    isValid() should have been tested before, otherwise.. it's gonna fail...
+    we copy memory from process for each pointer
+    and assign it to a python object _here, then we assign 
+    the member to be a pointer to _here'''
+    # Load and memcopy d / BN_ULONG *
+    attr_obj_address=getaddress(self.d)
+    #print self
+    self._d = process.readArray(attr_obj_address, ctypes.c_ulong, self.top) 
+    ## or    
+    #ulong_array= (ctypes.c_ulong * self.top)
+    #self._d = process.readStruct(attr_obj_address, ulong_array) 
+    self.d  = ctypes.cast(ctypes.pointer( self._d ), ctypes.POINTER(ctypes.c_ulong))
+    return True
+  
+  def isValid(self,mappings):
     if ( self.dmax < 0 or self.top < 0 or self.dmax < self.top ):
       return False
     if ( not (self.neg == 1 or self.neg == 0 ) ) :
       return False 
-    return True
+    #last test on memory address
+    return is_valid_address( self.d, mappings)
+    #return True
+  
   def __str__(self):
     if self.d:
       d=ctypes.addressof(self.d.contents)
@@ -84,35 +137,6 @@ class BN_MONT_CTX(ctypes.Structure):
   ("flags",ctypes.c_int)]
 
 
-''' returns 0 if the address seems to be valid
-          -1 else.
-'''
-def is_valid_address(obj,mappings):
-  '''static int is_valid_address(unsigned long addr, mappings_t *mappings) {'''
-  # check for null pointers
-  if bool(obj):
-    addr=ctypes.addressof(obj.contents)
-    #log.debug("addr: 0x%lx"%addr)
-    for m in mappings:
-      #log.debug(m)
-      if addr in m:
-        return True
-  return False
-
-def getaddress(obj):
-  if bool(obj):
-    return ctypes.addressof(obj.contents)
-  else:
-    return 0  
-
-def sstr(obj):
-  print obj, ctypes.addressof(obj),
-  if bool(obj):
-    print obj.contents
-    return str(obj.contents)
-  else:
-    print None
-    return "NULL"
 #KO
 class RSA(ctypes.Structure):
   _fields_ = [
@@ -148,12 +172,46 @@ class RSA(ctypes.Structure):
     log.debug(is_valid_address( self.dmp1, mappings) ) 
     log.debug(is_valid_address( self.dmq1, mappings) )
     log.debug(is_valid_address( self.iqmp, mappings) )
+    return
+  def loadMembers(self,process):
+    ''' 
+    isValid() should have been tested before, otherwise.. it's gonna fail...
+    we copy memory from process for each pointer
+    and assign it to a python object _here, then we assign 
+    the member to be a pointer to _here'''
+    # BIGNUMS
+    for attrname in ['n','e','d','p','q','dmp1','dmq1','iqmp']:
+      attr=getattr(self,attrname)
+      _attrname='_'+attrname
+      attr_obj_address=getaddress(attr)
+      #log.debug('getaddress(self.%s) 0x%lx'%(attrname, attr_obj_address) )
+      #save ref to keep mem alloc
+      setattr(self, _attrname, process.readStruct(attr_obj_address,BIGNUM) )
+      #save NB pointer to it's place
+      setattr(self, attrname, ctypes.pointer( getattr(self, _attrname) ) )
+      #### load inner structures pointers
+      attr=getattr(self,attrname)
+      mappings= readProcessMappings(process)
+      if not ( attr and attr.contents.isValid(mappings) ):
+        log.debug('BN %s is invalid: %s'%(attrname,attr))
+        return False
+      # go and load
+      attr.contents.loadMembers(process)
+    # XXXX clean other structs
+    self.meth=None
+    self._method_mod_n = None
+    self._method_mod_p = None
+    self._method_mod_q = None
+    self.bignum_data = None
+    self.blinding = None
+    return True
+    
   def isValid(self,mappings):
     ''' struct is valid when :
     '''
     return (self.pad ==0 and self.version ==0 and
           (0 <= self.references <= 0xfff)  and
-        is_valid_address( self.n, mappings)    and
+        is_valid_address( self.n, mappings)    and 
         is_valid_address( self.e, mappings)    and
         is_valid_address( self.d, mappings)    and
         is_valid_address( self.p, mappings)    and
@@ -165,8 +223,8 @@ class RSA(ctypes.Structure):
     s=repr(self)+'\n'
     for field,typ in self._fields_:
       if typ != ctypes.c_char_p and typ != ctypes.c_int and typ != CRYPTO_EX_DATA:
-        #s+='%s: 0x%lx\n'%(field, getaddress(getattr(self,field)) )  
-        s+='%s: %s\n'%(field, sstr(getattr(self,field)) )  
+        s+='%s: 0x%lx\n'%(field, getaddress(getattr(self,field)) )  
+        #s+='%s: %s\n'%(field, sstr(getattr(self,field)) )  
       else:
         s+='%s: %s\n'%(field,getattr(self,field) )  
     return s
@@ -191,6 +249,36 @@ class DSA(ctypes.Structure):
   ("meth",ctypes.POINTER(BIGNUM)),#  const DSA_METHOD *meth;
   ("engine",ctypes.POINTER(BIGNUM))#ENGINE *engine;
   ]
+  def loadMembers(self,process):
+    ''' 
+    isValid() should have been tested before, otherwise.. it's gonna fail...
+    we copy memory from process for each pointer
+    and assign it to a python object _here, then we assign 
+    the member to be a pointer to _here'''
+    # BIGNUMS
+    for attrname in ['p','q','g','pub_key','priv_key','kinv','r']:
+      attr=getattr(self,attrname)
+      _attrname='_'+attrname
+      attr_obj_address=getaddress(attr)
+      #log.debug('getaddress(self.%s) 0x%lx'%(attrname, attr_obj_address) )
+      #save ref to keep mem alloc
+      setattr(self, _attrname, process.readStruct(attr_obj_address,BIGNUM) )
+      #save NB pointer to it's place
+      setattr(self, attrname, ctypes.pointer( getattr(self, _attrname) ) )
+      #### load inner structures pointers
+      attr=getattr(self,attrname)
+      mappings= readProcessMappings(process)
+      if not ( attr and attr.contents.isValid(mappings) ):
+        log.warning('BN %s is invalid: %s'%(attrname,attr))
+        return False
+      # go and load
+      attr.contents.loadMembers(process)
+    # XXXX clean other structs
+    self.meth=None
+    self._method_mod_p = None
+    self.engine = None
+    return True
+    
   def isValid(self,mappings):
     return (
         self.pad ==0 and self.version ==0 and
@@ -207,6 +295,7 @@ class DSA(ctypes.Structure):
     for field,typ in self._fields_:
       if typ != ctypes.c_char_p and typ != ctypes.c_int and type != CRYPTO_EX_DATA:
         s+='%s: 0x%lx\n'%(field, getaddress(getattr(self,field)) )  
+        #s+='%s: %s\n'%(field, sstr(getattr(self,field)) )  
       else:
         s+='%s: %s\n'%(field,getattr(self,field) )        
     return s

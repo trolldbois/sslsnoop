@@ -28,11 +28,8 @@ if process is None:
   sys.exit(-1)
 
 maps=readProcessMappings(process)
-
-
 stack=process.findStack()
 
-#abouchet.find_keys(process,stack)
 
 
 addr=0xb93234e8
@@ -51,6 +48,8 @@ def readRsa(addr):
   #print rsa.n
   #print rsa.n.contents
   #print ctypes.byref(rsa.n.contents)
+  #print rsa
+  rsa.loadMembers(process)
   return rsa
 
 
@@ -61,11 +60,12 @@ def writeWithLib(addr):
   # need original data struct
   #rsa=process.readBytes(addr, ctypes.sizeof(model.RSA) )
   #rsa=ctypes.addressof(process.readStruct(addr,model.RSA))
-  rsa=addr
-  print 'rsa acquired'
+  rsa=readRsa(addr)
+  rsa_p=ctypes.addressof(rsa)
+  print 'rsa acquired 0x%lx copied to 0x%lx'%(addr,rsa_p)
   f=libc.fopen("test.out","w")
   print 'file opened',f  
-  ret=ssl.PEM_write_RSAPrivateKey(f, rsa, None, None, 0, None, None)
+  ret=ssl.PEM_write_RSAPrivateKey(f, rsa_p, None, None, 0, None, None)
   print 'key written'  
   print ret,f
 
@@ -79,5 +79,9 @@ def withM2(addr):
   myrsa=mRSA.load_key_bio(bio)
   return myrsa
 
-rsa=readRsa(addr)
-print rsa
+#rsa=readRsa(addr)
+
+writeWithLib(addr)
+print '---------------'
+abouchet.find_keys(process,stack)
+
