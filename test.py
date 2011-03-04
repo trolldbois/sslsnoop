@@ -20,7 +20,7 @@ def printBytes(data):
     print "0x%lx"%data[i],
     
 
-pid=8902
+pid=19002
 dbg=PtraceDebugger()
 process=dbg.addProcess(pid,is_attached=False)
 if process is None:
@@ -32,15 +32,52 @@ maps=readProcessMappings(process)
 
 stack=process.findStack()
 
-abouchet.find_keys(process,stack)
-
-addr=0xb8da74e8
-rsa=process.readStruct(addr,model.RSA)
-
-data=process.readBytes(addr,ctypes.sizeof(model.RSA))
-
-#print rsa
-#print hex(data)
-#printBytes(data)
+#abouchet.find_keys(process,stack)
 
 
+addr=0xb93234e8
+
+def dbg_read(addr):
+  from ptrace.cpu_info import CPU_64BITS, CPU_WORD_SIZE, CPU_POWERPC
+  for a in range(addr,addr+88,CPU_WORD_SIZE):
+    print "0x%lx"%process.readWord(a)
+
+
+def readRsa(addr):
+  rsa=process.readStruct(addr,model.RSA)
+  print "isValid : ", rsa.isValid(maps)
+  #rsa.printValid(maps)
+  #print rsa
+  #print rsa.n
+  #print rsa.n.contents
+  #print ctypes.byref(rsa.n.contents)
+  return rsa
+
+
+def writeWithLib(addr):
+  from ctypes import *
+  from ptrace.ctypes_libc import libc
+  ssl=cdll.LoadLibrary("libssl.so")
+  # need original data struct
+  #rsa=process.readBytes(addr, ctypes.sizeof(model.RSA) )
+  #rsa=ctypes.addressof(process.readStruct(addr,model.RSA))
+  rsa=addr
+  print 'rsa acquired'
+  f=libc.fopen("test.out","w")
+  print 'file opened',f  
+  ret=ssl.PEM_write_RSAPrivateKey(f, rsa, None, None, 0, None, None)
+  print 'key written'  
+  print ret,f
+
+def withM2(addr):
+  import M2Crypto
+  from M2Crypto.BIO import MemoryBuffer
+  from M2Crypto import RSA as mRSA
+  rsa=process.readBytes(addr, ctypes.sizeof(model.RSA) )
+  bio=MemoryBuffer(rsa)
+  # tsssi need PEM
+  myrsa=mRSA.load_key_bio(bio)
+  return myrsa
+
+rsa=readRsa(addr)
+print rsa

@@ -10,7 +10,7 @@ import os,logging,sys
 #use volatility?
 
 import model
-from  model import DSA,RSA
+#from  model import DSA,RSA
 import ctypes
 
 # linux only
@@ -37,18 +37,7 @@ static void *extract_from_mem(void *addr, unsigned int size, proc_t *proc) {
   return map->data + off;
 }
 
-static int is_valid_BN(BIGNUM *bn) {
-    
-    printf("BN { d=%p, top=%i, dmax=%i, neg=%i, flags=%i }\n",
-    bn->d, bn->top, bn->dmax, bn->neg, bn->flags);
-    if ( bn->dmax < 0 || bn->top < 0 || bn->dmax < bn->top )
-        return -1;
 
-    if ( !(bn->neg == 1 || bn->neg == 0 ) ) {
-        return -1;
-    }
-    return 0;
-}
 /*
    struct bignum_st
    {
@@ -63,111 +52,28 @@ static int is_valid_BN(BIGNUM *bn) {
    Extract a BIGNUM structure from memory.
    Set error to 1 if an error occured, else set it to 0.
    */
+'''
 
-BIGNUM * BN_extract_from_mem(void * bn_addr, proc_t * proc, int * error) {
-  BIGNUM *bn_tmp;
+def BN_extract_from_mem(bn_addr, process):
+  '''BIGNUM * BN_extract_from_mem(void * bn_addr, proc_t * proc, int * error) {'''
 
-  *error = 0;
-//printf("=a= %p\n", bn_addr);
-  bn_tmp = extract_from_mem( bn_addr, sizeof(BIGNUM), proc);
-  if (!bn_tmp) {
-//printf("=z=\n");
-    *error = 1;
-    return NULL;
-  }
-  BIGNUM *bn = malloc(sizeof(BIGNUM));
-  if ( bn == NULL ) {
-    exit(EXIT_FAILURE);
-  }
-  memcpy(bn, bn_tmp, sizeof(BIGNUM));
-  /* tests heuristiques */
-  if ( is_valid_BN(bn) == -1 ) { 
-      *error = 1;
-      free(bn);
-      return NULL;
-  }
+  # extract_from_mem == get bn_addr and MemoryMapping from the process mappings.
+  # puis on alloc et on memcopy
+  
+  # on remplace tout ca par un process.readXXXX(addr)
+  bn = process.readStruct(addr,model.BIGNUM)
 
-//printf("=b=\n");
-  bn->d = extract_from_mem( bn->d, bn->top * sizeof(BN_ULONG), proc);
-  if (!bn->d) {
-    *error = 1;
-    free(bn);
-    return NULL;
-  }
-//printf("=c=\n");
-  return bn;
-}
-/* }}} */
+  if ( not bn.isValid() ): 
+    log.warning('BN non valide')
+    return None
 
-/* key saving {{{ */
-
-/* returns 0 if file does not exist
-           1 if file exists */
-static int file_exists(char *filename) {
-    struct stat stat_st;
-    return !stat(filename, &stat_st);
-}
-
-char * get_valid_filename(char *string) {
-    int i = 0 ;
-    char filename[128] ;
-    sprintf(filename, "%s-%d.key", string, i);
-    while ( file_exists(filename) && i < MAX_KEYS ) {
-        i++;
-        sprintf(filename, "%s-%d.key", string, i);
-    } 
-    if ( i >= MAX_KEYS )
-        return NULL ;
-    
-    
-    return strdup(filename);
-}
-
-int write_rsa_key(RSA * rsa, char *prefix) {
-
-    char *filename = get_valid_filename(prefix) ;
-    
-    FILE *f = fopen(filename, "w");
-    if ( f == NULL ) {
-        perror("fopen");
-        return -1;
-    }
-    if ( ! PEM_write_RSAPrivateKey(f, rsa, NULL,
-            NULL, 0, NULL, NULL) ) {
-        fprintf(stderr, "Error saving key to file %s\n", filename);
-        return -1;
-    }
-    fclose(f);
-    printf("[X] Key saved to file %s\n", filename);
-    free(filename);
-    return 0;
-}
+  print bn
+  #bn.d = extract_from_mem( bn->d, bn->top * sizeof(BN_ULONG), proc);
+  ## arg 2 n'est meme pas utilise ....
+  return bn
 
 
-int write_dsa_key(DSA * dsa, char *prefix) {
-
-    char *filename = get_valid_filename(prefix) ;
-    
-    FILE *f = fopen(filename, "w");
-    if ( f == NULL ) {
-        perror("fopen");
-        return -1;
-    }
-    if ( ! PEM_write_DSAPrivateKey(f, dsa, NULL,
-            NULL, 0, NULL, NULL) ) {
-        fprintf(stderr, "Error saving key to file %s\n", filename);
-        return -1;
-    }
-    fclose(f);
-    printf("[X] Key saved to file %s\n", filename);
-    free(filename);
-    return 0;
-}
-
-
-/* key saving }}} */
-
-/* key extraction {{{ */
+'''
 
 int extract_rsa_key(RSA *rsa, proc_t *p) {
 
@@ -311,17 +217,68 @@ int extract_dsa_key( DSA * dsa, proc_t *p ) {
   return 0;
 
 '''
+
+
+
+
 def extract_rsa_key(rsa):
   return ""
 def extract_dsa_key(dsa):
   return ""
 
+
+def get_valid_filename(prefix):
+  filename_FMT="%s-%d.key"
+  for i in range(1,MAX_KEYS):
+    filename=filename_FMT%(prefix,i)
+    if not os.access(filename,os.F_OK):
+      return filename
+  #
+  log.error("Too many file keys extracted in current directory")
+  return None
+
+#ko
 def write_rsa_key(rsa,suffix):
-  return ""
+  filename=get_valid_filename(prefix)
+  #f=open(filename,"w")    
+  from ctypes import *
+  from ptrace.ctypes_libc import libc
+  ssl=cdll.LoadLibrary("libssl.so")
+  # need original data struct
+  #rsa=process.readBytes(addr, ctypes.sizeof(model.RSA) )
+  #rsa=ctypes.addressof(process.readStruct(addr,model.RSA))
+  rsa=addr
+  print 'rsa acquired'
+  f=libc.fopen(filename,"w")
+  print 'file opened',f  
+  ret=ssl.PEM_write_RSAPrivateKey(f, rsa, None, None, 0, None, None)
+  if ret:
+    log.error("Error saving key to file %s"% filename)
+    return False
+  print ("[X] Key saved to file %s"%filename)
+  return True
+
+#ko
 def write_dsa_key(dsa,suffix):
-  return ""
-
-
+  filename=get_valid_filename(prefix)
+  #f=open(filename,"w")    
+  from ctypes import *
+  from ptrace.ctypes_libc import libc
+  ssl=cdll.LoadLibrary("libssl.so")
+  # need original data struct
+  #dsa=process.readBytes(addr, ctypes.sizeof(model.DSA) )
+  #dsa=ctypes.addressof(process.readStruct(addr,model.DSA))
+  dsa=addr
+  print 'dsa acquired'
+  f=libc.fopen(filename,"w")
+  print 'file opened',f  
+  ret=ssl.PEM_write_DSAPrivateKey(f, dsa, None, None, 0, None, None)
+  if ret:
+    log.error("Error saving key to file %s"% filename)
+    return False
+  print ("[X] Key saved to file %s"%filename)
+  return True
+  
 def find_keys(process,stackmap):
 
   mappings= readProcessMappings(process)
