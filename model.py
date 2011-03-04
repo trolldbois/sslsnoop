@@ -107,8 +107,10 @@ class RSA(ctypes.Structure):
 	("mt_blinding",ctypes.POINTER(BIGNUM))#BN_BLINDING *mt_blinding;
 	]
   def isValid(self,mappings):
-    return (self.pad and self.version and
-        	(self.references < 0) and (self.references > 0xff)  and
+    ''' struct is valid when :
+    '''
+    return (self.pad ==0 and self.version ==0 and
+        	(self.references == 0)  and
         is_valid_address( ctypes.addressof(self.n), mappings)    and
         is_valid_address( ctypes.addressof(self.e), mappings)    and
         is_valid_address( ctypes.addressof(self.d), mappings)    and
@@ -117,7 +119,16 @@ class RSA(ctypes.Structure):
         is_valid_address( ctypes.addressof(self.dmp1), mappings) and
         is_valid_address( ctypes.addressof(self.dmq1), mappings) and
         is_valid_address( ctypes.addressof(self.iqmp), mappings)  )
-
+  def __str__(self):
+    s=repr(self)+'\n'
+    for field,typ in self._fields_:
+      if typ != ctypes.c_char_p and typ != ctypes.c_int:
+        s+='%s: 0x%lx\n'%(field,ctypes.addressof(getattr(self,field)) )  
+      else:
+        s+='%s: %s\n'%(field,getattr(self,field) )  
+      
+    return s
+    
 #KO
 class DSA(ctypes.Structure):
   _fields_ = [

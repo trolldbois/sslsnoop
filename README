@@ -21,3 +21,21 @@ http://jessekornblum.com/tools/volatility/cryptoscan.py
 python-ptrace ( hey, haypo again)
 https://bitbucket.org/haypo/python-ptrace/wiki/Home
 https://bitbucket.org/haypo/python-ptrace/wiki/Documentation
+
+from ptrace.debugger.memory_mapping import readProcessMappings
+
+
+
+dbg_init(
+dbg_attach
+if (from) {
+	if ( dbg_get_memory(&p) )
+		err(&p, "unable to fetch memory for process %d", pid);
+	map = dbg_map_lookup_by_address(&p, from, &off_start);
+	if (!map)
+		err(&p, "0x%lx not mapped into process %i", from, pid);
+	if (to) {
+		map2 = dbg_map_lookup_by_address(&p, to, &off_end);
+
+dbg_map_cache
+

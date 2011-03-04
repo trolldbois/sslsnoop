@@ -9,9 +9,9 @@ __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 import os,logging,sys
 #use volatility?
 
-import model 
+import model
+from  model import DSA,RSA
 import ctypes
-from ctypes import memmove,byref
 
 # linux only
 from ptrace.debugger.debugger import PtraceDebugger
@@ -327,8 +327,8 @@ def find_keys(process,stackmap):
   mappings= readProcessMappings(process)
   log.info("scanning 0x%lx --> 0x%lx %s"%(stackmap.start,stackmap.end,stackmap.pathname) )
   #openssl=cdll.LoadLibrary("libssl.so")
-  rsa=model.RSA()
-  dsa=model.DSA()
+  #rsa=model.RSA()
+  #dsa=model.DSA()
   
   ## stackmap.search(bytestr) // won't cut it.
   ## process.readBytes() is ok
@@ -343,16 +343,15 @@ def find_keys(process,stackmap):
   ## todo change 4 by len char *
   ##if ( j <= map->size - sizeof(RSA) ) {
   plen=ctypes.sizeof(ctypes.c_char_p)
-  rsalen=ctypes.sizeof(rsa)
-  dsalen=ctypes.sizeof(dsa)
+  rsalen=ctypes.sizeof(model.RSA)
+  dsalen=ctypes.sizeof(model.DSA)
   # parse for rsa
   for j in range(stackmap.start, stackmap.end-rsalen, plen):
-    log.debug("checking 0x%lx"% j)
-    log.debug("coping 0x%lx to 0x%lx for %d bytes"% (j,ctypes.addressof(rsa),rsalen))
-    ctypes.memmove(ctypes.addressof(rsa),j,rsalen)
-    log.debug("copied 0x%lx to 0x%lx for %d bytes"% (j,ctypes.addressof(rsa),rsalen))
+    #log.debug("checking 0x%lx"% j)
+    rsa=process.readStruct(j,model.RSA)
     # check if data matches
     if rsa.isValid(mappings): # refreshing would be better
+      log.info('Found valid rsa at 0x%lx'%(j))
       data=extract_rsa_key(rsa)
       if ( data is not None):
         print "found RSA key @ 0x%lx"%(j)
@@ -361,12 +360,11 @@ def find_keys(process,stackmap):
 
   #do the same with dsa
   for j in range(stackmap.start, stackmap.end-dsalen, plen):
-    log.debug("checking 0x%lx"% j)
-    log.debug("coping 0x%lx to 0x%lx for %d bytes"% (j,ctypes.addressof(dsa),dsalen))
-    ctypes.memmove(ctypes.addressof(dsa),j,dsalen)
-    log.debug("copied 0x%lx to 0x%lx for %d bytes"% (j,ctypes.addressof(dsa),dsalen))
+    #log.debug("checking 0x%lx"% j)
+    dsa=process.readStruct(j,model.DSA)
     # check if data matches
     if dsa.isValid(mappings): # refreshing would be better
+      log.info('Found valid dsa at 0x%lx'%(j))
       data=extract_dsa_key(dsa)
       if ( data is not None):
         print "found DSA key @ 0x%lx"%(j)

@@ -15,6 +15,13 @@ from model import mapping,proc
 # this use /proc/<pid>/maps + ptrace(2)
 
 # linux only
+from ptrace.debugger.debugger import PtraceDebugger
+from ptrace.debugger.memory_mapping import readProcessMappings
+
+dbg=PtraceDebugger()
+process=dbg.addProcess(8902,is_attached=False)
+maps=readProcessMappings(process)
+
 def getProcMaps():
    return "/proc/%s/maps"
 
@@ -34,62 +41,6 @@ MAX_USER_PTR=0xc0000000
 
 dbg_verbose = 0
 
-'''parse maps {{{ '''
-def parse_line(line):
-  '''static mapping_t *parse_line(char *str)'''
-  '''
-  755e000-b755f000 rw-p 00000000 00:00 0 
-  b755f000-b7572000 r-xp 00000000 08:04 7733442   /lib/libz.so.1.2.3.4
-  b7572000-b7573000 r--p 00012000 08:04 7733442   /lib/libz.so.1.2.3.4
-  '''
-  #end = strchr(line, '\n');  if (end)    *end = 0;
-  line=line.strip('\n')
-
-  #parse mapping name
-  line=line.split()
-  if len(line) < 5 or len(line) > 6:
-    log.error("invalid mapping line: %s"%line)
-    return None
-  elif len(line) == 5:
-    myfile="anonymous"
-  elif len(line) == 6:
-    myfile=line[5]
-
-  # parse start address 
-  addresses=line[0].split('-')
-  if len(addresses) != 2:
-    log.error("invalid addresses : %s"%(line))
-    return None
-  start=int(addresses[0],16)
-  end  =int(addresses[1],16)
-
-  if ((start < MIN_USER_PTR) or (start & 0xfff)) :
-    log.error("invalid mapping start address 0x%lx"%(start));
-    return None
-  if ((end < MIN_USER_PTR) or (end & 0xfff)) :
-    log.error("invalid mapping end address 0x%lx"%(end));
-    return None
-  #flags
-  strflags=[1]
-  if len(strflags) != 4:
-    log.error("invalid flags len %s"%strflags)
-    return None
-  flags=0
-
-  if (strflags[0] == 'r'):
-    flags |= DBGMAP_READ
-  if (strflags[1] == 'w'):
-    flags |= DBGMAP_WRITE
-  if (strflags[2] == 'x'):
-    flags |= DBGMAP_EXEC
-  if (strflags[3] == 's'):
-    flags |= DBGMAP_SHARED
-  print "=> 0x%lx 0x%lx %s"%( start, end, ' '.join(line[2:5]) )
-
-  mymap=mapping(start,end-start,flags,myfile)
-  log.debug(">\t%24s 0x%lx 0x%x"%( myfile, mymap.address, mymap.size) )
-  
-  return mymap
 
 
 def parse_maps(proc):
@@ -206,10 +157,6 @@ int dbg_init(proc_t *p, pid_t pid)
   if (!pid || (pid == getpid()) || (pid == getppid()))
     return DBGERR_BAD_PID;
   
-  memset(p, 0, sizeof(*p));
-  p->pid  = pid;
-  snprintf(p->pid_str, 8, "%u", pid);
-  ptraced_proc = p;
 
   ret = parse_maps(p);
   if (ret) {
