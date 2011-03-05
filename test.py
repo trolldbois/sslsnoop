@@ -59,20 +59,20 @@ def readRsa(addr):
 def readDsa(addr):
   dsa=process.readStruct(addr,model.DSA)
   print "isValid : ", dsa.isValid(maps)
-  dsa.printValid(maps)
-  print 'DSA1 -> ', dsa
-  print '------------'
-  print 'DSA1.q -> ', dsa.q
+  #dsa.printValid(maps)
+  #print 'DSA1 -> ', dsa
+  #print '------------'
+  #print 'DSA1.q -> ', dsa.q
   #print '------------ === '
   dsa.loadMembers(process)
   #print '------------  ===== ==== '
-  print 'DSA2.q -> ', dsa.q
-  print 'DSA2.q.contents -> ', dsa.q.contents
+  #print 'DSA2.q -> ', dsa.q
+  #print 'DSA2.q.contents -> ', dsa.q.contents
   #print ctypes.byref(rsa.n.contents)
   #print dsa
   return dsa
 
-def writeWithLib(addr):
+def writeWithLibRSA(addr):
   ssl=cdll.LoadLibrary("libssl.so")
   # need original data struct
   #rsa=process.readBytes(addr, ctypes.sizeof(model.RSA) )
@@ -83,6 +83,17 @@ def writeWithLib(addr):
   f=libc.fopen("test.out","w")
   print 'file opened',f  
   ret=ssl.PEM_write_RSAPrivateKey(f, rsa_p, None, None, 0, None, None)
+  print 'key written'  
+  print ret,f
+
+def writeWithLibDSA(addr):
+  ssl=cdll.LoadLibrary("libssl.so")
+  dsa=readDsa(addr)
+  dsa_p=ctypes.addressof(dsa)
+  print 'dsa acquired 0x%lx copied to 0x%lx'%(addr,dsa_p)
+  f=libc.fopen("test.out","w")
+  print 'file opened',f  
+  ret=ssl.PEM_write_DSAPrivateKey(f, dsa_p, None, None, 0, None, None)
   print 'key written'  
   print ret,f
 
@@ -98,9 +109,12 @@ def withM2(addr):
 
 #rsa=readRsa(addr)
 
-#writeWithLib(addr)
+#writeWithLibRSA(addr)
 #print '---------------'
 #abouchet.find_keys(process,stack)
 
-dsa=readDsa(addr)
+#dsa=readDsa(addr)
+writeWithLibDSA(addr)
+
+
 

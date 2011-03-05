@@ -41,11 +41,11 @@ def getaddress(obj):
 def sstr(obj):
   #print obj, ctypes.addressof(obj),
   if bool(obj):
-    #print obj.contents
+    #print 'obj.contents ',type(obj.contents)
     return str(obj.contents)
   else:
-    print None
-    return "NULL"
+    #print 'sstr: None'
+    return "0x0"
 
 
 class mapping:
@@ -114,7 +114,7 @@ class BIGNUM(ctypes.Structure):
   
   def __str__(self):
     #print 'coucou',repr(self)
-    #return repr(self)
+    return repr(self)
     #print self.d
     #print 'add',ctypes.addressof(self.d)
     #print 'addc',ctypes.addressof(self.d.contents)
@@ -288,39 +288,52 @@ class DSA(ctypes.Structure):
     the member to be a pointer to _here'''
     # BIGNUMS
     #print 'dsa.loadMember()'
+    mappings= readProcessMappings(process)
     for attrname in ['p','q','g','pub_key','priv_key','kinv','r']:
-      mappings= readProcessMappings(process)
 
       attr=getattr(self,attrname)
       _attrname='_'+attrname
       attr_obj_address=getaddress(getattr(self,attrname))
       #attr_obj_address=getaddress(attr)      
-      log.debug('getaddress(self.%s) 0x%lx'%(attrname, attr_obj_address) )
-      log.debug('getaddress(self.%s) 0x%lx'%('q', getaddress(self.q)) )
-      log.debug('getaddress(self.%s) 0x%lx'%('p', getaddress(self.p)) )
-      log.debug('getaddress(self.%s) 0x%lx'%('g', getaddress(self.g)) )
-      print self
+      #log.debug('getaddress(self.%s) 0x%lx'%(attrname, attr_obj_address) )
+      #log.debug('getaddress(self.%s) 0x%lx'%('q', getaddress(self.q)) )
+      #log.debug('getaddress(self.%s) 0x%lx'%('p', getaddress(self.p)) )
+      #log.debug('getaddress(self.%s) 0x%lx'%('g', getaddress(self.g)) )
+      
+      #print self
+
+      #log.debug('getaddress(self.%s) 0x%lx'%('q', getaddress(self.q)) )
+      
       if not is_valid_address(attr,mappings):
+        if ( attrname == 'kinv' or attrname == 'r' ) :
+          # r and kinv can be null
+          continue
         print 'returned invalid adress for %s 0x%lx'%(attrname,attr_obj_address)
         return False
+      #log.debug('getaddress(self.%s) 0x%lx'%('q', getaddress(self.q)) )
       
       #log.debug('getaddress(self.%s) 0x%lx'%(attrname, attr_obj_address) )
       #save ref to keep mem alloc
       setattr(self, _attrname, process.readStruct(attr_obj_address, BIGNUM) )
+      #log.debug('getaddress(self.%s) 0x%lx'%('q', getaddress(self.q)) )
       #save NB pointer to it's place
       setattr(self,  attrname, ctypes.pointer( getattr(self, _attrname) ) )
+      #log.debug('getaddress(self.%s) 0x%lx'%('q', getaddress(self.q)) )
       #### load inner structures pointers
       attr=getattr(self,attrname)
 
-      print 'read mappings'
+      #log.debug('getaddress(self.%s) 0x%lx'%('q', getaddress(self.q)) )
+      #print 'read mappings'
 
-      mappings= readProcessMappings(process)
+      #mappings= readProcessMappings(process)
+      #log.debug('getaddress(self.%s) 0x%lx'%('q', getaddress(self.q)) )
       if getattr(self,_attrname).isValid(mappings):
         getattr(self,_attrname).loadMembers(process)
-        print 'members loaded'
+        #log.debug('getaddress(self.%s) 0x%lx'%('q', getaddress(self.q)) )
       else:
         log.warning('%s is not valid'%_attrname)
         return False
+      #log.debug('getaddress(self.%s) 0x%lx'%('q', getaddress(self.q)) )
 
       #attr.contents can't be loaded
       #if not ( attr and attr.contents.isValid(mappings) ):
@@ -357,10 +370,11 @@ class DSA(ctypes.Structure):
         True )
   def __str__(self):
     s=repr(self)+'\n'
+    #return s
     for field,typ in self._fields_:
       if typ != ctypes.c_char_p and typ != ctypes.c_int and typ != CRYPTO_EX_DATA:
-        s+='%s: 0x%lx\n'%(field, getaddress(getattr(self,field)) )  
-        #s+='%s: %s\n'%(field, sstr(getattr(self,field)) )  
+        #s+='%s: 0x%lx\n'%(field, getaddress(getattr(self,field)) )  
+        s+='%s: %s\n'%(field, sstr(getattr(self,field)) )  
       else:
         s+='%s: %s\n'%(field,getattr(self,field) )        
     return s
