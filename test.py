@@ -12,6 +12,8 @@ import abouchet,model
 import ctypes
 from ptrace.debugger.debugger import PtraceDebugger
 from ptrace.debugger.memory_mapping import readProcessMappings
+from ctypes import *
+from ptrace.ctypes_libc import libc
 
 
 
@@ -20,7 +22,10 @@ def printBytes(data):
     print "0x%lx"%data[i],
     
 
-pid=19002
+pid=27477
+addr=0xb835b4e8
+
+
 dbg=PtraceDebugger()
 process=dbg.addProcess(pid,is_attached=False)
 if process is None:
@@ -32,7 +37,6 @@ stack=process.findStack()
 
 
 
-addr=0xb93234e8
 
 def dbg_read(addr):
   from ptrace.cpu_info import CPU_64BITS, CPU_WORD_SIZE, CPU_POWERPC
@@ -52,10 +56,23 @@ def readRsa(addr):
   rsa.loadMembers(process)
   return rsa
 
+def readDsa(addr):
+  dsa=process.readStruct(addr,model.DSA)
+  print "isValid : ", dsa.isValid(maps)
+  dsa.printValid(maps)
+  print 'DSA1 -> ', dsa
+  print '------------'
+  print 'DSA1.q -> ', dsa.q
+  #print '------------ === '
+  dsa.loadMembers(process)
+  #print '------------  ===== ==== '
+  print 'DSA2.q -> ', dsa.q
+  print 'DSA2.q.contents -> ', dsa.q.contents
+  #print ctypes.byref(rsa.n.contents)
+  #print dsa
+  return dsa
 
 def writeWithLib(addr):
-  from ctypes import *
-  from ptrace.ctypes_libc import libc
   ssl=cdll.LoadLibrary("libssl.so")
   # need original data struct
   #rsa=process.readBytes(addr, ctypes.sizeof(model.RSA) )
@@ -81,7 +98,9 @@ def withM2(addr):
 
 #rsa=readRsa(addr)
 
-writeWithLib(addr)
-print '---------------'
-abouchet.find_keys(process,stack)
+#writeWithLib(addr)
+#print '---------------'
+#abouchet.find_keys(process,stack)
+
+dsa=readDsa(addr)
 

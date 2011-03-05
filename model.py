@@ -17,6 +17,7 @@ log=logging.getLogger('model')
 def is_valid_address(obj,mappings):
   '''static int is_valid_address(unsigned long addr, mappings_t *mappings) {'''
   # check for null pointers
+  #print 'is_valid_address'
   addr=getaddress(obj)
   if addr == 0:
     return False
@@ -29,15 +30,18 @@ def is_valid_address(obj,mappings):
 '''
 def getaddress(obj):
   # check for null pointers
+  #print 'getaddress'
   if bool(obj):
+    #print 'get adressses is '
     return ctypes.addressof(obj.contents)
   else:
+    #print 'object pointer is null'
     return 0  
 
 def sstr(obj):
-  print obj, ctypes.addressof(obj),
+  #print obj, ctypes.addressof(obj),
   if bool(obj):
-    print obj.contents
+    #print obj.contents
     return str(obj.contents)
   else:
     print None
@@ -96,19 +100,35 @@ class BIGNUM(ctypes.Structure):
     return True
   
   def isValid(self,mappings):
+    #print 'BIGNUM.isValid 1'
+    #print self.flags
     if ( self.dmax < 0 or self.top < 0 or self.dmax < self.top ):
       return False
+    #print 'BIGNUM.isValid 2'
     if ( not (self.neg == 1 or self.neg == 0 ) ) :
       return False 
+    #print 'BIGNUM.isValid 3'
     #last test on memory address
     return is_valid_address( self.d, mappings)
     #return True
   
   def __str__(self):
-    if self.d:
-      d=ctypes.addressof(self.d.contents)
-    else:
-      d=0
+    #print 'coucou',repr(self)
+    #return repr(self)
+    #print self.d
+    #print 'add',ctypes.addressof(self.d)
+    #print 'addc',ctypes.addressof(self.d.contents)
+    ## is_valid_address(d,mappings) could be False
+    #if self.d:
+    #  print 'coucou2'
+    #  d=ctypes.addressof(self.d.contents)
+    #else:
+    #  print 'coucou2.2'
+    #  d=0
+    d=0
+    print 'coucou'
+    print self.top
+    return 'BIGNUM NB'
     return ("BN { d=0x%lx, top=%d, dmax=%d, neg=%d, flags=%d }"%
                 (d, self.top, self.dmax, self.neg, self.flags) )
 #ok
@@ -249,6 +269,17 @@ class DSA(ctypes.Structure):
   ("meth",ctypes.POINTER(BIGNUM)),#  const DSA_METHOD *meth;
   ("engine",ctypes.POINTER(BIGNUM))#ENGINE *engine;
   ]
+  def printValid(self,mappings):
+    log.debug( '----------------------- \npad: %d version %d ref %d'%(self.pad,self.version,self.write_params) )
+    log.debug(is_valid_address( self.p, mappings)    )
+    log.debug(is_valid_address( self.q, mappings)    )
+    log.debug(is_valid_address( self.g, mappings)    )
+    log.debug(is_valid_address( self.pub_key, mappings)    )
+    log.debug(is_valid_address( self.priv_key, mappings)    )
+    return
+  def internalCheck(self):
+    '''  pub_key = g^privKey mod p '''
+    return
   def loadMembers(self,process):
     ''' 
     isValid() should have been tested before, otherwise.. it's gonna fail...
@@ -256,23 +287,56 @@ class DSA(ctypes.Structure):
     and assign it to a python object _here, then we assign 
     the member to be a pointer to _here'''
     # BIGNUMS
+    #print 'dsa.loadMember()'
     for attrname in ['p','q','g','pub_key','priv_key','kinv','r']:
+      mappings= readProcessMappings(process)
+
       attr=getattr(self,attrname)
       _attrname='_'+attrname
-      attr_obj_address=getaddress(attr)
+      attr_obj_address=getaddress(getattr(self,attrname))
+      #attr_obj_address=getaddress(attr)      
+      log.debug('getaddress(self.%s) 0x%lx'%(attrname, attr_obj_address) )
+      log.debug('getaddress(self.%s) 0x%lx'%('q', getaddress(self.q)) )
+      log.debug('getaddress(self.%s) 0x%lx'%('p', getaddress(self.p)) )
+      log.debug('getaddress(self.%s) 0x%lx'%('g', getaddress(self.g)) )
+      print self
+      if not is_valid_address(attr,mappings):
+        print 'returned invalid adress for %s 0x%lx'%(attrname,attr_obj_address)
+        return False
+      
       #log.debug('getaddress(self.%s) 0x%lx'%(attrname, attr_obj_address) )
       #save ref to keep mem alloc
-      setattr(self, _attrname, process.readStruct(attr_obj_address,BIGNUM) )
+      setattr(self, _attrname, process.readStruct(attr_obj_address, BIGNUM) )
       #save NB pointer to it's place
-      setattr(self, attrname, ctypes.pointer( getattr(self, _attrname) ) )
+      setattr(self,  attrname, ctypes.pointer( getattr(self, _attrname) ) )
       #### load inner structures pointers
       attr=getattr(self,attrname)
+
+      print 'read mappings'
+
       mappings= readProcessMappings(process)
-      if not ( attr and attr.contents.isValid(mappings) ):
-        log.warning('BN %s is invalid: %s'%(attrname,attr))
+      if getattr(self,_attrname).isValid(mappings):
+        getattr(self,_attrname).loadMembers(process)
+        print 'members loaded'
+      else:
+        log.warning('%s is not valid'%_attrname)
         return False
+
+      #attr.contents can't be loaded
+      #if not ( attr and attr.contents.isValid(mappings) ):
+      #  log.debug('BN %s is invalid: %s'%(attrname,attr))
+      #  return False
+
+      #print self._p.top
+      #print self.p.contents.top
+      
+      #if not attr.contents.isValid(mappings):
+      #  log.warning('BN %s is invalid: %s'%(attrname,attr))
+      #  return False
+
+      #print 'load contents'
       # go and load
-      attr.contents.loadMembers(process)
+      #attr.contents.loadMembers(process)
     # XXXX clean other structs
     self.meth=None
     self._method_mod_p = None
@@ -288,12 +352,13 @@ class DSA(ctypes.Structure):
         is_valid_address( self.g, mappings)        and
         is_valid_address( self.priv_key, mappings) and
         is_valid_address( self.pub_key, mappings)  and
-        is_valid_address( self.kinv, mappings) and
-        is_valid_address( self.r, mappings)  )
+        #is_valid_address( self.kinv, mappings) and  # kinv and r can be null
+        #is_valid_address( self.r, mappings)  ) 
+        True )
   def __str__(self):
     s=repr(self)+'\n'
     for field,typ in self._fields_:
-      if typ != ctypes.c_char_p and typ != ctypes.c_int and type != CRYPTO_EX_DATA:
+      if typ != ctypes.c_char_p and typ != ctypes.c_int and typ != CRYPTO_EX_DATA:
         s+='%s: 0x%lx\n'%(field, getaddress(getattr(self,field)) )  
         #s+='%s: %s\n'%(field, sstr(getattr(self,field)) )  
       else:

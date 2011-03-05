@@ -162,6 +162,7 @@ def find_keys(process,stackmap):
   plen=ctypes.sizeof(ctypes.c_char_p)
   rsalen=ctypes.sizeof(model.RSA)
   dsalen=ctypes.sizeof(model.DSA)
+  '''
   # parse for rsa
   for j in range(stackmap.start, stackmap.end-rsalen, plen):
     #log.debug("checking 0x%lx"% j)
@@ -181,11 +182,14 @@ def find_keys(process,stackmap):
     # check if data matches
     if dsa.isValid(mappings): # refreshing would be better
       log.info('Found valid dsa at 0x%lx'%(j))
+      #print ' dsa isValid -----------'
+      #dsa.printValid(mappings)
+      #print '--------------------------- \nextract :'
       if ( extract_dsa_key(dsa, process) ):
         log.info( "found DSA key @ 0x%lx"%(j) )
         write_dsa_key(dsa, "id_dsa")
         continue
-  '''
+  
   return
 
 def hasValidPermissions(memmap):
