@@ -1,0 +1,203 @@
+OpenSSH_5.5p1 Debian-4ubuntu5, OpenSSL 0.9.8o 01 Jun 2010
+debug1: Reading configuration data /etc/ssh/ssh_config
+debug1: Applying options for *
+debug2: ssh_connect: needpriv 0
+debug1: Connecting to adips.asso.fr [213.186.33.2] port 22.
+debug1: Connection established.
+debug3: Not a RSA1 key file /home/jal/.ssh/id_rsa.
+debug2: key_type_from_name: unknown key type '-----BEGIN'
+debug3: key_read: missing keytype
+debug2: key_type_from_name: unknown key type 'Proc-Type:'
+debug3: key_read: missing keytype
+debug2: key_type_from_name: unknown key type 'DEK-Info:'
+debug3: key_read: missing keytype
+debug3: key_read: missing whitespace
+debug3: key_read: missing whitespace
+debug3: key_read: missing whitespace
+debug3: key_read: missing whitespace
+debug3: key_read: missing whitespace
+debug3: key_read: missing whitespace
+debug3: key_read: missing whitespace
+debug3: key_read: missing whitespace
+debug3: key_read: missing whitespace
+debug3: key_read: missing whitespace
+debug3: key_read: missing whitespace
+debug3: key_read: missing whitespace
+debug3: key_read: missing whitespace
+debug3: key_read: missing whitespace
+debug3: key_read: missing whitespace
+debug3: key_read: missing whitespace
+debug3: key_read: missing whitespace
+debug3: key_read: missing whitespace
+debug3: key_read: missing whitespace
+debug3: key_read: missing whitespace
+debug3: key_read: missing whitespace
+debug3: key_read: missing whitespace
+debug3: key_read: missing whitespace
+debug3: key_read: missing whitespace
+debug3: key_read: missing whitespace
+debug2: key_type_from_name: unknown key type '-----END'
+debug3: key_read: missing keytype
+debug1: identity file /home/jal/.ssh/id_rsa type 1
+debug1: Checking blacklist file /usr/share/ssh/blacklist.RSA-2048
+debug1: Checking blacklist file /etc/ssh/blacklist.RSA-2048
+debug1: identity file /home/jal/.ssh/id_rsa-cert type -1
+debug1: identity file /home/jal/.ssh/id_dsa type -1
+debug1: identity file /home/jal/.ssh/id_dsa-cert type -1
+debug1: Remote protocol version 2.0, remote software version OpenSSH_5.6
+debug1: match: OpenSSH_5.6 pat OpenSSH*
+debug1: Enabling compatibility mode for protocol 2.0
+debug1: Local version string SSH-2.0-OpenSSH_5.5p1 Debian-4ubuntu5
+debug2: fd 3 setting O_NONBLOCK
+debug1: SSH2_MSG_KEXINIT sent
+debug1: SSH2_MSG_KEXINIT received
+debug2: kex_parse_kexinit: diffie-hellman-group-exchange-sha256,diffie-hellman-group-exchange-sha1,diffie-hellman-group14-sha1,diffie-hellman-group1-sha1
+debug2: kex_parse_kexinit: ssh-rsa-cert-v00@openssh.com,ssh-dss-cert-v00@openssh.com,ssh-rsa,ssh-dss
+debug2: kex_parse_kexinit: aes128-ctr,aes192-ctr,aes256-ctr,arcfour256,arcfour128,aes128-cbc,3des-cbc,blowfish-cbc,cast128-cbc,aes192-cbc,aes256-cbc,arcfour,rijndael-cbc@lysator.liu.se
+debug2: kex_parse_kexinit: aes128-ctr,aes192-ctr,aes256-ctr,arcfour256,arcfour128,aes128-cbc,3des-cbc,blowfish-cbc,cast128-cbc,aes192-cbc,aes256-cbc,arcfour,rijndael-cbc@lysator.liu.se
+debug2: kex_parse_kexinit: hmac-md5,hmac-sha1,umac-64@openssh.com,hmac-ripemd160,hmac-ripemd160@openssh.com,hmac-sha1-96,hmac-md5-96
+debug2: kex_parse_kexinit: hmac-md5,hmac-sha1,umac-64@openssh.com,hmac-ripemd160,hmac-ripemd160@openssh.com,hmac-sha1-96,hmac-md5-96
+debug2: kex_parse_kexinit: none,zlib@openssh.com,zlib
+debug2: kex_parse_kexinit: none,zlib@openssh.com,zlib
+debug2: kex_parse_kexinit: 
+debug2: kex_parse_kexinit: 
+debug2: kex_parse_kexinit: first_kex_follows 0 
+debug2: kex_parse_kexinit: reserved 0 
+debug2: kex_parse_kexinit: diffie-hellman-group-exchange-sha256,diffie-hellman-group-exchange-sha1,diffie-hellman-group14-sha1,diffie-hellman-group1-sha1
+debug2: kex_parse_kexinit: ssh-rsa,ssh-dss
+debug2: kex_parse_kexinit: aes128-ctr,aes192-ctr,aes256-ctr,arcfour256,arcfour128,aes128-cbc,3des-cbc,blowfish-cbc,cast128-cbc,aes192-cbc,aes256-cbc,arcfour,rijndael-cbc@lysator.liu.se
+debug2: kex_parse_kexinit: aes128-ctr,aes192-ctr,aes256-ctr,arcfour256,arcfour128,aes128-cbc,3des-cbc,blowfish-cbc,cast128-cbc,aes192-cbc,aes256-cbc,arcfour,rijndael-cbc@lysator.liu.se
+debug2: kex_parse_kexinit: hmac-md5,hmac-sha1,umac-64@openssh.com,hmac-ripemd160,hmac-ripemd160@openssh.com,hmac-sha1-96,hmac-md5-96
+debug2: kex_parse_kexinit: hmac-md5,hmac-sha1,umac-64@openssh.com,hmac-ripemd160,hmac-ripemd160@openssh.com,hmac-sha1-96,hmac-md5-96
+debug2: kex_parse_kexinit: none,zlib@openssh.com
+debug2: kex_parse_kexinit: none,zlib@openssh.com
+debug2: kex_parse_kexinit: 
+debug2: kex_parse_kexinit: 
+debug2: kex_parse_kexinit: first_kex_follows 0 
+debug2: kex_parse_kexinit: reserved 0 
+debug2: mac_setup: found hmac-md5
+debug1: kex: server->client aes128-ctr hmac-md5 none
+debug2: mac_setup: found hmac-md5
+debug1: kex: client->server aes128-ctr hmac-md5 none
+debug1: SSH2_MSG_KEX_DH_GEX_REQUEST(1024<1024<8192) sent
+debug1: expecting SSH2_MSG_KEX_DH_GEX_GROUP
+debug2: dh_gen_key: priv key bits set: 132/256
+debug2: bits set: 517/1024
+debug1: SSH2_MSG_KEX_DH_GEX_INIT sent
+debug1: expecting SSH2_MSG_KEX_DH_GEX_REPLY
+debug3: check_host_in_hostfile: host adips.asso.fr filename /home/jal/.ssh/known_hosts
+debug3: check_host_in_hostfile: host adips.asso.fr filename /home/jal/.ssh/known_hosts
+debug3: check_host_in_hostfile: match line 18
+debug3: check_host_in_hostfile: host 213.186.33.2 filename /home/jal/.ssh/known_hosts
+debug3: check_host_in_hostfile: host 213.186.33.2 filename /home/jal/.ssh/known_hosts
+debug3: check_host_in_hostfile: match line 19
+debug1: Host 'adips.asso.fr' is known and matches the RSA host key.
+debug1: Found key in /home/jal/.ssh/known_hosts:18
+debug2: bits set: 504/1024
+debug1: ssh_rsa_verify: signature correct
+debug2: kex_derive_keys
+debug2: set_newkeys: mode 1
+debug1: SSH2_MSG_NEWKEYS sent
+debug1: expecting SSH2_MSG_NEWKEYS
+debug2: set_newkeys: mode 0
+debug1: SSH2_MSG_NEWKEYS received
+debug1: Roaming not allowed by server
+debug1: SSH2_MSG_SERVICE_REQUEST sent
+debug2: service_accept: ssh-userauth
+debug1: SSH2_MSG_SERVICE_ACCEPT received
+debug2: key: /home/jal/.ssh/id_rsa (0xb92385f0)
+debug2: key: /home/jal/.ssh/id_rsa (0xb923af20)
+debug2: key: /home/jal/.ssh/id_dsa ((nil))
+debug1: Authentications that can continue: publickey,password,keyboard-interactive
+debug3: start over, passed a different list publickey,password,keyboard-interactive
+debug3: preferred gssapi-keyex,gssapi-with-mic,publickey,keyboard-interactive,password
+debug3: authmethod_lookup publickey
+debug3: remaining preferred: keyboard-interactive,password
+debug3: authmethod_is_enabled publickey
+debug1: Next authentication method: publickey
+debug1: Offering public key: /home/jal/.ssh/id_rsa
+debug3: send_pubkey_test
+debug2: we sent a publickey packet, wait for reply
+debug1: Server accepts key: pkalg ssh-rsa blen 279
+debug2: input_userauth_pk_ok: fp 70:67:25:79:83:98:81:2d:53:88:82:37:d5:72:eb:60
+debug3: sign_and_send_pubkey
+debug1: Authentication succeeded (publickey).
+debug2: fd 5 setting O_NONBLOCK
+debug3: fd 6 is O_NONBLOCK
+debug1: channel 0: new [client-session]
+debug3: ssh_session2_open: channel_new: 0
+debug2: channel 0: send open
+debug1: Requesting no-more-sessions@openssh.com
+debug1: Entering interactive session.
+debug2: callback start
+debug2: client_session2_setup: id 0
+debug2: channel 0: request pty-req confirm 1
+debug1: Sending environment.
+debug3: Ignored env ORBIT_SOCKETDIR
+debug3: Ignored env SSH_AGENT_PID
+debug3: Ignored env SHELL
+debug3: Ignored env TERM
+debug3: Ignored env XDG_SESSION_COOKIE
+debug3: Ignored env WINDOWID
+debug3: Ignored env GNOME_KEYRING_CONTROL
+debug3: Ignored env GTK_MODULES
+debug3: Ignored env USER
+debug3: Ignored env LS_COLORS
+debug3: Ignored env SSH_AUTH_SOCK
+debug3: Ignored env TERMCAP
+debug3: Ignored env DEFAULTS_PATH
+debug3: Ignored env USERNAME
+debug3: Ignored env SESSION_MANAGER
+debug3: Ignored env XDG_CONFIG_DIRS
+debug3: Ignored env PATH
+debug3: Ignored env DESKTOP_SESSION
+debug3: Ignored env STY
+debug3: Ignored env PWD
+debug3: Ignored env GDM_KEYBOARD_LAYOUT
+debug1: Sending env LANG = en_US.utf8
+debug2: channel 0: request env confirm 0
+debug3: Ignored env GDM_LANG
+debug3: Ignored env MANDATORY_PATH
+debug3: Ignored env UBUNTU_MENUPROXY
+debug3: Ignored env GDMSESSION
+debug3: Ignored env HOME
+debug3: Ignored env SHLVL
+debug3: Ignored env GNOME_DESKTOP_SESSION_ID
+debug3: Ignored env LOGNAME
+debug3: Ignored env WINDOW
+debug3: Ignored env DBUS_SESSION_BUS_ADDRESS
+debug3: Ignored env XDG_DATA_DIRS
+debug3: Ignored env LESSOPEN
+debug3: Ignored env WINDOWPATH
+debug3: Ignored env DISPLAY
+debug3: Ignored env LESSCLOSE
+debug3: Ignored env COLORTERM
+debug3: Ignored env XAUTHORITY
+debug3: Ignored env OLDPWD
+debug3: Ignored env _
+debug2: channel 0: request shell confirm 1
+debug2: fd 3 setting TCP_NODELAY
+debug2: callback done
+debug2: channel 0: open confirm rwindow 0 rmax 32768
+debug2: channel_input_status_confirm: type 99 id 0
+debug2: PTY allocation request accepted on channel 0
+debug2: channel 0: rcvd adjust 2097152
+debug2: channel_input_status_confirm: type 99 id 0
+debug2: shell request accepted on channel 0
+Last login: Sat Mar  5 21:10:07 2011 from c-68-54-3-179.hsd1.nm.comcast.net
+Linux ssh1.90.ha.ovh.net 2.6.32.7-mutu-grs-ipv4-32 #2 SMP Sat Feb 6 13:33:23 UTC 2010 i686
+adips@ssh1:~$ 
+adips@ssh1:~$ 
+adips@ssh1:~$ 
+adips@ssh1:~$ 
+adips@ssh1:~$ \
+> 
+adips@ssh1:~$ 
+adips@ssh1:~$ debug1: channel 0: free: client-session, nchannels 1
+debug3: channel 0: status: The following connections are open:
+  #0 client-session (t4 r0 i0/0 o0/0 fd 4/5 cc -1)
+
+debug3: channel 0: close_fds r 4 w 5 e 6
+debug1: fd 1 clearing O_NONBLOCK
+debug3: fd 2 is not O_NONBLOCK
+debug1: Killed by signal 15.

@@ -25,17 +25,103 @@ https://bitbucket.org/haypo/python-ptrace/wiki/Documentation
 from ptrace.debugger.memory_mapping import readProcessMappings
 
 
+abouchet.py is passe-partout.py - OK - 04/03/2011
 
-dbg_init(
-dbg_attach
-if (from) {
-	if ( dbg_get_memory(&p) )
-		err(&p, "unable to fetch memory for process %d", pid);
-	map = dbg_map_lookup_by_address(&p, from, &off_start);
-	if (!map)
-		err(&p, "0x%lx not mapped into process %i", from, pid);
-	if (to) {
-		map2 = dbg_map_lookup_by_address(&p, to, &off_end);
+next ssh :
+Keys are cleaned from memory (ssh.c:830) after ssh_login (ssh_connect.c:1097).
 
-dbg_map_cache
+ssh_login:
+--------------
+keys are read
+Key exchange is initiated (ssh_connect.c:1121) ssh_kex2 (ssh_connect2.c:105)
+-> session_id2 is created
+ssh_userauth2 is initiated (ssh_connect.c:1122) (ssh_connect2.c:360)
+end
+
+ssh_userauth2:
+--------------
+client ask server for AUTH (ssh_connect2.c:370)
+server says ok, go on (ssh_connect2.c:372)
+client use dispatch_run to get password or passphrase (ssh_connect2.c:414)
+
+in packet.c, struct session_state is the struct we want to target.
+there is 
+ packet.c:197:static struct session_state *active_state, *backup_state;
+and defautl allocation never changed after that:
+ packet.c:206:s->max_packet_size = 32768;
+
+ssh_userauth2:
+--------------
+packet_start // use active_state
+packet_put_cstring("ssh-userauth"); // memcpy
+packet_send();   ////  packet_send2 packet.c:960
+debug("SSH2_MSG_SERVICE_REQUEST sent");
+packet_write_wait();  -> packet goes out
+type = packet_read();
+[..]
+packet_check_eom()
+[..]
+pubkey_prepare(&authctxt);
+userauth_none(&authctxt);
+[..]
+dispatch_init(&input_userauth_error);
+dispatch_set(SSH2_MSG_USERAUTH_SUCCESS, &input_userauth_success);
+dispatch_set(SSH2_MSG_USERAUTH_FAILURE, &input_userauth_failure);
+dispatch_set(SSH2_MSG_USERAUTH_BANNER, &input_userauth_banner);
+dispatch_run(DISPATCH_BLOCK, &authctxt.success, &authctxt);	/* loop until success */
+[..]
+pubkey_cleanup(&authctxt);
+dispatch_range(SSH2_MSG_USERAUTH_MIN, SSH2_MSG_USERAUTH_MAX, NULL);
+
+
+packet_send(2) packet.c:960
+------------
+if active_state->rekeying , alors, rien ne sort si ce n'est les SSH2_KEX_INIT
+sending is done by packet.c:839:packet_send2_wrapped(void)
+
+packet.c:839:packet_send2_wrapped(void)
+-----------------------------------------
+Encryption, Mac and Compression are done regarding to 	active_state->newkeys[MODE_OUT]->* values
+MODE_OUT ( enum == 1 je crois)
+active_state->outgoing_packet is compressed if required ( packet.c:866 )
+padding/random is added if necessary (packet.c:889)
+then MAC is calculated (packet.c:924)
+then buffer is encrypted with 	
+  cipher_crypt(&active_state->send_context, cp, (packet.c:933)   ->OpenSSL EVP_Cipher
+MAC is appended unencrypted
+finally session is updated with seqnum++ and stuff like that
+and set_newkeys is called if it's was a rekey command
+[ packet is reading in active_state->output and will be sent by subsequent packet_write_wait]
+
+
+packet.c:728:set_newkeys
+------------------------
+cipher_cleanup -> call OpenSSL cipher_cleanup
+mac_clear() -> 
+free data struct for enc, mac and comp ( IV & key )
+kex.c:538:kex_get_newkeys(int mode)  -> use prepared memory current_keys[mode] struct  (NULLs the pointer for reprocessiong)
+cipher_init
+set &active_state->max_blocks_out
+
+WHERE ARE THE KEY:
+-----------------
+&active_state->newkeys[mode]->enc
+enc->name
+enc->key
+enc->iv
+
+and they must be in OpenSSL format... EVP in CypherContext struct
+
+HOW TO READ:
+------------
+packet.c:1139
+	/* Decrypt data to incoming_packet. */
+	buffer_clear(&active_state->incoming_packet);
+	cp = buffer_append_space(&active_state->incoming_packet, padded_len);
+	cipher_crypt(&active_state->receive_context, cp,
+	    buffer_ptr(&active_state->input), padded_len);
+
+
+
+
 

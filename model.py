@@ -16,6 +16,7 @@ HMAC_MAX_MD_CBLOCK=128
 ''' evp.h:91 '''
 EVP_MAX_BLOCK_LENGTH=32
 EVP_MAX_IV_LENGTH=16
+AES_MAXNR=14 # aes.h:66
 
 ''' returns if the address of the struct is in the mapping area
 '''
@@ -426,8 +427,12 @@ class HMAC_CTX(ctypes.Structure):
   ("key",  ctypes.c_char * HMAC_MAX_MD_CBLOCK)
   ] 
 
-
-
+class AES_KEY(ctypes.Structure):
+  ''' aes.h:78 '''
+  _fields_ = [
+  ("rd_key",  ctypes.c_ulong * 4 * (AES_MAXNR+1)), 
+  ("rounds",  ctypes.c_int)
+  ] 
 
 
 
