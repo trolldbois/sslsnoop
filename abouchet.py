@@ -112,7 +112,6 @@ def get_valid_filename(prefix):
 #ko
 def write_rsa_key(rsa,prefix):
   filename=get_valid_filename(prefix)
-  #f=open(filename,"w")    
   ssl=cdll.LoadLibrary("libssl.so")
   # need original data struct, loaded in our memory
   rsa_p=ctypes.addressof(rsa)
@@ -127,7 +126,6 @@ def write_rsa_key(rsa,prefix):
 #ko
 def write_dsa_key(dsa,prefix):
   filename=get_valid_filename(prefix)
-  #f=open(filename,"w")    
   ssl=cdll.LoadLibrary("libssl.so")
   # need original data struct
   dsa_p=ctypes.addressof(dsa)
@@ -143,9 +141,6 @@ def find_keys(process,stackmap):
 
   mappings= readProcessMappings(process)
   log.debug("scanning 0x%lx --> 0x%lx %s"%(stackmap.start,stackmap.end,stackmap.pathname) )
-  #openssl=cdll.LoadLibrary("libssl.so")
-  #rsa=model.RSA()
-  #dsa=model.DSA()
   
   ## stackmap.search(bytestr) // won't cut it.
   ## process.readBytes() is ok
@@ -162,7 +157,7 @@ def find_keys(process,stackmap):
   plen=ctypes.sizeof(ctypes.c_char_p)
   rsalen=ctypes.sizeof(model.RSA)
   dsalen=ctypes.sizeof(model.DSA)
-  '''
+  
   # parse for rsa
   for j in range(stackmap.start, stackmap.end-rsalen, plen):
     #log.debug("checking 0x%lx"% j)
@@ -174,17 +169,14 @@ def find_keys(process,stackmap):
         log.info( "found RSA key @ 0x%lx"%(j) )
         write_rsa_key(rsa, "id_rsa")
         continue
-  '''
+  
   #do the same with dsa
   for j in range(stackmap.start, stackmap.end-dsalen, plen):
     #log.debug("checking 0x%lx"% j)
     dsa=process.readStruct(j,model.DSA)
     # check if data matches
     if dsa.isValid(mappings): # refreshing would be better
-      log.info('Found valid dsa at 0x%lx'%(j))
-      #print ' dsa isValid -----------'
-      #dsa.printValid(mappings)
-      #print '--------------------------- \nextract :'
+      log.debug('possible valid dsa at 0x%lx'%(j))
       if ( extract_dsa_key(dsa, process) ):
         log.info( "found DSA key @ 0x%lx"%(j) )
         write_dsa_key(dsa, "id_dsa")
@@ -247,10 +239,7 @@ def main(argv):
     if hasValidPermissions(m):
       print m,m.permissions
       find_keys(process, m)
-    
-
-  # dbg_map_for_each(&p, map)  ????
-
+  #    
   log.info("done for pid %d"%pid)
 
   return -1

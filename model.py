@@ -11,6 +11,11 @@ from ptrace.debugger.memory_mapping import readProcessMappings
 import logging
 log=logging.getLogger('model')
 
+''' hmac.h:69 '''
+HMAC_MAX_MD_CBLOCK=128
+''' evp.h:91 '''
+EVP_MAX_BLOCK_LENGTH=32
+EVP_MAX_IV_LENGTH=16
 
 ''' returns if the address of the struct is in the mapping area
 '''
@@ -287,69 +292,31 @@ class DSA(ctypes.Structure):
     and assign it to a python object _here, then we assign 
     the member to be a pointer to _here'''
     # BIGNUMS
-    #print 'dsa.loadMember()'
     mappings= readProcessMappings(process)
     for attrname in ['p','q','g','pub_key','priv_key','kinv','r']:
-
       attr=getattr(self,attrname)
       _attrname='_'+attrname
       attr_obj_address=getaddress(getattr(self,attrname))
-      #attr_obj_address=getaddress(attr)      
-      #log.debug('getaddress(self.%s) 0x%lx'%(attrname, attr_obj_address) )
-      #log.debug('getaddress(self.%s) 0x%lx'%('q', getaddress(self.q)) )
-      #log.debug('getaddress(self.%s) 0x%lx'%('p', getaddress(self.p)) )
-      #log.debug('getaddress(self.%s) 0x%lx'%('g', getaddress(self.g)) )
-      
-      #print self
-
-      #log.debug('getaddress(self.%s) 0x%lx'%('q', getaddress(self.q)) )
-      
+      #
       if not is_valid_address(attr,mappings):
         if ( attrname == 'kinv' or attrname == 'r' ) :
           # r and kinv can be null
           continue
-        print 'returned invalid adress for %s 0x%lx'%(attrname,attr_obj_address)
+        log.error('returned invalid adress for %s 0x%lx'%(attrname,attr_obj_address) )
         return False
-      #log.debug('getaddress(self.%s) 0x%lx'%('q', getaddress(self.q)) )
-      
-      #log.debug('getaddress(self.%s) 0x%lx'%(attrname, attr_obj_address) )
       #save ref to keep mem alloc
       setattr(self, _attrname, process.readStruct(attr_obj_address, BIGNUM) )
-      #log.debug('getaddress(self.%s) 0x%lx'%('q', getaddress(self.q)) )
       #save NB pointer to it's place
       setattr(self,  attrname, ctypes.pointer( getattr(self, _attrname) ) )
-      #log.debug('getaddress(self.%s) 0x%lx'%('q', getaddress(self.q)) )
       #### load inner structures pointers
       attr=getattr(self,attrname)
-
-      #log.debug('getaddress(self.%s) 0x%lx'%('q', getaddress(self.q)) )
-      #print 'read mappings'
-
-      #mappings= readProcessMappings(process)
-      #log.debug('getaddress(self.%s) 0x%lx'%('q', getaddress(self.q)) )
-      if getattr(self,_attrname).isValid(mappings):
-        getattr(self,_attrname).loadMembers(process)
-        #log.debug('getaddress(self.%s) 0x%lx'%('q', getaddress(self.q)) )
+      #if getattr(self,_attrname).isValid(mappings):
+      #  getattr(self,_attrname).loadMembers(process)
+      if getattr(self,attrname).contents.isValid(mappings):
+        getattr(self,attrname).contents.loadMembers(process)
       else:
-        log.warning('%s is not valid'%_attrname)
+        #log.warning('%s is not valid'%_attrname)
         return False
-      #log.debug('getaddress(self.%s) 0x%lx'%('q', getaddress(self.q)) )
-
-      #attr.contents can't be loaded
-      #if not ( attr and attr.contents.isValid(mappings) ):
-      #  log.debug('BN %s is invalid: %s'%(attrname,attr))
-      #  return False
-
-      #print self._p.top
-      #print self.p.contents.top
-      
-      #if not attr.contents.isValid(mappings):
-      #  log.warning('BN %s is invalid: %s'%(attrname,attr))
-      #  return False
-
-      #print 'load contents'
-      # go and load
-      #attr.contents.loadMembers(process)
     # XXXX clean other structs
     self.meth=None
     self._method_mod_p = None
@@ -370,7 +337,6 @@ class DSA(ctypes.Structure):
         True )
   def __str__(self):
     s=repr(self)+'\n'
-    #return s
     for field,typ in self._fields_:
       if typ != ctypes.c_char_p and typ != ctypes.c_int and typ != CRYPTO_EX_DATA:
         #s+='%s: 0x%lx\n'%(field, getaddress(getattr(self,field)) )  
@@ -378,5 +344,90 @@ class DSA(ctypes.Structure):
       else:
         s+='%s: %s\n'%(field,getattr(self,field) )        
     return s
-  
-  
+
+
+#ok
+class EVP_CIPHER(ctypes.Structure):
+  ''' evp.h:332 '''	
+  _fields_ = [
+  ("nid",  ctypes.c_int), 
+  ("block_size",  ctypes.c_int), 
+  ("key_len",  ctypes.c_int), 
+  ("iv_len",  ctypes.c_int), 
+  ("flags",  ctypes.c_ulong), 
+  ("init",  ctypes.POINTER(ctypes.c_int)), # function () 
+  ("do_cipher",  ctypes.POINTER(ctypes.c_int)), # function () 
+  ("cleanup",  ctypes.POINTER(ctypes.c_int)), # function () 
+  ("ctx_size",  ctypes.c_int), 
+  ("set_asn1_parameters",  ctypes.POINTER(ctypes.c_int)), # function () 
+  ("get_asn1_parameters",  ctypes.POINTER(ctypes.c_int)), # function () 
+  ("ctrl",  ctypes.POINTER(ctypes.c_int)), # function () 
+  ("app_data",  ctypes.c_void_p) 
+  ]
+
+#mok
+class EVP_CIPHER_CTX(ctypes.Structure):
+  ''' evp.h:332 '''	
+  _fields_ = [
+  ("cipher",  ctypes.POINTER(EVP_CIPHER)), 
+  ("engine",  ctypes.POINTER(ctypes.c_int)), ## TODO ENGINE*
+  ("encrypt",  ctypes.c_int), 
+  ("buf_len",  ctypes.c_int), 
+  ("oiv",  ctypes.c_char*EVP_MAX_IV_LENGTH),## unsigned char  oiv[EVP_MAX_IV_LENGTH];
+  ("iv",  ctypes.c_char*EVP_MAX_IV_LENGTH), ##unsigned char  iv[EVP_MAX_IV_LENGTH];
+  ("buf",  ctypes.c_char*EVP_MAX_BLOCK_LENGTH), ##unsigned char buf[EVP_MAX_BLOCK_LENGTH];
+  ("num",  ctypes.c_int), 
+  ("app_data",  ctypes.c_void_p), 
+  ("key_len",  ctypes.c_int), 
+  ("flags",  ctypes.c_ulong), 
+  ("cipher_data",  ctypes.c_void_p), 
+  ("final_used",  ctypes.c_int), 
+  ("block_mask",  ctypes.c_int), 
+  ("final",  ctypes.c_char*EVP_MAX_BLOCK_LENGTH) ###unsigned char final[EVP_MAX_BLOCK_LENGTH]
+  ]
+
+#mok
+class EVP_MD(ctypes.Structure):
+  ''' struct env_md_st evp.h:227 '''
+  _fields_ = [
+  ("type",  ctypes.c_int), 
+  ("pkey_type",  ctypes.c_int), 
+  ("md_size",  ctypes.c_int), 
+  ("flags",  ctypes.c_ulong), 
+  ("init",  ctypes.POINTER(ctypes.c_int)), # function () 
+  ("update",  ctypes.POINTER(ctypes.c_int)), # function () 
+  ("final",  ctypes.POINTER(ctypes.c_int)), # function () 
+  ("copy",  ctypes.POINTER(ctypes.c_int)), # function () 
+  ("cleanup",  ctypes.POINTER(ctypes.c_int)), # function () 
+  ("sign",  ctypes.POINTER(ctypes.c_int)), # function () 
+  ("verify",  ctypes.POINTER(ctypes.c_int)), # function () 
+  ("required_pkey_type",  ctypes.c_int*5), #required_pkey_type[5]
+  ("block_size",  ctypes.c_int), 
+  ("ctx_size",  ctypes.c_int)
+  ]
+
+class EVP_MD_CTX(ctypes.Structure):
+  ''' evp.h:304 '''
+  _fields_ = [
+  ("digest",  ctypes.POINTER(EVP_MD)),
+  ("engine",  ctypes.POINTER(ctypes.c_int) ), # ENGINE *
+  ("flags",  ctypes.c_ulong),
+  ("md_data",  ctypes.c_void_p)
+  ]
+
+class HMAC_CTX(ctypes.Structure):
+  ''' hmac.h:75 '''
+  _fields_ = [
+  ("md",  ctypes.POINTER(EVP_MD)), 
+  ("md_ctx",  EVP_MD_CTX), 
+  ("i_ctx",  EVP_MD_CTX), 
+  ("o_ctx",  EVP_MD_CTX), 
+  ("key_length",  ctypes.c_uint), 
+  ("key",  ctypes.c_char * HMAC_MAX_MD_CBLOCK)
+  ] 
+
+
+
+
+
+
