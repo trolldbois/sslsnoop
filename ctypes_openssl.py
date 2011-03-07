@@ -21,8 +21,12 @@ AES_MAXNR=14 # aes.h:66
 
 BN_ULONG=ctypes.c_ulong
 
+class OpenSSLStruct(LoadableMembers):
+  ''' defines classRef '''
+  pass
+
 #ok
-class BIGNUM(LoadableMembers):
+class BIGNUM(OpenSSLStruct):
   _fields_ = [
   ("d",ctypes.POINTER(BN_ULONG) ),
   ('top',ctypes.c_int),
@@ -64,7 +68,7 @@ class BIGNUM(LoadableMembers):
     return ("BN { d=0x%lx, top=%d, dmax=%d, neg=%d, flags=%d }"%
                 (d, self.top, self.dmax, self.neg, self.flags) )
 #ok
-class STACK(ctypes.Structure):
+class STACK(OpenSSLStruct):
   _fields_ = [
   ("num",ctypes.c_int),
   ("data",ctypes.c_char_p),
@@ -73,13 +77,13 @@ class STACK(ctypes.Structure):
   ("comp",ctypes.POINTER(ctypes.c_int) ) ]
 
 #ok
-class CRYPTO_EX_DATA(ctypes.Structure):
+class CRYPTO_EX_DATA(OpenSSLStruct):
   _fields_ = [
   ("sk",ctypes.POINTER(STACK) ),
   ("dummy",ctypes.c_int)]
   
 #ok
-class BN_MONT_CTX(ctypes.Structure):
+class BN_MONT_CTX(OpenSSLStruct):
   _fields_ = [
   ("ri",ctypes.c_int),
   ("RR",BIGNUM),
@@ -88,7 +92,7 @@ class BN_MONT_CTX(ctypes.Structure):
   ("n0",ctypes.c_ulong),
   ("flags",ctypes.c_int)]
 
-class EVP_PKEY(LoadableMembers):
+class EVP_PKEY(OpenSSLStruct):
 	_fields_ = [
   ('type',ctypes.c_int),
   ('save_type',ctypes.c_int),
@@ -99,7 +103,7 @@ class EVP_PKEY(LoadableMembers):
   ]
 
 
-class ENGINE_CMD_DEFN(LoadableMembers):
+class ENGINE_CMD_DEFN(OpenSSLStruct):
 	_fields_ = [
   ('cmd_num',ctypes.c_uint),
   ('cmd_name',ctypes.c_char_p),
@@ -107,7 +111,7 @@ class ENGINE_CMD_DEFN(LoadableMembers):
   ('cmd_flags',ctypes.c_uint)
   ]  
 
-class ENGINE(LoadableMembers):
+class ENGINE(OpenSSLStruct):
   pass
 ENGINE._fields_ = [
   ('id',ctypes.c_char_p),
@@ -139,7 +143,7 @@ ENGINE._fields_ = [
 
 
 #KO
-class RSA(LoadableMembers):
+class RSA(OpenSSLStruct):
   ''' rsa/rsa.h '''
   loaded=False
   _fields_ = [
@@ -214,7 +218,7 @@ class RSA(LoadableMembers):
 
     
 #KO
-class DSA(LoadableMembers):
+class DSA(OpenSSLStruct):
   _fields_ = [
   ("pad",  ctypes.c_int), 
   ("version",  ctypes.c_long),
@@ -274,7 +278,7 @@ class DSA(LoadableMembers):
     return self.valid
 
 #ok
-class EVP_CIPHER(ctypes.Structure):
+class EVP_CIPHER(OpenSSLStruct):
   ''' evp.h:332 '''	
   _fields_ = [
   ("nid",  ctypes.c_int), 
@@ -293,7 +297,7 @@ class EVP_CIPHER(ctypes.Structure):
   ]
 
 #mok
-class EVP_CIPHER_CTX(ctypes.Structure):
+class EVP_CIPHER_CTX(OpenSSLStruct):
   ''' evp.h:332 '''	
   _fields_ = [
   ("cipher",  ctypes.POINTER(EVP_CIPHER)), 
@@ -314,7 +318,7 @@ class EVP_CIPHER_CTX(ctypes.Structure):
   ]
 
 #mok
-class EVP_MD(ctypes.Structure):
+class EVP_MD(OpenSSLStruct):
   ''' struct env_md_st evp.h:227 '''
   _fields_ = [
   ("type",  ctypes.c_int), 
@@ -333,7 +337,7 @@ class EVP_MD(ctypes.Structure):
   ("ctx_size",  ctypes.c_int)
   ]
 
-class EVP_MD_CTX(ctypes.Structure):
+class EVP_MD_CTX(OpenSSLStruct):
   ''' evp.h:304 '''
   _fields_ = [
   ("digest",  ctypes.POINTER(EVP_MD)),
@@ -342,7 +346,7 @@ class EVP_MD_CTX(ctypes.Structure):
   ("md_data",  ctypes.c_void_p)
   ]
 
-class HMAC_CTX(ctypes.Structure):
+class HMAC_CTX(OpenSSLStruct):
   ''' hmac.h:75 '''
   _fields_ = [
   ("md",  ctypes.POINTER(EVP_MD)), 
@@ -353,7 +357,7 @@ class HMAC_CTX(ctypes.Structure):
   ("key",  ctypes.c_char * HMAC_MAX_MD_CBLOCK)
   ] 
 
-class AES_KEY(ctypes.Structure):
+class AES_KEY(OpenSSLStruct):
   ''' aes.h:78 '''
   _fields_ = [
   ("rd_key",  ctypes.c_ulong * 4 * (AES_MAXNR+1)), 
@@ -380,5 +384,9 @@ def printSizeof():
   print 'EVP_MAX_BLOCK_LENGTH:',EVP_MAX_BLOCK_LENGTH
   print 'EVP_MAX_IV_LENGTH:',EVP_MAX_IV_LENGTH
   print 'AES_MAXNR:',AES_MAXNR
+
+import inspect,sys
+''' Load all openSSL classes to local classRef '''
+OpenSSLStruct.classRef=dict([ (ctypes.POINTER( klass), klass) for (name,klass) in inspect.getmembers(sys.modules[__name__], inspect.isclass) if klass.__module__ == __name__])
 
 

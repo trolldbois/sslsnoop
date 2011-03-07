@@ -111,6 +111,17 @@ def printSize():
   ctypes_openssl.printSizeof()
   ctypes_openssh.printSizeof()
 
+def findCipherContext():
+  pass
+#dbg=PtraceDebugger()
+#process=dbg.addProcess(pid,is_attached=False)
+#if process is None:
+#  log.error("Error initializing Process debugging for %d"% pid)
+#  sys.exit(-1)
+
+#maps=readProcessMappings(process)
+#stack=process.findStack()
+
 #rsa=readRsa(addr)
 
 #writeWithLibRSA(addr)
@@ -121,4 +132,10 @@ def printSize():
 #writeWithLibDSA(addr)
 
 printSize()
+
+class a:
+  _plop=[1,2,3]
+  _plip=[l*2 for l in _plop]
+
+
 

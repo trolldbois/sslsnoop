@@ -9,6 +9,7 @@ __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 import ctypes
 from model import is_valid_address,getaddress,sstr,LoadableMembers
 from ptrace.debugger.memory_mapping import readProcessMappings
+from ptrace import ctypes_stdint
 import logging
 log=logging.getLogger('openssh.model')
 
@@ -25,12 +26,15 @@ HASH_BUF_BYTES=64 # umac.c:315
 SSH_SESSION_KEY_LENGTH=32 # ssh.h:84
 
 ''' typedefs ptrace / ctypes_stdint.py  TODO'''
-UINT64=ctypes.c_ulonglong
-UINT32=ctypes.c_ulong
-UINT8=ctypes.c_ubyte
+UINT64=ctypes_stdint.uint64_t
+UINT32=ctypes_stdint.uint32_t
+UINT8=ctypes_stdint.uint8_t
 
-
-class Cipher(ctypes.Structure):
+class OpenSSHStruct(LoadableMembers):
+  ''' defines classRef '''
+  pass
+  
+class Cipher(OpenSSHStruct):
   ''' cipher.c:60 '''
   _fields_ = [
   ("name",  ctypes.c_char_p), 
@@ -42,7 +46,7 @@ class Cipher(ctypes.Structure):
   ("evptype",  ctypes.POINTER(ctypes.c_int)) ## pointer function() 
   ]
 
-class CipherContext(ctypes.Structure):
+class CipherContext(OpenSSHStruct):
   ''' cipher.h:65 '''
   _fields_ = [
   ("plaintext",  ctypes.c_int), 
@@ -50,7 +54,7 @@ class CipherContext(ctypes.Structure):
   ("cipher", ctypes.POINTER(Cipher))
   ]
 
-class Enc(ctypes.Structure):
+class Enc(OpenSSHStruct):
   ''' kex.h:84 '''
   _fields_ = [
   ("name",  ctypes.c_char_p), 
@@ -62,7 +66,7 @@ class Enc(ctypes.Structure):
   ("iv",  ctypes.c_char_p)
   ]
 
-class nh_ctx(ctypes.Structure):
+class nh_ctx(OpenSSHStruct):
   ''' umac.c:323 '''
   _fields_ = [
   ("nh_key",  UINT8 *(L1_KEY_LEN + L1_KEY_SHIFT * (STREAMS - 1)) ), 
@@ -72,7 +76,7 @@ class nh_ctx(ctypes.Structure):
   ("state",  UINT64 * STREAMS)
   ]
 
-class uhash_ctx(ctypes.Structure):
+class uhash_ctx(OpenSSHStruct):
   ''' umac.c:772 '''
   _fields_ = [
   ("hash",  nh_ctx), 
@@ -84,7 +88,7 @@ class uhash_ctx(ctypes.Structure):
   ]
 
 #AES_KEY
-class pdf_ctx(ctypes.Structure):
+class pdf_ctx(OpenSSHStruct):
   ''' umac:221 '''
   _fields_ = [
   ("cache",  UINT8 * AES_BLOCK_LEN), #UINT8 
@@ -92,7 +96,7 @@ class pdf_ctx(ctypes.Structure):
   ("prf_key",  AES_KEY * 1) #typedef AES_KEY aes_int_key[1];
   ]
 
-class umac_ctx(ctypes.Structure):
+class umac_ctx(OpenSSHStruct):
   ''' umac:1179 '''
   _fields_ = [
   ("hash",  uhash_ctx), 
@@ -100,7 +104,7 @@ class umac_ctx(ctypes.Structure):
   ("free_ptr",  ctypes.c_void_p)
   ]
 
-class Mac(ctypes.Structure):
+class Mac(OpenSSHStruct):
   ''' kex.h:90 '''
   _fields_ = [
   ("name",  ctypes.c_char_p), 
@@ -114,7 +118,7 @@ class Mac(ctypes.Structure):
   ("umac_ctx",  ctypes.POINTER(umac_ctx)) 
   ]
 
-class Comp(ctypes.Structure):
+class Comp(OpenSSHStruct):
   ''' kex.h:100 '''
   _fields_ = [
   ("type",  ctypes.c_int), 
@@ -122,7 +126,7 @@ class Comp(ctypes.Structure):
   ("name",  ctypes.c_char_p)
   ]
 
-class Newkeys(ctypes.Structure):
+class Newkeys(OpenSSHStruct):
   ''' kex.h:110 '''
   _fields_ = [
   ("enc",  Enc), 
@@ -130,7 +134,7 @@ class Newkeys(ctypes.Structure):
   ("comp",  Comp)
   ]
 
-class Buffer(ctypes.Structure):
+class Buffer(OpenSSHStruct):
   ''' buffer.h:19 '''
   _fields_ = [
   ("buf", ctypes.c_char_p ), 
@@ -140,7 +144,7 @@ class Buffer(ctypes.Structure):
   ]
 
 
-class packet_state(ctypes.Structure):
+class packet_state(OpenSSHStruct):
   ''' packet.c:90 '''
   _fields_ = [
   ("seqnr", UINT32 ), 
@@ -149,18 +153,18 @@ class packet_state(ctypes.Structure):
   ("bytes", UINT64 )
   ]
 
-class packet(ctypes.Structure):
+class packet(OpenSSHStruct):
   pass
   
 
-class TAILQ_HEAD_PACKET(ctypes.Structure):
+class TAILQ_HEAD_PACKET(OpenSSHStruct):
   ''' sys/queue.h:382 '''
   _fields_ = [
   ("tqh_first", ctypes.POINTER(packet) ), 
   ("tqh_last", ctypes.POINTER(ctypes.POINTER(packet)) )
   ]
 
-class TAILQ_ENTRY_PACKET(ctypes.Structure):
+class TAILQ_ENTRY_PACKET(OpenSSHStruct):
   ''' sys/queue.h:382 '''
   _fields_ = [
   ("tqe_next", ctypes.POINTER(packet) ), 
@@ -174,7 +178,7 @@ packet._fields_ = [
   ("payload", Buffer )
   ] 
 
-class session_state(ctypes.Structure):
+class session_state(OpenSSHStruct):
   ''' openssh/packet.c:103 '''
   _fields_ = [
   ("connection_in", ctypes.c_int ), 
@@ -245,6 +249,9 @@ def printSizeof():
   print 'STREAMS:',STREAMS
 
 
+import inspect,sys
+''' Load all openSSH classes and used OpenSSL classes to local classRef '''
+OpenSSHStruct.classRef=dict([ (ctypes.POINTER( klass), klass) for (name,klass) in inspect.getmembers(sys.modules[__name__], inspect.isclass) if klass.__module__ == __name__ or klass.__module__ == 'ctypes_openssl'])
 
 
 

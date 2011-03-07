@@ -58,6 +58,13 @@ def sstr(obj):
 class LoadableMembers(ctypes.Structure):
   loaded=False
   valid=False
+  ''' ctypes.POINTER types for automatic address space checks '''
+  classRef=[]  
+  def isValid(self,mappings):
+    '''
+      checks if each members has coherent data
+    '''
+    return self.valid
   def loadMembers(self,process):
     ''' 
     isValid() should have been tested before, otherwise.. it's gonna fail...
@@ -70,14 +77,12 @@ class LoadableMembers(ctypes.Structure):
       log.error("%s not loaded, it's not even valid"%(self.__class__.__name__))
       return False
     mappings= readProcessMappings(process)
-    # we only load struct here. basic type must be done by specialized methods.
-    classRef=dict([ (ctypes.POINTER( t), t) for t in [BIGNUM, STACK, CRYPTO_EX_DATA, RSA, DSA, BN_MONT_CTX, EVP_CIPHER, EVP_CIPHER_CTX, EVP_MD]])
     ## go through all members. if they are pointers AND not null AND in valid memorymapping AND a struct type, load them as struct pointers
     for attrname,attrtype in self._fields_:
       if attrtype.__module__ == 'ctypes':
         # basic type, ignore
         continue
-      if attrtype not in classRef:
+      if attrtype not in self.classRef:
         continue
       attr=getattr(self,attrname)
       # check null, in mappings and contents types.
@@ -90,7 +95,7 @@ class LoadableMembers(ctypes.Structure):
       attr_obj_address=getaddress(attr)
       #log.debug('getaddress(self.%s) 0x%lx'%(attrname, attr_obj_address) )
       #save ref to keep mem alloc - XXX Useful ?
-      _attrType=classRef[attrtype]
+      _attrType=self.classRef[attrtype]
       ## boundary Double validation - check if address space of supposed valid member is cool and fits in mappings
       if ( not is_valid_address( attr, mappings, _attrType) ):
         log.warning('member %s has been unvalidated by boudaries check'%attrname)
@@ -129,7 +134,7 @@ class LoadableMembers(ctypes.Structure):
       elif hasattr(attr,'contents'):
         s+='%s: 0x%lx\n'%(field, getaddress(getattr(self,field)) )  
       else:
-        s+='%s: %s\n'%(field,attr )  
+        s+='%s: %s'%(field,attr )  
     return s
 
 
