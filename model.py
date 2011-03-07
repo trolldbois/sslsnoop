@@ -61,10 +61,37 @@ class LoadableMembers(ctypes.Structure):
   ''' ctypes.POINTER types for automatic address space checks '''
   classRef=[]  
   def isValid(self,mappings):
-    '''
-      checks if each members has coherent data
-    '''
+    '''  checks if each members has coherent data  '''
+    self.valid = self._isValid(mappings)
     return self.valid
+
+  def _isValid(self,mappings):
+    ''' Internal checks on pointers    '''
+    # by default, check if pointers are pointing somewhere valid || NULL
+    for attrname,attrtype in self._fields_:
+      if not self._fieldNeedsChecking(attrname,attrtype):
+        continue
+      _attrname='_'+attrname
+      _attrType=self.classRef[attrtype]
+      attr=getattr(self,attrname)
+      attr_obj_address=getaddress(attr)
+      ## boundary Double validation - check if address space of supposed valid member is cool and fits in mappings
+      if ( not is_valid_address( attr, mappings, _attrType) ):
+        log.warning('member %s has been unvalidated by boundaries check'%attrname)
+        return False      
+    return True
+  
+  def _fieldNeedsChecking(self,attrname,attrtype):
+    ''' Internal checks on pointers    '''
+    if (attrtype.__module__ == 'ctypes') or (attrtype not in self.classRef):
+      return False
+    attr=getattr(self,attrname)
+    # check if pointer is NULL or if it's a basic type. getaddress return 0
+    attr_obj_address=getaddress(attr)
+    if (attr_obj_address == 0 ): # null is ok
+      return False
+    return True
+  
   def loadMembers(self,process):
     ''' 
     isValid() should have been tested before, otherwise.. it's gonna fail...
@@ -79,27 +106,17 @@ class LoadableMembers(ctypes.Structure):
     mappings= readProcessMappings(process)
     ## go through all members. if they are pointers AND not null AND in valid memorymapping AND a struct type, load them as struct pointers
     for attrname,attrtype in self._fields_:
-      if attrtype.__module__ == 'ctypes':
-        # basic type, ignore
-        continue
-      if attrtype not in self.classRef:
-        continue
-      attr=getattr(self,attrname)
-      # check null, in mappings and contents types.
-      ## already checked by self.valid - we hope - if not is_valid_address(obj,mappings):
-      if not bool(attr): # null is ok
-        continue
-      if not hasattr(attr,'contents'): # not struct is ok
+      if not self._fieldNeedsChecking(attrname,attrtype):
         continue
       _attrname='_'+attrname
-      attr_obj_address=getaddress(attr)
-      #log.debug('getaddress(self.%s) 0x%lx'%(attrname, attr_obj_address) )
-      #save ref to keep mem alloc - XXX Useful ?
       _attrType=self.classRef[attrtype]
+      attr=getattr(self,attrname)
+      attr_obj_address=getaddress(attr)
       ## boundary Double validation - check if address space of supposed valid member is cool and fits in mappings
       if ( not is_valid_address( attr, mappings, _attrType) ):
         log.warning('member %s has been unvalidated by boudaries check'%attrname)
         return False
+      # do the loading
       setattr(self, _attrname, process.readStruct(attr_obj_address, _attrType ) )
       #save pointer to it's place
       setattr(self, attrname, ctypes.pointer( getattr(self, _attrname) ) )

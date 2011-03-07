@@ -111,16 +111,24 @@ def printSize():
   ctypes_openssl.printSizeof()
   ctypes_openssh.printSizeof()
 
-def findCipherContext():
-  pass
-#dbg=PtraceDebugger()
-#process=dbg.addProcess(pid,is_attached=False)
-#if process is None:
-#  log.error("Error initializing Process debugging for %d"% pid)
-#  sys.exit(-1)
+def printme(obj):
+  print obj
 
-#maps=readProcessMappings(process)
-#stack=process.findStack()
+def findCipherContext():
+  dbg=PtraceDebugger()
+  process=dbg.addProcess(pid,is_attached=False)
+  if process is None:
+    log.error("Error initializing Process debugging for %d"% pid)
+    sys.exit(-1)
+  mappings=readProcessMappings(process)
+  stack=process.findStack()
+  for m in mappings:
+    #if m.pathname != '[heap]':
+    #  continue
+    if not abouchet.hasValidPermissions(m):
+      continue    
+    print m,m.permissions
+    abouchet.find_struct(process, m, ctypes_openssh.CipherContext, printme)
 
 #rsa=readRsa(addr)
 
@@ -131,11 +139,11 @@ def findCipherContext():
 #dsa=readDsa(addr)
 #writeWithLibDSA(addr)
 
-printSize()
+#printSize()
 
 class a:
   _plop=[1,2,3]
   _plip=[l*2 for l in _plop]
 
-
+findCipherContext()
 
