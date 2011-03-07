@@ -207,27 +207,47 @@ class BN_MONT_CTX(ctypes.Structure):
   ("n0",ctypes.c_ulong),
   ("flags",ctypes.c_int)]
 
+class EVP_PKEY(LoadableMembers):
+	_fields_ = [
+  ('type',ctypes.c_int),
+  ('save_type',ctypes.c_int),
+  ('references',ctypes.c_int),
+  ('pkey',ctypes.c_void_p), ## union of struct really
+  ('save_parameters',ctypes.c_int),
+  ('attributes',ctypes.c_void_p) ## 	STACK_OF(X509_ATTRIBUTE) *attributes; /* [ 0 ] */
+  ]
+
+
+class ENGINE_CMD_DEFN(LoadableMembers):
+	_fields_ = [
+  ('cmd_num',ctypes.c_uint),
+  ('cmd_name',ctypes.c_char_p),
+  ('cmd_desc',ctypes.c_char_p),
+  ('cmd_flags',ctypes.c_uint)
+  ]  
+
 class ENGINE(LoadableMembers):
   pass
 ENGINE._fields_ = [
   ('id',ctypes.c_char_p),
   ('name',ctypes.c_char_p),
-  ('dsa_meth',ctypes.POINTER(ctypes.c_int) ),
   ('rsa_meth',ctypes.POINTER(ctypes.c_int) ),
+  ('dsa_meth',ctypes.POINTER(ctypes.c_int) ),
   ('dh_meth',ctypes.POINTER(ctypes.c_int) ),
   ('ecdh_meth',ctypes.POINTER(ctypes.c_int) ),
+  ('ecdsa_meth',ctypes.POINTER(ctypes.c_int) ),
   ('rand_meth',ctypes.POINTER(ctypes.c_int) ),
   ('store_meth',ctypes.POINTER(ctypes.c_int) ),
-  ('ciphers',ctypes.POINTER(ctypes.c_int) ),
-  ('digest',ctypes.POINTER(ctypes.c_int) ),
-  ('destroy',ctypes.POINTER(ctypes.c_int) ), ## fn 
-  ('init',ctypes.POINTER(ctypes.c_int) ),
-  ('finish',ctypes.POINTER(ctypes.c_int) ),
-  ('ctrl',ctypes.POINTER(ctypes.c_int) ),
-  ('load_privkey',ctypes.POINTER(ctypes.c_int) ),
-  ('load_pubkey',ctypes.POINTER(ctypes.c_int) ),
-  ('load_ssl_client_cert',ctypes.POINTER(ctypes.c_int) ),
-  ('cmd_defns',ctypes.POINTER(ctypes.c_int) ),
+  ('ciphers',ctypes.POINTER(ctypes.c_int) ), ## fn typedef int (*ENGINE_CIPHERS_PTR)(ENGINE *, const EVP_CIPHER **, const int **, int);
+  ('digest',ctypes.POINTER(ctypes.c_int) ),  ## fn typedef int (*ENGINE_DIGESTS_PTR)(ENGINE *, const EVP_MD **, const int **, int);
+  ('destroy',ctypes.POINTER(ctypes.c_int) ), ## fn typedef int (*ENGINE_GEN_INT_FUNC_PTR)(ENGINE *);
+  ('init',ctypes.POINTER(ctypes.c_int) ),    ## fn typedef int (*ENGINE_GEN_INT_FUNC_PTR)(ENGINE *);
+  ('finish',ctypes.POINTER(ctypes.c_int) ),  ## fn typedef int (*ENGINE_GEN_INT_FUNC_PTR)(ENGINE *);
+  ('ctrl',ctypes.POINTER(ctypes.c_int) ),    ## fn typedef int (*ENGINE_CTRL_FUNC_PTR)(ENGINE *, int, long, void *, void (*f)(void));
+  ('load_privkey',ctypes.POINTER(EVP_PKEY) ), ## fn EVP_PKEY *
+  ('load_pubkey',ctypes.POINTER(EVP_PKEY) ),  ## fn EVP_PKEY *
+  ('load_ssl_client_cert',ctypes.POINTER(ctypes.c_int) ), ## fn typedef int (*ENGINE_SSL_CLIENT_CERT_PTR)(ENGINE *, SSL *ssl,
+  ('cmd_defns',ctypes.POINTER(ENGINE_CMD_DEFN) ), ##
   ('flags',ctypes.c_int),
   ('struct_ref',ctypes.c_int),
   ('funct_ref',ctypes.c_int),
@@ -235,8 +255,6 @@ ENGINE._fields_ = [
   ('prev',ctypes.POINTER(ENGINE) ),
   ('nex',ctypes.POINTER(ENGINE) )
   ]
-
-
 
 
 #KO
@@ -438,7 +456,7 @@ class EVP_MD_CTX(ctypes.Structure):
   ''' evp.h:304 '''
   _fields_ = [
   ("digest",  ctypes.POINTER(EVP_MD)),
-  ("engine",  ctypes.POINTER(ctypes.c_int) ), # ENGINE *
+  ("engine",  ctypes.POINTER(ENGINE) ), #
   ("flags",  ctypes.c_ulong),
   ("md_data",  ctypes.c_void_p)
   ]
@@ -461,5 +479,25 @@ class AES_KEY(ctypes.Structure):
   ("rounds",  ctypes.c_int)
   ] 
 
+def printSizeof():
+  print 'BIGNUM:',ctypes.sizeof(BIGNUM)
+  print 'STACK:',ctypes.sizeof(STACK)
+  print 'CRYPTO_EX_DATA:',ctypes.sizeof(CRYPTO_EX_DATA)
+  print 'BN_MONT_CTX:',ctypes.sizeof(BN_MONT_CTX)
+  print 'EVP_PKEY:',ctypes.sizeof(EVP_PKEY)
+  print 'ENGINE_CMD_DEFN:',ctypes.sizeof(ENGINE_CMD_DEFN)
+  print 'ENGINE:', ctypes.sizeof(ENGINE)
+  print 'RSA:',ctypes.sizeof(RSA)
+  print 'DSA:',ctypes.sizeof(DSA)
+  print 'EVP_CIPHER:',ctypes.sizeof(EVP_CIPHER)
+  print 'EVP_CIPHER_CTX:',ctypes.sizeof(EVP_CIPHER_CTX)
+  print 'EVP_MD:',ctypes.sizeof(EVP_MD)
+  print 'EVP_MD_CTX:',ctypes.sizeof(EVP_MD_CTX)
+  print 'HMAC_CTX:',ctypes.sizeof(HMAC_CTX)
+  print 'AES_KEY:',ctypes.sizeof(AES_KEY)
+  print 'HMAC_MAX_MD_CBLOCK:',HMAC_MAX_MD_CBLOCK
+  print 'EVP_MAX_BLOCK_LENGTH:',EVP_MAX_BLOCK_LENGTH
+  print 'EVP_MAX_IV_LENGTH:',EVP_MAX_IV_LENGTH
+  print 'AES_MAXNR:',AES_MAXNR
 
 

@@ -37,7 +37,7 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "includes.h"
+#include <includes.h>
  
 #include <sys/types.h>
 #include "openbsd-compat/sys-queue.h"
@@ -295,12 +295,14 @@ typedef struct umac_ctx {
 
 
 
-
+//#include <engine/engine.h>
+#include <engine/eng_int.h>
 
 
 
 /**
-gcc -g -O2 -Wall -Wpointer-arith -Wuninitialized -Wsign-compare -Wno-pointer-sign -Wformat-security -fno-strict-aliasing -fno-builtin-memset -fstack-protector-all -Os -DSSH_EXTRAVERSION=\"Debian-4ubuntu5\"  -I. -I..  -DSSHDIR=\"/etc/ssh\" -D_PATH_SSH_PROGRAM=\"/usr/bin/ssh\" -D_PATH_SSH_ASKPASS_DEFAULT=\"/usr/bin/ssh-askpass\" -D_PATH_SFTP_SERVER=\"/usr/lib/openssh/sftp-server\" -D_PATH_SSH_KEY_SIGN=\"/usr/lib/openssh/ssh-keysign\" -D_PATH_SSH_PKCS11_HELPER=\"/usr/lib/openssh/ssh-pkcs11-helper\" -D_PATH_SSH_PIDDIR=\"/var/run\" -D_PATH_PRIVSEP_CHROOT_DIR=\"/var/run/sshd\" -DSSH_RAND_HELPER=\"/usr/lib/openssh/ssh-rand-helper\" -D_PATH_SSH_DATADIR=\"/usr/share/ssh\" -DHAVE_CONFIG_H -I build-deb/ test.c -o test
+INCLUDES="-I./biblio/openssh-5.5p1/ -I./biblio/openssh-5.5p1/build-deb/ -I./biblio/openssl-0.9.8o/crypto/ -I./biblio/openssl-0.9.8o/"
+gcc -g -O2 -Wall -Wpointer-arith -Wuninitialized -Wsign-compare -Wno-pointer-sign -Wformat-security -fno-strict-aliasing -fno-builtin-memset -fstack-protector-all -Os -DSSH_EXTRAVERSION=\"Debian-4ubuntu5\"  $INCLUDES  -DSSHDIR=\"/etc/ssh\" -D_PATH_SSH_PROGRAM=\"/usr/bin/ssh\" -D_PATH_SSH_ASKPASS_DEFAULT=\"/usr/bin/ssh-askpass\" -D_PATH_SFTP_SERVER=\"/usr/lib/openssh/sftp-server\" -D_PATH_SSH_KEY_SIGN=\"/usr/lib/openssh/ssh-keysign\" -D_PATH_SSH_PKCS11_HELPER=\"/usr/lib/openssh/ssh-pkcs11-helper\" -D_PATH_SSH_PIDDIR=\"/var/run\" -D_PATH_PRIVSEP_CHROOT_DIR=\"/var/run/sshd\" -DSSH_RAND_HELPER=\"/usr/lib/openssh/ssh-rand-helper\" -D_PATH_SSH_DATADIR=\"/usr/share/ssh\" -DHAVE_CONFIG_H  ssh-types.c -o ssh-types
 
 */
 
@@ -308,26 +310,43 @@ gcc -g -O2 -Wall -Wpointer-arith -Wuninitialized -Wsign-compare -Wno-pointer-sig
 
 int main(){
 
-  printf("session_state: %d\n",sizeof(struct session_state));
-  printf("Buffer: %d\n",sizeof(Buffer));
-  printf("CipherContext: %d\n",sizeof(CipherContext));
-  printf("Newkeys: %d\n",sizeof(Newkeys));
-  printf("Mac: %d\n",sizeof(Mac));
-  printf("Cipher: %d\n",sizeof(Cipher));
-  printf("Comp: %d\n",sizeof(Comp));
+
+  printf("BIGNUM: %d\n",sizeof(BIGNUM));
+  printf("STACK: %d\n",sizeof(STACK));
+  printf("CRYPTO_EX_DATA: %d\n",sizeof(CRYPTO_EX_DATA));
+  printf("BN_MONT_CTX: %d\n",sizeof(BN_MONT_CTX));
+  printf("EVP_PKEY: %d\n",sizeof(EVP_PKEY));
+  printf("ENGINE_CMD_DEFN: %d\n",sizeof(ENGINE_CMD_DEFN));
+  printf("ENGINE: %d\n",sizeof(ENGINE));
+  printf("RSA: %d\n",sizeof(RSA));
+  printf("DSA: %d\n",sizeof(DSA));
+  printf("EVP_CIPHER: %d\n",sizeof(EVP_CIPHER));
   printf("EVP_CIPHER_CTX: %d\n",sizeof(EVP_CIPHER_CTX));
   printf("EVP_MD: %d\n",sizeof(EVP_MD));
+  printf("EVP_MD_CTX: %d\n",sizeof(EVP_MD_CTX));
+  printf("HMAC_CTX: %d\n",sizeof(HMAC_CTX));
+  printf("AES_KEY: %d\n",sizeof(AES_KEY));
+  printf("HMAC_MAX_MD_CBLOCK: %d\n", HMAC_MAX_MD_CBLOCK);
+  printf("EVP_MAX_BLOCK_LENGTH: %d\n", EVP_MAX_BLOCK_LENGTH);
+  printf("EVP_MAX_IV_LENGTH: %d\n",EVP_MAX_IV_LENGTH);
+  printf("AES_MAXNR: %d\n",AES_MAXNR);
+
+  printf("Cipher: %d\n",sizeof(Cipher));
+  printf("CipherContext: %d\n",sizeof(CipherContext));
   printf("Enc: %d\n",sizeof(Enc));
   printf("nh_ctx: %d\n",sizeof(struct nh_ctx));
+  printf("uhash_ctx: %d\n",sizeof(struct uhash_ctx));
+  printf("pdf_ctx: %d\n",sizeof(struct pdf_ctx));
+  printf("umac_ctx: %d\n",sizeof(struct umac_ctx));
+  printf("Mac: %d\n",sizeof(Mac));
+  printf("Comp: %d\n",sizeof(Comp));
+  printf("Newkeys: %d\n",sizeof(Newkeys));
+  printf("Buffer: %d\n",sizeof(Buffer));
   printf("packet: %d\n",sizeof(struct packet));
   printf("packet_state: %d\n",sizeof(struct packet_state));
-  printf("pdf_ctx: %d\n",sizeof(struct pdf_ctx));
-  printf("AES_KEY: %d\n",sizeof(AES_KEY));
-  printf("uhash_ctx: %d\n",sizeof(struct uhash_ctx));
-  printf("umac_ctx: %d\n",sizeof(struct umac_ctx));
-  printf("HMAC_CTX: %d\n",sizeof(HMAC_CTX));
-  printf("TAILQ_ENTRY_PACKET: %d\n",sizeof(TAILQ_ENTRY(packet)));
   printf("TAILQ_HEAD_PACKET: %d\n",sizeof(TAILQ_HEAD(,packet)));
+  printf("TAILQ_ENTRY_PACKET: %d\n",sizeof(TAILQ_ENTRY(packet)));
+  printf("session_state: %d\n",sizeof(struct session_state));
   printf("UINT32: %d\n",sizeof(UINT32));
   printf("UINT64: %d\n",sizeof(UINT64));
   printf("UINT8: %d\n",sizeof(UINT8));

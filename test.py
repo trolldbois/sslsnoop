@@ -8,7 +8,7 @@
 import logging,sys,os
 logging.basicConfig(level=logging.DEBUG)
 
-import abouchet,model
+import abouchet,ctypes_openssl,ctypes_openssh
 import ctypes
 from ptrace.debugger.debugger import PtraceDebugger
 from ptrace.debugger.memory_mapping import readProcessMappings
@@ -26,14 +26,14 @@ pid=27477
 addr=0xb835b4e8
 
 
-dbg=PtraceDebugger()
-process=dbg.addProcess(pid,is_attached=False)
-if process is None:
-  log.error("Error initializing Process debugging for %d"% pid)
-  sys.exit(-1)
+#dbg=PtraceDebugger()
+#process=dbg.addProcess(pid,is_attached=False)
+#if process is None:
+#  log.error("Error initializing Process debugging for %d"% pid)
+#  sys.exit(-1)
 
-maps=readProcessMappings(process)
-stack=process.findStack()
+#maps=readProcessMappings(process)
+#stack=process.findStack()
 
 
 
@@ -45,7 +45,7 @@ def dbg_read(addr):
 
 
 def readRsa(addr):
-  rsa=process.readStruct(addr,model.RSA)
+  rsa=process.readStruct(addr,ctypes_openssl.RSA)
   print "isValid : ", rsa.isValid(maps)
   #rsa.printValid(maps)
   #print rsa
@@ -57,7 +57,7 @@ def readRsa(addr):
   return rsa
 
 def readDsa(addr):
-  dsa=process.readStruct(addr,model.DSA)
+  dsa=process.readStruct(addr,ctypes_openssl.DSA)
   print "isValid : ", dsa.isValid(maps)
   #dsa.printValid(maps)
   #print 'DSA1 -> ', dsa
@@ -75,8 +75,8 @@ def readDsa(addr):
 def writeWithLibRSA(addr):
   ssl=cdll.LoadLibrary("libssl.so")
   # need original data struct
-  #rsa=process.readBytes(addr, ctypes.sizeof(model.RSA) )
-  #rsa=ctypes.addressof(process.readStruct(addr,model.RSA))
+  #rsa=process.readBytes(addr, ctypes.sizeof(ctypes_openssl.RSA) )
+  #rsa=ctypes.addressof(process.readStruct(addr,ctypes_openssl.RSA))
   rsa=readRsa(addr)
   rsa_p=ctypes.addressof(rsa)
   print 'rsa acquired 0x%lx copied to 0x%lx'%(addr,rsa_p)
@@ -101,11 +101,15 @@ def withM2(addr):
   import M2Crypto
   from M2Crypto.BIO import MemoryBuffer
   from M2Crypto import RSA as mRSA
-  rsa=process.readBytes(addr, ctypes.sizeof(model.RSA) )
+  rsa=process.readBytes(addr, ctypes.sizeof(ctypes_openssl.RSA) )
   bio=MemoryBuffer(rsa)
   # tsssi need PEM
   myrsa=mRSA.load_key_bio(bio)
   return myrsa
+
+def printSize():
+  ctypes_openssl.printSizeof()
+  ctypes_openssh.printSizeof()
 
 #rsa=readRsa(addr)
 
@@ -114,7 +118,7 @@ def withM2(addr):
 #abouchet.find_keys(process,stack)
 
 #dsa=readDsa(addr)
-writeWithLibDSA(addr)
+#writeWithLibDSA(addr)
 
-
+printSize()
 

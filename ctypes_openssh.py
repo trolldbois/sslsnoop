@@ -11,8 +11,8 @@ from ptrace.debugger.memory_mapping import readProcessMappings
 import logging
 log=logging.getLogger('openssh.model')
 
-from model import is_valid_address,getaddress,sstr
-from model import EVP_CIPHER_CTX, EVP_MD, HMAC_CTX, AES_KEY
+from ctypes_openssl import is_valid_address,getaddress,sstr
+from ctypes_openssl import EVP_CIPHER_CTX, EVP_MD, HMAC_CTX, AES_KEY
 
 MODE_MAX=2 #kex.h:62
 AES_BLOCK_LEN=16 #umac.c:168
@@ -23,7 +23,7 @@ STREAMS=(UMAC_OUTPUT_LEN / 4) #umac.c:310
 HASH_BUF_BYTES=64 # umac.c:315
 SSH_SESSION_KEY_LENGTH=32 # ssh.h:84
 
-''' typedefs '''
+''' typedefs ptrace / ctypes_stdint.py  TODO'''
 UINT64=ctypes.c_ulonglong
 UINT32=ctypes.c_ulong
 UINT8=ctypes.c_ubyte
@@ -166,9 +166,8 @@ class TAILQ_ENTRY_PACKET(ctypes.Structure):
   ("tqe_prev", ctypes.POINTER(ctypes.POINTER(packet)) )
   ]
 
-class packet(ctypes.Structure):
-  ''' packet.c:90 '''
-  _fields_ = [
+''' packet.c:90 '''
+packet._fields_ = [
   ("next", TAILQ_ENTRY_PACKET), 
   ("type", ctypes.c_ubyte ), #u_char
   ("payload", Buffer )
@@ -215,27 +214,23 @@ class session_state(ctypes.Structure):
   ]
 
 
-def test():
-  print 'session_state:',ctypes.sizeof(session_state)
-  print 'Buffer:',ctypes.sizeof(Buffer)
-  print 'CipherContext:',ctypes.sizeof(CipherContext)
-  print 'Newkeys:',ctypes.sizeof(Newkeys)
-  print 'Mac:',ctypes.sizeof(Mac)
+def printSizeof():
   print 'Cipher:',ctypes.sizeof(Cipher)
-  print 'Comp:',ctypes.sizeof(Comp)
-  print 'EVP_CIPHER_CTX:',ctypes.sizeof(EVP_CIPHER_CTX)
-  print 'EVP_MD:',ctypes.sizeof(EVP_MD)
+  print 'CipherContext:',ctypes.sizeof(CipherContext)
   print 'Enc:',ctypes.sizeof(Enc)
   print 'nh_ctx:',ctypes.sizeof(nh_ctx)
+  print 'uhash_ctx:',ctypes.sizeof(uhash_ctx)
+  print 'pdf_ctx:',ctypes.sizeof(pdf_ctx)
+  print 'umac_ctx:',ctypes.sizeof(umac_ctx)
+  print 'Mac:',ctypes.sizeof(Mac)
+  print 'Comp:',ctypes.sizeof(Comp)
+  print 'Newkeys:',ctypes.sizeof(Newkeys)
+  print 'Buffer:',ctypes.sizeof(Buffer)
   print 'packet:',ctypes.sizeof(packet)
   print 'packet_state:',ctypes.sizeof(packet_state)
-  print 'pdf_ctx:',ctypes.sizeof(pdf_ctx)
-  print 'AES_KEY:',ctypes.sizeof(AES_KEY)
-  print 'uhash_ctx:',ctypes.sizeof(uhash_ctx)
-  print 'umac_ctx:',ctypes.sizeof(umac_ctx)
-  print 'HMAC_CTX:',ctypes.sizeof(HMAC_CTX)
-  print 'TAILQ_ENTRY_PACKET:',ctypes.sizeof(TAILQ_ENTRY_PACKET)
   print 'TAILQ_HEAD_PACKET:',ctypes.sizeof(TAILQ_HEAD_PACKET)
+  print 'TAILQ_ENTRY_PACKET:',ctypes.sizeof(TAILQ_ENTRY_PACKET)
+  print 'session_state:',ctypes.sizeof(session_state)
   print 'UINT32:',ctypes.sizeof(UINT32)
   print 'UINT64:',ctypes.sizeof(UINT64)
   print 'UINT8:',ctypes.sizeof(UINT8)
@@ -249,7 +244,6 @@ def test():
   print 'STREAMS:',STREAMS
 
 
-test()
 
 
 

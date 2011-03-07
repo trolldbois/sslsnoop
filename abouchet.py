@@ -9,7 +9,7 @@ __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 import os,logging,sys
 #use volatility?
 
-import model
+import ctypes_openssl
 #from  model import DSA,RSA
 import ctypes
 from ctypes import *
@@ -140,7 +140,7 @@ def write_rsa_key(rsa,prefix):
      -> i=BIO_write(out,&(b[j]),n);
    -> i=PEM_write_bio(bp,name,buf,data,i);
    
-  en gros, c'est model.RSA().writeASN1(file)
+  en gros, c'est ctypes_openssl.RSA().writeASN1(file)
   '''
   filename=get_valid_filename(prefix)
   ssl=cdll.LoadLibrary("libssl.so")
@@ -191,13 +191,13 @@ def find_keys(process,stackmap):
   ## todo change 4 by len char *
   ##if ( j <= map->size - sizeof(RSA) ) {
   plen=ctypes.sizeof(ctypes.c_char_p) # use aligned words only
-  rsalen=ctypes.sizeof(model.RSA)
-  dsalen=ctypes.sizeof(model.DSA)
+  rsalen=ctypes.sizeof(ctypes_openssl.RSA)
+  dsalen=ctypes.sizeof(ctypes_openssl.DSA)
   
   # parse for rsa
   for j in range(stackmap.start, stackmap.end-rsalen, plen):
     #log.debug("checking 0x%lx"% j)
-    rsa=process.readStruct(j,model.RSA)
+    rsa=process.readStruct(j,ctypes_openssl.RSA)
     # check if data matches
     if rsa.isValid(mappings): # refreshing would be better
       log.debug('possible valid rsa key at 0x%lx'%(j))
@@ -209,7 +209,7 @@ def find_keys(process,stackmap):
   #do the same with dsa
   for j in range(stackmap.start, stackmap.end-dsalen, plen):
     #log.debug("checking 0x%lx"% j)
-    dsa=process.readStruct(j,model.DSA)
+    dsa=process.readStruct(j,ctypes_openssl.DSA)
     # check if data matches
     if dsa.isValid(mappings): # refreshing would be better
       log.debug('possible valid dsa at 0x%lx'%(j))
@@ -352,9 +352,9 @@ def main(argv):
     print m,m.permissions
     ## method generic
     # look for RSA
-    find_struct(process, m, model.RSA, rsaw.writeToFile)
+    find_struct(process, m, ctypes_openssl.RSA, rsaw.writeToFile)
     # look for DSA
-    find_struct(process, m, model.DSA, dsaw.writeToFile)
+    find_struct(process, m, ctypes_openssl.DSA, dsaw.writeToFile)
 
   log.info("done for pid %d"%pid)
 
