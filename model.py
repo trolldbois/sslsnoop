@@ -18,6 +18,8 @@ EVP_MAX_BLOCK_LENGTH=32
 EVP_MAX_IV_LENGTH=16
 AES_MAXNR=14 # aes.h:66
 
+BN_ULONG=ctypes.c_ulong
+
 ''' returns if the address of the struct is in the mapping area
 '''
 def is_valid_address(obj,mappings):
@@ -38,6 +40,8 @@ def getaddress(obj):
   # check for null pointers
   #print 'getaddress'
   if bool(obj):
+    if not hasattr(obj,'contents'):
+      return 0
     #print 'get adressses is '
     return ctypes.addressof(obj.contents)
   else:
@@ -54,36 +58,71 @@ def sstr(obj):
     return "0x0"
 
 
-class mapping:
-  '''  struct _mapping *next;
-  unsigned long address;
-  unsigned int size;
-  int flags;
-  const char *name;
-  mappings_t *mappings;
-  char * data;
-  '''
-  next=None
-  address=0
-  size=0
-  flags=0
-  name=None
-  mappings=0
-  data=None
-  def __init__(self,address,size,flags,name):
-    self.address=address
-    self.size=size
-    self.flags=flags
-    self.name=name
-      
-class mappings:
-  pid=None
-  maps=None
+class LoadableMembers(ctypes.Structure):
+  loaded=False
+  valid=False
+  def loadMembers(self,process):
+    ''' 
+    isValid() should have been tested before, otherwise.. it's gonna fail...
+    we copy memory from process for each pointer
+    and assign it to a python object _here, then we assign 
+    the member to be a pointer to _here'''
+    if self.loaded:
+      return True
+    if not self.valid:
+      log.error("%s not loaded, it's not even valid"%(self.__class__.__name__))
+      return False
+    mappings= readProcessMappings(process)
+    # we only load struct here. basic type must be done by specialized methods.
+    classRef=dict([ (ctypes.POINTER( t), t) for t in [BIGNUM, STACK, CRYPTO_EX_DATA, RSA, DSA, BN_MONT_CTX, EVP_CIPHER, EVP_CIPHER_CTX, EVP_MD]])
+    ## go through all members. if they are pointers AND not null AND in valid memorymapping AND a struct type, load them as struct pointers
+    for attrname,attrtype in self._fields_:
+      if attrtype.__module__ == 'ctypes':
+        # basic type, ignore
+        continue
+      if attrtype not in classRef:
+        continue
+      attr=getattr(self,attrname)
+      # check null, in mappings and contents types.
+      ## already checked by self.valid - we hope - if not is_valid_address(obj,mappings):
+      if not bool(attr): # null is ok
+        continue
+      if not hasattr(attr,'contents'): # not struct is ok
+        continue
+      _attrname='_'+attrname
+      attr_obj_address=getaddress(attr)
+      #log.debug('getaddress(self.%s) 0x%lx'%(attrname, attr_obj_address) )
+      #save ref to keep mem alloc - XXX Useful ?
+      _attrType=classRef[attrtype]
+      setattr(self, _attrname, process.readStruct(attr_obj_address, _attrType ) )
+      #save pointer to it's place
+      setattr(self, attrname, ctypes.pointer( getattr(self, _attrname) ) )
+      # recurse
+      attr=getattr(self,attrname)
+      if not bool(attr):
+        log.warning('Member %s is null after copy: %s'%(attrname,attr))
+        continue
+      # attr.contents isntance is always different
+      contents=attr.contents
+      if (not contents.isValid(mappings) ):
+        log.error('Member %s is invalid: %s'%(attrname,attr))
+        self.valid=False
+        return False
+      # go and load
+      ret=contents.loadMembers(process)
+      #if attrname == 'n':
+      #  print ctypes.addressof(contents), contents.top
+      #  print ctypes.addressof(attr.contents), attr.contents.top
+      if not ret:
+        log.error('member %s was not loaded'%(attrname))
+        return False
+    self.loaded=True
+    return True
 
 #ok
-class BIGNUM(ctypes.Structure):
+class BIGNUM(LoadableMembers):
   _fields_ = [
-  ("d",ctypes.POINTER(ctypes.c_ulong) ), #BN_ULONG *
+  ("d",ctypes.POINTER(BN_ULONG) ),
   ('top',ctypes.c_int),
   ('dmax',ctypes.c_int),
   ('neg',ctypes.c_int),
@@ -95,6 +134,9 @@ class BIGNUM(ctypes.Structure):
     we copy memory from process for each pointer
     and assign it to a python object _here, then we assign 
     the member to be a pointer to _here'''
+    if not self.valid:
+      log.error('BigNUm tries to load members when its not validated')
+      return False
     # Load and memcopy d / BN_ULONG *
     attr_obj_address=getaddress(self.d)
     #print self
@@ -103,6 +145,7 @@ class BIGNUM(ctypes.Structure):
     #ulong_array= (ctypes.c_ulong * self.top)
     #self._d = process.readStruct(attr_obj_address, ulong_array) 
     self.d  = ctypes.cast(ctypes.pointer( self._d ), ctypes.POINTER(ctypes.c_ulong))
+    self.loaded=True
     return True
   
   def isValid(self,mappings):
@@ -115,8 +158,9 @@ class BIGNUM(ctypes.Structure):
       return False 
     #print 'BIGNUM.isValid 3'
     #last test on memory address
-    return is_valid_address( self.d, mappings)
-    #return True
+    self.valid=is_valid_address( self.d, mappings)
+    #print 'is_valid_adress is ',self.valid
+    return self.valid
   
   def __str__(self):
     #print 'coucou',repr(self)
@@ -164,7 +208,9 @@ class BN_MONT_CTX(ctypes.Structure):
 
 
 #KO
-class RSA(ctypes.Structure):
+class RSA(LoadableMembers):
+  ''' rsa/rsa.h '''
+  loaded=False
   _fields_ = [
   ("pad",  ctypes.c_int), 
   ("version",  ctypes.c_long),
@@ -184,7 +230,7 @@ class RSA(ctypes.Structure):
   ("_method_mod_n", ctypes.POINTER(BN_MONT_CTX) ),
   ("_method_mod_p", ctypes.POINTER(BN_MONT_CTX) ),
   ("_method_mod_q", ctypes.POINTER(BN_MONT_CTX) ),
-  ("bignum_data",ctypes.c_char_p),
+  ("bignum_data",ctypes.POINTER(ctypes.c_char)), ## moue c_char_p ou POINTER(c_char) ?
   ("blinding",ctypes.POINTER(BIGNUM)),#BN_BLINDING *blinding;
   ("mt_blinding",ctypes.POINTER(BIGNUM))#BN_BLINDING *mt_blinding;
   ]
@@ -200,11 +246,22 @@ class RSA(ctypes.Structure):
     log.debug(is_valid_address( self.iqmp, mappings) )
     return
   def loadMembers(self,process):
+    # XXXX clean other structs
+    self.meth=None
+    self._method_mod_n = None
+    self._method_mod_p = None
+    self._method_mod_q = None
+    self.bignum_data = None
+    self.blinding = None
+
+    if not LoadableMembers.loadMembers(self,process):
+      log.error('RSA not loaded')
+      return False
     ''' 
-    isValid() should have been tested before, otherwise.. it's gonna fail...
-    we copy memory from process for each pointer
-    and assign it to a python object _here, then we assign 
-    the member to be a pointer to _here'''
+    if self.loaded:
+      return True
+    if not self.valid:
+      return False
     # BIGNUMS
     for attrname in ['n','e','d','p','q','dmp1','dmq1','iqmp']:
       attr=getattr(self,attrname)
@@ -223,19 +280,28 @@ class RSA(ctypes.Structure):
         return False
       # go and load
       attr.contents.loadMembers(process)
-    # XXXX clean other structs
-    self.meth=None
-    self._method_mod_n = None
-    self._method_mod_p = None
-    self._method_mod_q = None
-    self.bignum_data = None
-    self.blinding = None
+    # we have to load ALL pointer ...
+    # bignum_data has  the real BIGNNUM data
+    #
+    #k=ctypes.sizeof(BIGNUM)*6
+    #off=k/ctypes.sizeof(BN_ULONG)+1
+    #j=1
+    #for bn in ['d','p','q','dmp1','dmq1','iqmp']:
+    #  j+=getattr(self,bn).contents.top
+    #self.bignum_data_len=(off+j)*ctypes.sizeof(BN_ULONG)
+    #self._bignum_data=process.readBytes(getaddress(self.bignum_data),self.bignum_data_len) 
+    #self.bignum_data=ctypes.pointer(self._bignum_data)
+    '''
+    # but it can be null, so...
+    
+    #
+    self.loaded=True
     return True
     
   def isValid(self,mappings):
     ''' struct is valid when :
     '''
-    return (self.pad ==0 and self.version ==0 and
+    self.valid=(self.pad ==0 and self.version ==0 and
           (0 <= self.references <= 0xfff)  and
         is_valid_address( self.n, mappings)    and 
         is_valid_address( self.e, mappings)    and
@@ -245,6 +311,8 @@ class RSA(ctypes.Structure):
         is_valid_address( self.dmp1, mappings) and
         is_valid_address( self.dmq1, mappings) and
         is_valid_address( self.iqmp, mappings) )
+    return self.valid
+    
   def __str__(self):
     s=repr(self)+'\n'
     for field,typ in self._fields_:
@@ -357,7 +425,7 @@ class EVP_CIPHER(ctypes.Structure):
   ("iv_len",  ctypes.c_int), 
   ("flags",  ctypes.c_ulong), 
   ("init",  ctypes.POINTER(ctypes.c_int)), # function () 
-  ("do_cipher",  ctypes.POINTER(ctypes.c_int)), # function () 
+  ("do_cipher",  ctypes.POINTER(ctypes.c_int)), # function () ## crypt func.
   ("cleanup",  ctypes.POINTER(ctypes.c_int)), # function () 
   ("ctx_size",  ctypes.c_int), 
   ("set_asn1_parameters",  ctypes.POINTER(ctypes.c_int)), # function () 
