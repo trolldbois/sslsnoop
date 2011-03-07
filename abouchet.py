@@ -117,12 +117,12 @@ class FileWriter:
 
 class RSAFileWriter(FileWriter):
   def __init__(self):
-    self.prefix='rsa'
+    self.prefix='id_rsa'
   def writeToFile(self,instance):
     write_rsa_key(instance,self.prefix)
 class DSAFileWriter(FileWriter):
   def __init__(self):
-    self.prefix='dsa'
+    self.prefix='id_dsa'
   def writeToFile(self,instance):
     write_dsa_key(instance,self.prefix)
     
@@ -340,6 +340,8 @@ def main(argv):
   #if (dbg_map_cache(map) < 0)
   ### t-t-t-t, search in all MemoryMap
   mappings= readProcessMappings(process)
+  rsaw=RSAFileWriter()
+  dsaw=DSAFileWriter()
   for m in mappings:
     ##debug, rsa is on head
     if m.pathname != '[heap]':
@@ -348,20 +350,14 @@ def main(argv):
       continue
     
     print m,m.permissions
-    find_keys(process,m)
-    
-    
+    ## method 1
+    #find_keys(process,m)
+    ## method 2
     # look for RSA
-    #rsaw=RSAFileWriter()
-    #rsakeys=find_struct(process, m, model.RSA, rsaw.writeToFile)
-    
-    
-    '''
+    find_struct(process, m, model.RSA, rsaw.writeToFile)
     # look for DSA
-    dsakeys=find_struct(process, m, model.DSA)
-    for k in dsakeys:
-      write_dsa_key(k, "id_dsa")
-    #'''
+    find_struct(process, m, model.DSA, dsaw.writeToFile)
+
   log.info("done for pid %d"%pid)
 
   return -1

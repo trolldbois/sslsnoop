@@ -293,7 +293,7 @@ class RSA(LoadableMembers):
 
     
 #KO
-class DSA(ctypes.Structure):
+class DSA(LoadableMembers):
   _fields_ = [
   ("pad",  ctypes.c_int), 
   ("version",  ctypes.c_long),
@@ -323,46 +323,23 @@ class DSA(ctypes.Structure):
   def internalCheck(self):
     '''  pub_key = g^privKey mod p '''
     return
+
   def loadMembers(self,process):
-    ''' 
-    isValid() should have been tested before, otherwise.. it's gonna fail...
-    we copy memory from process for each pointer
-    and assign it to a python object _here, then we assign 
-    the member to be a pointer to _here'''
-    # BIGNUMS
-    mappings= readProcessMappings(process)
-    for attrname in ['p','q','g','pub_key','priv_key','kinv','r']:
-      attr=getattr(self,attrname)
-      _attrname='_'+attrname
-      attr_obj_address=getaddress(getattr(self,attrname))
-      #
-      if not is_valid_address(attr,mappings):
-        if ( attrname == 'kinv' or attrname == 'r' ) :
-          # r and kinv can be null
-          continue
-        log.error('returned invalid adress for %s 0x%lx'%(attrname,attr_obj_address) )
-        return False
-      #save ref to keep mem alloc
-      setattr(self, _attrname, process.readStruct(attr_obj_address, BIGNUM) )
-      #save NB pointer to it's place
-      setattr(self,  attrname, ctypes.pointer( getattr(self, _attrname) ) )
-      #### load inner structures pointers
-      attr=getattr(self,attrname)
-      #if getattr(self,_attrname).isValid(mappings):
-      #  getattr(self,_attrname).loadMembers(process)
-      if getattr(self,attrname).contents.isValid(mappings):
-        getattr(self,attrname).contents.loadMembers(process)
-      else:
-        #log.warning('%s is not valid'%_attrname)
-        return False
-    # XXXX clean other structs
+    # clean other structs
+    # r and kinv can be null
     self.meth=None
     self._method_mod_p = None
     self.engine = None
+    
+    if not LoadableMembers.loadMembers(self,process):
+      log.error('RSA not loaded')
+      return False
+    #
+    self.loaded=True
     return True
     
   def isValid(self,mappings):
-    return (
+    self.valid= (
         self.pad ==0 and self.version ==0 and
         (0 <= self.references <= 0xfff)  and
         is_valid_address( self.p, mappings)        and
@@ -373,16 +350,7 @@ class DSA(ctypes.Structure):
         #is_valid_address( self.kinv, mappings) and  # kinv and r can be null
         #is_valid_address( self.r, mappings)  ) 
         True )
-  def __str__(self):
-    s=repr(self)+'\n'
-    for field,typ in self._fields_:
-      if typ != ctypes.c_char_p and typ != ctypes.c_int and typ != CRYPTO_EX_DATA:
-        #s+='%s: 0x%lx\n'%(field, getaddress(getattr(self,field)) )  
-        s+='%s: %s\n'%(field, sstr(getattr(self,field)) )  
-      else:
-        s+='%s: %s\n'%(field,getattr(self,field) )        
-    return s
-
+    return self.valid
 
 #ok
 class EVP_CIPHER(ctypes.Structure):
