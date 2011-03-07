@@ -7,6 +7,7 @@
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
 import ctypes
+from model import is_valid_address,getaddress,sstr,LoadableMembers
 from ptrace.debugger.memory_mapping import readProcessMappings
 import logging
 log=logging.getLogger('openssh.model')
