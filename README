@@ -87,7 +87,7 @@ active_state->outgoing_packet is compressed if required ( packet.c:866 )
 padding/random is added if necessary (packet.c:889)
 then MAC is calculated (packet.c:924)
 then buffer is encrypted with 	
-  cipher_crypt(&active_state->send_context, cp, (packet.c:933)   ->OpenSSL EVP_Cipher
+  cipher_crypt(&active_state->send_context, cp, (packet.c:933)   ->OpenSSL EVP_Cipher (evp/enc_min.c:348:int EVP_Cipher)
 MAC is appended unencrypted
 finally session is updated with seqnum++ and stuff like that
 and set_newkeys is called if it's was a rekey command
@@ -121,7 +121,12 @@ packet.c:1139
 	cipher_crypt(&active_state->receive_context, cp,
 	    buffer_ptr(&active_state->input), padded_len);
 
+Data structs are the same size...
+----------------
+Next step, load a valid session_state 
+print its address
+ptrace it .
 
-
+print CipherContext.cipher.name .
 
 

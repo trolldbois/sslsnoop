@@ -300,7 +300,7 @@ def usage(txt):
 
 
 def main(argv):
-  logging.basicConfig(level=logging.DEBUG)
+  logging.basicConfig(level=logging.INFO)
   logging.debug(argv)
   if ( len(argv) < 1 ):
     usage(argv[0])
@@ -344,15 +344,13 @@ def main(argv):
   dsaw=DSAFileWriter()
   for m in mappings:
     ##debug, rsa is on head
-    if m.pathname != '[heap]':
-      continue
+    #if m.pathname != '[heap]':
+    #  continue
     if not hasValidPermissions(m):
       continue
     
     print m,m.permissions
-    ## method 1
-    #find_keys(process,m)
-    ## method 2
+    ## method generic
     # look for RSA
     find_struct(process, m, model.RSA, rsaw.writeToFile)
     # look for DSA

@@ -22,7 +22,7 @@ BN_ULONG=ctypes.c_ulong
 
 ''' returns if the address of the struct is in the mapping area
 '''
-def is_valid_address(obj,mappings):
+def is_valid_address(obj,mappings, structType=None):
   '''static int is_valid_address(unsigned long addr, mappings_t *mappings) {'''
   # check for null pointers
   #print 'is_valid_address'
@@ -31,6 +31,11 @@ def is_valid_address(obj,mappings):
     return False
   for m in mappings:
     if addr in m:
+      # check if end of struct is ALSO in m
+      if (structType is not None):
+        s=ctypes.sizeof(structType)
+        if (addr+s) not in m:
+          return False
       return True
   return False
 
@@ -94,6 +99,10 @@ class LoadableMembers(ctypes.Structure):
       #log.debug('getaddress(self.%s) 0x%lx'%(attrname, attr_obj_address) )
       #save ref to keep mem alloc - XXX Useful ?
       _attrType=classRef[attrtype]
+      ## boundary Double validation - check if address space of supposed valid member is cool and fits in mappings
+      if ( not is_valid_address( attr, mappings, _attrType) ):
+        log.warning('member %s has been unvalidated by boudaries check'%attrname)
+        return False
       setattr(self, _attrname, process.readStruct(attr_obj_address, _attrType ) )
       #save pointer to it's place
       setattr(self, attrname, ctypes.pointer( getattr(self, _attrname) ) )
@@ -105,7 +114,7 @@ class LoadableMembers(ctypes.Structure):
       # attr.contents isntance is always different
       contents=attr.contents
       if (not contents.isValid(mappings) ):
-        log.error('Member %s is invalid: %s'%(attrname,attr))
+        log.debug('Member %s is invalid: %s'%(attrname,attr))
         self.valid=False
         return False
       # go and load
@@ -114,7 +123,7 @@ class LoadableMembers(ctypes.Structure):
       #  print ctypes.addressof(contents), contents.top
       #  print ctypes.addressof(attr.contents), attr.contents.top
       if not ret:
-        log.error('member %s was not loaded'%(attrname))
+        log.debug('member %s was not loaded'%(attrname))
         return False
     self.loaded=True
     return True
@@ -151,7 +160,6 @@ class BIGNUM(LoadableMembers):
       return False
     # Load and memcopy d / BN_ULONG *
     attr_obj_address=getaddress(self.d)
-    #print self
     self._d = process.readArray(attr_obj_address, ctypes.c_ulong, self.top) 
     ## or    
     #ulong_array= (ctypes.c_ulong * self.top)
@@ -161,36 +169,17 @@ class BIGNUM(LoadableMembers):
     return True
   
   def isValid(self,mappings):
-    #print 'BIGNUM.isValid 1'
-    #print self.flags
     if ( self.dmax < 0 or self.top < 0 or self.dmax < self.top ):
       return False
-    #print 'BIGNUM.isValid 2'
     if ( not (self.neg == 1 or self.neg == 0 ) ) :
       return False 
-    #print 'BIGNUM.isValid 3'
     #last test on memory address
     self.valid=is_valid_address( self.d, mappings)
-    #print 'is_valid_adress is ',self.valid
     return self.valid
   
   def __str__(self):
-    #print 'coucou',repr(self)
-    return repr(self)
-    #print self.d
-    #print 'add',ctypes.addressof(self.d)
-    #print 'addc',ctypes.addressof(self.d.contents)
-    ## is_valid_address(d,mappings) could be False
-    #if self.d:
-    #  print 'coucou2'
-    #  d=ctypes.addressof(self.d.contents)
-    #else:
-    #  print 'coucou2.2'
-    #  d=0
-    d=0
-    print 'coucou'
-    print self.top
-    return 'BIGNUM NB'
+    #return repr(self)
+    d= getaddress(self.d)
     return ("BN { d=0x%lx, top=%d, dmax=%d, neg=%d, flags=%d }"%
                 (d, self.top, self.dmax, self.neg, self.flags) )
 #ok
@@ -217,6 +206,37 @@ class BN_MONT_CTX(ctypes.Structure):
   ("Ni",BIGNUM),
   ("n0",ctypes.c_ulong),
   ("flags",ctypes.c_int)]
+
+class ENGINE(LoadableMembers):
+  pass
+ENGINE._fields_ = [
+  ('id',ctypes.c_char_p),
+  ('name',ctypes.c_char_p),
+  ('dsa_meth',ctypes.POINTER(ctypes.c_int) ),
+  ('rsa_meth',ctypes.POINTER(ctypes.c_int) ),
+  ('dh_meth',ctypes.POINTER(ctypes.c_int) ),
+  ('ecdh_meth',ctypes.POINTER(ctypes.c_int) ),
+  ('rand_meth',ctypes.POINTER(ctypes.c_int) ),
+  ('store_meth',ctypes.POINTER(ctypes.c_int) ),
+  ('ciphers',ctypes.POINTER(ctypes.c_int) ),
+  ('digest',ctypes.POINTER(ctypes.c_int) ),
+  ('destroy',ctypes.POINTER(ctypes.c_int) ), ## fn 
+  ('init',ctypes.POINTER(ctypes.c_int) ),
+  ('finish',ctypes.POINTER(ctypes.c_int) ),
+  ('ctrl',ctypes.POINTER(ctypes.c_int) ),
+  ('load_privkey',ctypes.POINTER(ctypes.c_int) ),
+  ('load_pubkey',ctypes.POINTER(ctypes.c_int) ),
+  ('load_ssl_client_cert',ctypes.POINTER(ctypes.c_int) ),
+  ('cmd_defns',ctypes.POINTER(ctypes.c_int) ),
+  ('flags',ctypes.c_int),
+  ('struct_ref',ctypes.c_int),
+  ('funct_ref',ctypes.c_int),
+  ('ex_data',CRYPTO_EX_DATA),
+  ('prev',ctypes.POINTER(ENGINE) ),
+  ('nex',ctypes.POINTER(ENGINE) )
+  ]
+
+
 
 
 #KO
@@ -270,9 +290,11 @@ class RSA(LoadableMembers):
     self.blinding = None
 
     if not LoadableMembers.loadMembers(self,process):
-      log.error('RSA not loaded')
+      log.debug('RSA not loaded')
       return False
     #
+    #for e in [self.n, self.e, self.d, self.p, self.q, self.dmp1, self.dmq1 , self.iqmp]:
+    #  print e.contents
     self.loaded=True
     return True
     
@@ -309,8 +331,8 @@ class DSA(LoadableMembers):
   ("_method_mod_p", ctypes.POINTER(BN_MONT_CTX) ),
   ("references", ctypes.c_int),
   ("ex_data", CRYPTO_EX_DATA ),
-  ("meth",ctypes.POINTER(BIGNUM)),#  const DSA_METHOD *meth;
-  ("engine",ctypes.POINTER(BIGNUM))#ENGINE *engine;
+  ("meth",ctypes.POINTER(ctypes.c_int)),#  const DSA_METHOD *meth;
+  ("engine",ctypes.POINTER(ENGINE))
   ]
   def printValid(self,mappings):
     log.debug( '----------------------- \npad: %d version %d ref %d'%(self.pad,self.version,self.write_params) )
@@ -332,7 +354,7 @@ class DSA(LoadableMembers):
     self.engine = None
     
     if not LoadableMembers.loadMembers(self,process):
-      log.error('RSA not loaded')
+      log.debug('DSA not loaded')
       return False
     #
     self.loaded=True
