@@ -109,8 +109,25 @@ def get_valid_filename(prefix):
   log.error("Too many file keys extracted in current directory")
   return None
 
-#ko
-def write_rsa_key(rsa,prefix,process):
+class FileWriter:
+  def __init__(self,prefix):
+    self.prefix=prefix
+  def writeToFile(self,instance):
+    raise NotImplementedError
+
+class RSAFileWriter(FileWriter):
+  def __init__(self):
+    self.prefix='rsa'
+  def writeToFile(self,instance):
+    write_rsa_key(instance,self.prefix)
+class DSAFileWriter(FileWriter):
+  def __init__(self):
+    self.prefix='dsa'
+  def writeToFile(self,instance):
+    write_dsa_key(instance,self.prefix)
+    
+
+def write_rsa_key(rsa,prefix):
   '''
   PEM_write_RSAPrivateKey(f, rsa_p, None, None, 0, None, None)
   PEM_write_RSAPrivateKey(fp,x, [enc,kstr,klen,cb,u]) 
@@ -126,30 +143,23 @@ def write_rsa_key(rsa,prefix,process):
   en gros, c'est model.RSA().writeASN1(file)
   '''
   filename=get_valid_filename(prefix)
-  #print 'filename'
   ssl=cdll.LoadLibrary("libssl.so")
   # need original data struct, loaded in our memory
   #rsa_p=ctypes.addressof(rsa)
   rsa_p=ctypes.pointer(rsa)
-  print 'in rsa_p',rsa_p
-  print 'in rsa',rsa
+  #print 'in rsa_p',rsa_p
+  #print 'in rsa',rsa
   f=libc.fopen(filename,"w")
-  print 'PEM_write_RSAPrivateKey'
   
   ret=ssl.PEM_write_RSAPrivateKey(f, rsa_p, None, None, 0, None, None)
-  print 'writtent'
   libc.fclose(f)
-  print 'close'
 
   if ret < 1:
     log.error("Error saving key to file %s"% filename)
     return False
   log.info ("[X] Key saved to file %s"%filename)
-  #print 'out rsa',rsa
-  #print 'out rsa_p',rsa_p
   return True
 
-#ko
 def write_dsa_key(dsa,prefix):
   filename=get_valid_filename(prefix)
   ssl=cdll.LoadLibrary("libssl.so")
@@ -193,12 +203,9 @@ def find_keys(process,stackmap):
       log.debug('possible valid rsa key at 0x%lx'%(j))
       if ( extract_rsa_key(rsa, process) ):
         log.info( "found RSA key @ 0x%lx"%(j) )
-        print rsa
-        print 'goto write'
-        write_rsa_key(rsa, "id_rsa",process)
+        write_rsa_key(rsa, "id_rsa")
         continue
-  print 'do dsa'
-  return
+
   #do the same with dsa
   for j in range(stackmap.start, stackmap.end-dsalen, plen):
     #log.debug("checking 0x%lx"% j)
@@ -214,12 +221,14 @@ def find_keys(process,stackmap):
   return
 
 
-def find_struct(process, memoryMap, struct, hint=None, hintOffset=None):
+def find_struct(process, memoryMap, struct, callback, hint=None, hintOffset=None):
   '''
     Looks for struct in memory, using :
       hints from struct (default values, and such)
       guessing validation with instance(struct)().isValid()
       and confirming with instance(struct)().loadMembers()
+    
+    returns POINTERS to struct.
   '''
   
   # update process mappings
@@ -231,7 +240,6 @@ def find_struct(process, memoryMap, struct, hint=None, hintOffset=None):
   end=memoryMap.end
   plen=ctypes.sizeof(ctypes.c_char_p) # use aligned words only
   structlen=ctypes.sizeof(struct)
-  outputs=[]
   
   ## hinted search
   if not (hint is None or hintOffset is None ):
@@ -244,23 +252,26 @@ def find_struct(process, memoryMap, struct, hint=None, hintOffset=None):
       for offset in solutions:
         instance=try_to_map(process, mappings, struct, offset-hintOffset )
         if instance is not None:
-          outputs.append(instance)
+          callback(instance)
+          # XXX memory issues :the memory region is gonna die now.
           pass
     else:
       log.debug('Found no possible offsets for the hint')
     # get out
-    return outputs
+    return
   
   ## search without hint
   # parse for struct on each aligned word
+  log.debug("checking 0x%lx-0x%lx by increment of %d"%(start, (end-structlen), plen))
+  instance=None
   for j in range(start, end-structlen, plen):
-    log.debug("checking 0x%lx"% j)
     instance=try_to_map(process,mappings,struct,j)
     if instance is not None:
-      print 'appending to outputs',instance 
-      outputs.append(instance)
-      pass  
-  return outputs
+      # do stuff with it.
+      callback(instance)
+      # XXX memory issues : the memory region is gonna die now.
+  # XXX memory issues : la structure dies here. end of life for try_tomap returns
+  return 
 
 def try_to_map(process,mappings,struct,offset):
   ''' '''
@@ -270,11 +281,12 @@ def try_to_map(process,mappings,struct,offset):
     log.debug('possible instance at 0x%lx'%(offset))
     if ( instance.loadMembers(process) ):
       log.info( "found instance @ 0x%lx"%(offset) )
-      print 'before write', instance
-      write_rsa_key(instance, "id_rsa",process)
-      print 'after write', instance
+      #print 'before write', instance
+      #write_rsa_key(instance, "id_rsa",process)
+      #print 'after write', instance
       return instance
   return None
+
 
 
 def hasValidPermissions(memmap):
@@ -332,25 +344,24 @@ def main(argv):
     ##debug, rsa is on head
     if m.pathname != '[heap]':
       continue
-    if hasValidPermissions(m):
-      print m,m.permissions
-      find_keys(process,m)
-      
-      '''
-      # look for RSA
-      rsakeys=find_struct(process, m, model.RSA)
-      for k in rsakeys:
-        print 'instance is :', k
-        write_rsa_key(k, "id_rsa",process)
-        print 'continue next find_key'
-      '''
-      
-      '''
-      # look for DSA
-      dsakeys=find_struct(process, m, model.DSA)
-      for k in dsakeys:
-        write_dsa_key(k, "id_dsa")
-  #   '''
+    if not hasValidPermissions(m):
+      continue
+    
+    print m,m.permissions
+    find_keys(process,m)
+    
+    
+    # look for RSA
+    #rsaw=RSAFileWriter()
+    #rsakeys=find_struct(process, m, model.RSA, rsaw.writeToFile)
+    
+    
+    '''
+    # look for DSA
+    dsakeys=find_struct(process, m, model.DSA)
+    for k in dsakeys:
+      write_dsa_key(k, "id_dsa")
+    #'''
   log.info("done for pid %d"%pid)
 
   return -1
