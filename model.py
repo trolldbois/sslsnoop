@@ -118,6 +118,18 @@ class LoadableMembers(ctypes.Structure):
         return False
     self.loaded=True
     return True
+    
+  def __str__(self):
+    s=repr(self)+'\n'
+    for field,typ in self._fields_:
+      attr=getattr(self,field)
+      if not bool(attr):
+        s+='%s: 0x0\n'%field
+      elif hasattr(attr,'contents'):
+        s+='%s: 0x%lx\n'%(field, getaddress(getattr(self,field)) )  
+      else:
+        s+='%s: %s\n'%(field,attr )  
+    return s
 
 #ok
 class BIGNUM(LoadableMembers):
@@ -235,7 +247,9 @@ class RSA(LoadableMembers):
   ("mt_blinding",ctypes.POINTER(BIGNUM))#BN_BLINDING *mt_blinding;
   ]
   def printValid(self,mappings):
-    log.debug( '----------------------- pad: %d version %d ref %d'%(self.pad,self.version,self.references) )
+    print 'me',self.valid
+    log.debug( '----------------------- LOADED: %s'%self.loaded)
+    log.debug('pad: %d version %d ref %d'%(self.pad,self.version,self.references) )
     log.debug(is_valid_address( self.n, mappings)    )
     log.debug(is_valid_address( self.e, mappings)    )
     log.debug(is_valid_address( self.d, mappings)    )
@@ -244,6 +258,7 @@ class RSA(LoadableMembers):
     log.debug(is_valid_address( self.dmp1, mappings) ) 
     log.debug(is_valid_address( self.dmq1, mappings) )
     log.debug(is_valid_address( self.iqmp, mappings) )
+    print 'me',self.valid
     return
   def loadMembers(self,process):
     # XXXX clean other structs
@@ -257,43 +272,6 @@ class RSA(LoadableMembers):
     if not LoadableMembers.loadMembers(self,process):
       log.error('RSA not loaded')
       return False
-    ''' 
-    if self.loaded:
-      return True
-    if not self.valid:
-      return False
-    # BIGNUMS
-    for attrname in ['n','e','d','p','q','dmp1','dmq1','iqmp']:
-      attr=getattr(self,attrname)
-      _attrname='_'+attrname
-      attr_obj_address=getaddress(attr)
-      #log.debug('getaddress(self.%s) 0x%lx'%(attrname, attr_obj_address) )
-      #save ref to keep mem alloc
-      setattr(self, _attrname, process.readStruct(attr_obj_address,BIGNUM) )
-      #save NB pointer to it's place
-      setattr(self, attrname, ctypes.pointer( getattr(self, _attrname) ) )
-      #### load inner structures pointers
-      attr=getattr(self,attrname)
-      mappings= readProcessMappings(process)
-      if not ( attr and attr.contents.isValid(mappings) ):
-        log.debug('BN %s is invalid: %s'%(attrname,attr))
-        return False
-      # go and load
-      attr.contents.loadMembers(process)
-    # we have to load ALL pointer ...
-    # bignum_data has  the real BIGNNUM data
-    #
-    #k=ctypes.sizeof(BIGNUM)*6
-    #off=k/ctypes.sizeof(BN_ULONG)+1
-    #j=1
-    #for bn in ['d','p','q','dmp1','dmq1','iqmp']:
-    #  j+=getattr(self,bn).contents.top
-    #self.bignum_data_len=(off+j)*ctypes.sizeof(BN_ULONG)
-    #self._bignum_data=process.readBytes(getaddress(self.bignum_data),self.bignum_data_len) 
-    #self.bignum_data=ctypes.pointer(self._bignum_data)
-    '''
-    # but it can be null, so...
-    
     #
     self.loaded=True
     return True
@@ -312,16 +290,7 @@ class RSA(LoadableMembers):
         is_valid_address( self.dmq1, mappings) and
         is_valid_address( self.iqmp, mappings) )
     return self.valid
-    
-  def __str__(self):
-    s=repr(self)+'\n'
-    for field,typ in self._fields_:
-      if typ != ctypes.c_char_p and typ != ctypes.c_int and typ != CRYPTO_EX_DATA:
-        s+='%s: 0x%lx\n'%(field, getaddress(getattr(self,field)) )  
-        #s+='%s: %s\n'%(field, sstr(getattr(self,field)) )  
-      else:
-        s+='%s: %s\n'%(field,getattr(self,field) )  
-    return s
+
     
 #KO
 class DSA(ctypes.Structure):

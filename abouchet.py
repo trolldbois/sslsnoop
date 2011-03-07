@@ -110,17 +110,43 @@ def get_valid_filename(prefix):
   return None
 
 #ko
-def write_rsa_key(rsa,prefix):
+def write_rsa_key(rsa,prefix,process):
+  '''
+  PEM_write_RSAPrivateKey(f, rsa_p, None, None, 0, None, None)
+  PEM_write_RSAPrivateKey(fp,x, [enc,kstr,klen,cb,u]) 
+   -> PEM_ASN1_write((int (*)())i2d_RSAPrivateKey,PEM_STRING_RSA,fp, (char *)x, [enc,kstr,klen,cb,u])
+  int PEM_ASN1_write(i2d_of_void *i2d, const char *name, FILE *fp, char *x, [const EVP_CIPHER *, unsigned char *kstr,int , pem_password_cb *, void *])
+   -> PEM_ASN1_write_bio(i2d, name, b, x  [,enc,kstr,klen,callback,u] );
+  int PEM_ASN1_write_bio(i2d_of_void *i2d, const char *name, BIO *bp, char *x ,  [..]
+   -> i2d_RSAPrivateKey( sur x )
+    -> ASN1_item_i2d_bio(ASN1_ITEM_rptr(RSAPrivateKey), bp, rsa);
+     -> i=BIO_write(out,&(b[j]),n);
+   -> i=PEM_write_bio(bp,name,buf,data,i);
+   
+  en gros, c'est model.RSA().writeASN1(file)
+  '''
   filename=get_valid_filename(prefix)
+  #print 'filename'
   ssl=cdll.LoadLibrary("libssl.so")
   # need original data struct, loaded in our memory
-  rsa_p=ctypes.addressof(rsa)
+  #rsa_p=ctypes.addressof(rsa)
+  rsa_p=ctypes.pointer(rsa)
+  print 'in rsa_p',rsa_p
+  print 'in rsa',rsa
   f=libc.fopen(filename,"w")
+  print 'PEM_write_RSAPrivateKey'
+  
   ret=ssl.PEM_write_RSAPrivateKey(f, rsa_p, None, None, 0, None, None)
+  print 'writtent'
+  libc.fclose(f)
+  print 'close'
+
   if ret < 1:
     log.error("Error saving key to file %s"% filename)
     return False
   log.info ("[X] Key saved to file %s"%filename)
+  #print 'out rsa',rsa
+  #print 'out rsa_p',rsa_p
   return True
 
 #ko
@@ -154,7 +180,7 @@ def find_keys(process,stackmap):
   data=stackmap.start  
   ## todo change 4 by len char *
   ##if ( j <= map->size - sizeof(RSA) ) {
-  plen=ctypes.sizeof(ctypes.c_char_p)
+  plen=ctypes.sizeof(ctypes.c_char_p) # use aligned words only
   rsalen=ctypes.sizeof(model.RSA)
   dsalen=ctypes.sizeof(model.DSA)
   
@@ -167,9 +193,12 @@ def find_keys(process,stackmap):
       log.debug('possible valid rsa key at 0x%lx'%(j))
       if ( extract_rsa_key(rsa, process) ):
         log.info( "found RSA key @ 0x%lx"%(j) )
-        write_rsa_key(rsa, "id_rsa")
+        print rsa
+        print 'goto write'
+        write_rsa_key(rsa, "id_rsa",process)
         continue
-  
+  print 'do dsa'
+  return
   #do the same with dsa
   for j in range(stackmap.start, stackmap.end-dsalen, plen):
     #log.debug("checking 0x%lx"% j)
@@ -184,6 +213,70 @@ def find_keys(process,stackmap):
   
   return
 
+
+def find_struct(process, memoryMap, struct, hint=None, hintOffset=None):
+  '''
+    Looks for struct in memory, using :
+      hints from struct (default values, and such)
+      guessing validation with instance(struct)().isValid()
+      and confirming with instance(struct)().loadMembers()
+  '''
+  
+  # update process mappings
+  mappings= readProcessMappings(process)
+  log.debug("scanning 0x%lx --> 0x%lx %s"%(memoryMap.start,memoryMap.end,memoryMap.pathname) )
+
+  # where do we look  
+  start=memoryMap.start  
+  end=memoryMap.end
+  plen=ctypes.sizeof(ctypes.c_char_p) # use aligned words only
+  structlen=ctypes.sizeof(struct)
+  outputs=[]
+  
+  ## hinted search
+  if not (hint is None or hintOffset is None ):
+    # search map for hint
+    results=memoryMap.search( bytes(hint) )
+    if results is not None:
+      ## Boundary check, don't try too far in mapping
+      solutions=[offset for offset in results if (( (offset-hintOffset) + structlen ) <= end) ]
+      log.debug('Found %d offsets possible with the hint'%(len(solutions)) )
+      for offset in solutions:
+        instance=try_to_map(process, mappings, struct, offset-hintOffset )
+        if instance is not None:
+          outputs.append(instance)
+          pass
+    else:
+      log.debug('Found no possible offsets for the hint')
+    # get out
+    return outputs
+  
+  ## search without hint
+  # parse for struct on each aligned word
+  for j in range(start, end-structlen, plen):
+    log.debug("checking 0x%lx"% j)
+    instance=try_to_map(process,mappings,struct,j)
+    if instance is not None:
+      print 'appending to outputs',instance 
+      outputs.append(instance)
+      pass  
+  return outputs
+
+def try_to_map(process,mappings,struct,offset):
+  ''' '''
+  instance=process.readStruct(offset,struct)
+  # check if data matches
+  if instance.isValid(mappings): # refreshing would be better
+    log.debug('possible instance at 0x%lx'%(offset))
+    if ( instance.loadMembers(process) ):
+      log.info( "found instance @ 0x%lx"%(offset) )
+      print 'before write', instance
+      write_rsa_key(instance, "id_rsa",process)
+      print 'after write', instance
+      return instance
+  return None
+
+
 def hasValidPermissions(memmap):
   ''' memmap must be 'rw..' or shared '...s' '''
   perms=memmap.permissions
@@ -195,7 +288,7 @@ def usage(txt):
 
 
 def main(argv):
-  logging.basicConfig(level=logging.INFO)
+  logging.basicConfig(level=logging.DEBUG)
   logging.debug(argv)
   if ( len(argv) < 1 ):
     usage(argv[0])
@@ -236,10 +329,28 @@ def main(argv):
   ### t-t-t-t, search in all MemoryMap
   mappings= readProcessMappings(process)
   for m in mappings:
+    ##debug, rsa is on head
+    if m.pathname != '[heap]':
+      continue
     if hasValidPermissions(m):
       print m,m.permissions
-      find_keys(process, m)
-  #    
+      find_keys(process,m)
+      
+      '''
+      # look for RSA
+      rsakeys=find_struct(process, m, model.RSA)
+      for k in rsakeys:
+        print 'instance is :', k
+        write_rsa_key(k, "id_rsa",process)
+        print 'continue next find_key'
+      '''
+      
+      '''
+      # look for DSA
+      dsakeys=find_struct(process, m, model.DSA)
+      for k in dsakeys:
+        write_dsa_key(k, "id_dsa")
+  #   '''
   log.info("done for pid %d"%pid)
 
   return -1
