@@ -111,12 +111,12 @@ class CRYPTO_EX_DATA(OpenSSLStruct):
   ("dummy",ctypes.c_int)]
   def loadMembers(self,process,mappings):
     ''' erase self.sk'''
-    self.sk=ctypes.POINTER(STACK)()
+    #self.sk=ctypes.POINTER(STACK)()
     return LoadableMembers.loadMembers(self,process,mappings)
   def isValid(self,mappings):
     ''' erase self.sk'''
     # TODO why ?
-    self.sk=ctypes.POINTER(STACK)()
+    #self.sk=ctypes.POINTER(STACK)()
     return LoadableMembers.isValid(self,mappings)
   
 #ok
@@ -233,21 +233,17 @@ class RSA(OpenSSLStruct):
     return
   def loadMembers(self,process,mappings):
     # XXXX clean other structs
-    self.meth = ctypes.POINTER(BIGNUM)()
-    self._method_mod_n = ctypes.POINTER(BN_MONT_CTX)()
-    self._method_mod_p = ctypes.POINTER(BN_MONT_CTX)()
-    self._method_mod_q = ctypes.POINTER(BN_MONT_CTX)()
-    self.bignum_data = ctypes.POINTER(ctypes.c_char)()
-    self.blinding = ctypes.POINTER(BIGNUM)()
-    self.mt_blinding = ctypes.POINTER(BIGNUM)()
-    #print '******** loadMembers bool(self._method_mod_p) %s '%bool(self._method_mod_p)
+    self.meth = None
+    #self._method_mod_n = ctypes.POINTER(BN_MONT_CTX)()
+    #self._method_mod_p = ctypes.POINTER(BN_MONT_CTX)()
+    #self._method_mod_q = ctypes.POINTER(BN_MONT_CTX)()
+    self.bignum_data = None
+    self.blinding = None
+    self.mt_blinding = None
+
     if not LoadableMembers.loadMembers(self,process,mappings):
       log.debug('RSA not loaded')
       return False
-    #
-    #for e in [self.n, self.e, self.d, self.p, self.q, self.dmp1, self.dmq1 , self.iqmp]:
-    #  print e.contents
-    #print self
     return True
     
 #KO
@@ -295,15 +291,14 @@ class DSA(OpenSSLStruct):
   def loadMembers(self,process, mappings):
     # clean other structs
     # r and kinv can be null
-    self.meth=None
+    self.meth = None
     self._method_mod_p = None
-    self.engine = None
+    #self.engine = None
     
     if not LoadableMembers.loadMembers(self,process, mappings):
       log.debug('DSA not loaded')
       return False
-    #
-    #print self
+
     return True
 
 #ok

@@ -138,16 +138,9 @@ def write_rsa_key(rsa,prefix):
   '''
   filename=get_valid_filename(prefix)
   ssl=cdll.LoadLibrary("libssl.so")
-  # need original data struct, loaded in our memory
-  #rsa_p=ctypes.addressof(rsa)
-  rsa_p=ctypes.pointer(rsa)
-  print 'in rsa_p',rsa_p
-  #print 'in rsa',rsa
-  f=libc.fopen(filename,"w")
-  
-  ret=ssl.PEM_write_RSAPrivateKey(f, rsa_p, None, None, 0, None, None)
+  f=libc.fopen(filename,"w")  
+  ret=ssl.PEM_write_RSAPrivateKey(f, ctypes.byref(rsa), None, None, 0, None, None)
   libc.fclose(f)
-
   if ret < 1:
     log.error("Error saving key to file %s"% filename)
     return False
@@ -157,10 +150,8 @@ def write_rsa_key(rsa,prefix):
 def write_dsa_key(dsa,prefix):
   filename=get_valid_filename(prefix)
   ssl=cdll.LoadLibrary("libssl.so")
-  # need original data struct
-  dsa_p=ctypes.addressof(dsa)
   f=libc.fopen(filename,"w")
-  ret=ssl.PEM_write_DSAPrivateKey(f, dsa_p, None, None, 0, None, None)
+  ret=ssl.PEM_write_DSAPrivateKey(f, ctypes.byref(dsa), None, None, 0, None, None)
   if ret < 1:
     log.error("Error saving key to file %s"% filename)
     return False
@@ -169,7 +160,7 @@ def write_dsa_key(dsa,prefix):
   
 
 
-def find_struct(process, memoryMap, struct, hint=None, hintOffset=None):
+def find_struct(process, memoryMap, struct, hintOffset=None):
   '''
     Looks for struct in memory, using :
       hints from struct (default values, and such)
@@ -190,26 +181,11 @@ def find_struct(process, memoryMap, struct, hint=None, hintOffset=None):
   structlen=ctypes.sizeof(struct)
   #ret vals
   outputs=[]
-  
-  ## hinted search
-  if not (hint is None or hintOffset is None ):
-    # search map for hint
-    results=memoryMap.search( bytes(hint) )
-    if results is not None:
-      ## Boundary check, don't try too far in mapping
-      solutions=[offset for offset in results if (( (offset-hintOffset) + structlen ) <= end) ]
-      log.debug('Found %d offsets possible with the hint'%(len(solutions)) )
-      for offset in solutions:
-        instance=try_to_map(process, mappings, struct, offset-hintOffset )
-        if instance is not None:
-          outputs.append(instance)
-          pass
-    else:
-      log.debug('Found no possible offsets for the hint')
-    # get out
-    return outputs
-  
-  ## search without hint
+  # alignement
+  if hintOffset in memoryMap:
+    align=hintOffset%plen
+    start=hintOffset-plen
+   
   # parse for struct on each aligned word
   log.debug("checking 0x%lx-0x%lx by increment of %d"%(start, (end-structlen), plen))
   instance=None
@@ -294,7 +270,8 @@ def main(argv):
     print m,m.permissions
     ## method generic
     print 'look for RSA'
-    outs=find_struct(process, m, ctypes_openssl.RSA )
+    from struct import pack
+    outs=find_struct(process, m, ctypes_openssl.RSA)
     for rsa in outs:
       rsaw.writeToFile(rsa)
     print 'look for DSA'
