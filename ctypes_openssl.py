@@ -99,7 +99,7 @@ class BIGNUM(OpenSSLStruct):
 class STACK(OpenSSLStruct):
   _fields_ = [
   ("num",ctypes.c_int),
-  ("data",ctypes.c_char_p),
+  ("data",ctypes.POINTER(ctypes.c_byte)), 
   ("sorted",ctypes.c_int),
   ("num_alloc",ctypes.c_int),
   ("comp",ctypes.POINTER(ctypes.c_int) ) ]
@@ -202,7 +202,7 @@ class RSA(OpenSSLStruct):
   ("_method_mod_n", ctypes.POINTER(BN_MONT_CTX) ),
   ("_method_mod_p", ctypes.POINTER(BN_MONT_CTX) ),
   ("_method_mod_q", ctypes.POINTER(BN_MONT_CTX) ),
-  ("bignum_data",ctypes.POINTER(ctypes.c_char)), ## moue c_char_p ou POINTER(c_char) ?
+  ("bignum_data",ctypes.POINTER(ctypes.c_byte)), ## moue c_char_p ou POINTER(c_char) ?
   ("blinding",ctypes.POINTER(BIGNUM)),#BN_BLINDING *blinding;
   ("mt_blinding",ctypes.POINTER(BIGNUM))#BN_BLINDING *mt_blinding;
   ]

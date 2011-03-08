@@ -9,7 +9,7 @@ __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 import os,logging,sys
 #use volatility?
 
-import ctypes_openssl
+import ctypes_openssl,ctypes_openssh
 #from  model import DSA,RSA
 import ctypes
 from ctypes import *
@@ -269,8 +269,8 @@ def main(argv):
     
     print m,m.permissions
     ## method generic
+    '''    
     print 'look for RSA'
-    from struct import pack
     outs=find_struct(process, m, ctypes_openssl.RSA)
     for rsa in outs:
       rsaw.writeToFile(rsa)
@@ -278,6 +278,11 @@ def main(argv):
     outs=find_struct(process, m, ctypes_openssl.DSA)
     for dsa in outs:
       dsaw.writeToFile(dsa)
+    '''
+    print 'look for session_state'
+    outs=find_struct(process, m, ctypes_openssh.session_state)
+    for ss in outs:
+      print ss
 
   log.info("done for pid %d"%pid)
 

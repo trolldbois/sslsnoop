@@ -80,6 +80,8 @@ class RangeValue:
 class NotNullComparable:
   def __contains__(self,obj):
     return bool(obj)
+  def __eq__(self,obj):
+    return bool(obj)
 
 NotNull=NotNullComparable()
 
