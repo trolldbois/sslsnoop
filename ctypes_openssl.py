@@ -7,7 +7,7 @@
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
 import ctypes
-from model import is_valid_address,getaddress,sstr,LoadableMembers,RangeValue
+from model import is_valid_address,getaddress,sstr,LoadableMembers,RangeValue,NotNull
 from ptrace.debugger.memory_mapping import readProcessMappings
 import logging
 log=logging.getLogger('openssl.model')
@@ -19,6 +19,7 @@ EVP_MAX_BLOCK_LENGTH=32
 EVP_MAX_IV_LENGTH=16
 AES_MAXNR=14 # aes.h:66
 
+# we have to alloc a big chunk
 BN_ULONG=ctypes.c_ulong
 
 class OpenSSLStruct(LoadableMembers):
@@ -29,6 +30,7 @@ class OpenSSLStruct(LoadableMembers):
 class BIGNUM(OpenSSLStruct):
   _fields_ = [
   ("d",ctypes.POINTER(BN_ULONG) ),
+  #("d",ctypes.c_void_p ),
   ('top',ctypes.c_int),
   ('dmax',ctypes.c_int),
   ('neg',ctypes.c_int),
@@ -37,41 +39,60 @@ class BIGNUM(OpenSSLStruct):
   expectedValues={
     "neg": [0,1]
   }
-  def loadMembers(self,process):
+  def loadMembers(self,process, mappings):
     ''' 
-    isValid() should have been tested before, otherwise.. it's gonna fail...
-    we copy memory from process for each pointer
-    and assign it to a python object _here, then we assign 
-    the member to be a pointer to _here'''
-    if not self.valid:
+    #self._d = process.readArray(attr_obj_address, ctypes.c_ulong, self.top) 
+    ## or    
+    #ulong_array= (ctypes.c_ulong * self.top)    
+    '''
+    if not self.isValid(mappings):
       log.error('BigNUm tries to load members when its not validated')
       return False
-    # Load and memcopy d / BN_ULONG *
-    attr_obj_address=getaddress(self.d)
-    self._d = process.readArray(attr_obj_address, ctypes.c_ulong, self.top) 
-    ## or    
-    #ulong_array= (ctypes.c_ulong * self.top)
-    #self._d = process.readStruct(attr_obj_address, ulong_array) 
-    self.d  = ctypes.cast(ctypes.pointer( self._d ), ctypes.POINTER(ctypes.c_ulong))
-    self.loaded=True
-    return True
+    if True:
+      # Load and memcopy d / BN_ULONG *
+      attr_obj_address=getaddress(self.d)
+      contents=(BN_ULONG*self.top).from_buffer_copy(process.readArray(attr_obj_address, BN_ULONG, self.top))
+      log.debug('contents acquired %d'%ctypes.sizeof(contents))
+      self.d.contents=BN_ULONG.from_address(ctypes.addressof(contents))
+      # TODO ctypes.from_address(address)
+      #self.d=ctypes.cast(ctypes.pointer(contents), ctypes.POINTER(BN_ULONG) ) 
+      self.d=ctypes.cast(contents, ctypes.POINTER(BN_ULONG) ) 
+      return True
+    else:
+      ### we can't cast , so we need to copy ulong by ulong
+      #if (ctypes.sizeof(ctypes.c_ulong)*self.top) >= ctypes.sizeof(self.d.contents):
+      #  log.error('self.top %d is too big for us puny humans'%self.top)
+      #  return False
+      # memory leak surely, but we can't handle 
+      top=self.top
+      contents=BN_ULONG(0)
+      self.d.contents=contents
+      print '7 -> ',self
+      print "self: 0x%lx"%ctypes.addressof(self)
+      log.debug("contents : 0x%lx-0x%lx"%( ctypes.addressof(contents), ctypes.addressof(contents)+ ctypes.sizeof(contents) ))
+      log.debug("contents : 0x%lx-0x%lx"%( ctypes.addressof(contents), ctypes.addressof(contents)+ ctypes.sizeof(contents) ))
+      log.debug("d.contents : 0x%lx-0x%lx"%( ctypes.addressof(self.d.contents), ctypes.addressof(self.d.contents)+ ctypes.sizeof(self.d.contents) ))
+      log.debug("contents : 0x%lx-0x%lx"%( ctypes.addressof(contents), ctypes.addressof(contents)+ ctypes.sizeof(contents) ))
+      #log.debug('new memspace : 0x%lx with size %d '%(ctypes.addressof(self.d.contents), ctypes.sizeof(self.d.contents) )   )
+      log.debug("contents : 0x%lx-0x%lx"%( getaddress(contents), getaddress(contents)+ ctypes.sizeof(contents) ))
+      log.debug("d.contents : 0x%lx-0x%lx"%( getaddress(self.d.contents), getaddress(self.d.contents)+ ctypes.sizeof(self.d.contents) ))
+      print '8 -> ',self
+      log.debug("contents : 0x%lx-0x%lx"%( getaddress(contents), getaddress(contents)+ ctypes.sizeof(contents) ))
+      log.debug("d.contents : 0x%lx-0x%lx"%( getaddress(self.d.contents), getaddress(self.d.contents)+ ctypes.sizeof(self.d.contents) ))
+      print top
+      for i in range(0,top):
+        self.d.contents[i]=contents[i]
+      log.debug('contents copied %d'%(i+1))
+      log.debug('%s loaded at 0x%lx'%(self.__class__.__name__,ctypes.addressof(self)))    
+      return True
   
   def isValid(self,mappings):
-    print 'BN.isValid'
-    print '0x%lx'%ctypes.addressof(self)
-    print 'self.top: ',self.top
-    
     if ( self.dmax < 0 or self.top < 0 or self.dmax < self.top ):
       return False
-    # TODO we could test if is_valid_address( self.d, mappings)
-    # but with the expected Array size of self.top
     return LoadableMembers.isValid(self,mappings)
   
   def __str__(self):
-    print 'BN.__str__'
-    #return repr(self)
-    d=0
-    #d= getaddress(self.d)
+    d= getaddress(self.d)
     return ("BN { d=0x%lx, top=%d, dmax=%d, neg=%d, flags=%d }"%
                 (d, self.top, self.dmax, self.neg, self.flags) )
 #ok
@@ -88,6 +109,15 @@ class CRYPTO_EX_DATA(OpenSSLStruct):
   _fields_ = [
   ("sk",ctypes.POINTER(STACK) ),
   ("dummy",ctypes.c_int)]
+  def loadMembers(self,process,mappings):
+    ''' erase self.sk'''
+    self.sk=ctypes.POINTER(STACK)()
+    return LoadableMembers.loadMembers(self,process,mappings)
+  def isValid(self,mappings):
+    ''' erase self.sk'''
+    # TODO why ?
+    self.sk=ctypes.POINTER(STACK)()
+    return LoadableMembers.isValid(self,mappings)
   
 #ok
 class BN_MONT_CTX(OpenSSLStruct):
@@ -157,7 +187,7 @@ class RSA(OpenSSLStruct):
   ("pad",  ctypes.c_int), 
   ("version",  ctypes.c_long),
   ("meth",ctypes.POINTER(BIGNUM)),#const RSA_METHOD *meth;
-  ("engine",ctypes.POINTER(BIGNUM)),#ENGINE *engine;
+  ("engine",ctypes.POINTER(ENGINE)),#ENGINE *engine;
   ('n', ctypes.POINTER(BIGNUM) ), ## still in ssh memap
   ('e', ctypes.POINTER(BIGNUM) ), ## still in ssh memap
   ('d', ctypes.POINTER(BIGNUM) ), ## still in ssh memap
@@ -179,10 +209,17 @@ class RSA(OpenSSLStruct):
   expectedValues={
     "pad": [0], 
     "version": [0], 
-    "references": RangeValue(0,0xfff)
+    "references": RangeValue(0,0xfff),
+    "n": [NotNull],
+    "e": [NotNull],
+    "d": [NotNull],
+    "p": [NotNull],
+    "q": [NotNull],
+    "dmp1": [NotNull],
+    "dmq1": [NotNull],
+    "iqmp": [NotNull]
   }
   def printValid(self,mappings):
-    print 'me',self.valid
     log.debug( '----------------------- LOADED: %s'%self.loaded)
     log.debug('pad: %d version %d ref %d'%(self.pad,self.version,self.references) )
     log.debug(is_valid_address( self.n, mappings)    )
@@ -193,24 +230,24 @@ class RSA(OpenSSLStruct):
     log.debug(is_valid_address( self.dmp1, mappings) ) 
     log.debug(is_valid_address( self.dmq1, mappings) )
     log.debug(is_valid_address( self.iqmp, mappings) )
-    print 'me',self.valid
     return
-  def loadMembers(self,process):
+  def loadMembers(self,process,mappings):
     # XXXX clean other structs
-    self.meth=None
-    self._method_mod_n = None
-    self._method_mod_p = None
-    self._method_mod_q = None
-    self.bignum_data = None
-    self.blinding = None
-    #print '******** loadMembers'
-    if not LoadableMembers.loadMembers(self,process):
+    self.meth = ctypes.POINTER(BIGNUM)()
+    self._method_mod_n = ctypes.POINTER(BN_MONT_CTX)()
+    self._method_mod_p = ctypes.POINTER(BN_MONT_CTX)()
+    self._method_mod_q = ctypes.POINTER(BN_MONT_CTX)()
+    self.bignum_data = ctypes.POINTER(ctypes.c_char)()
+    self.blinding = ctypes.POINTER(BIGNUM)()
+    self.mt_blinding = ctypes.POINTER(BIGNUM)()
+    #print '******** loadMembers bool(self._method_mod_p) %s '%bool(self._method_mod_p)
+    if not LoadableMembers.loadMembers(self,process,mappings):
       log.debug('RSA not loaded')
       return False
     #
     #for e in [self.n, self.e, self.d, self.p, self.q, self.dmp1, self.dmq1 , self.iqmp]:
     #  print e.contents
-    self.loaded=True
+    #print self
     return True
     
 #KO
@@ -236,7 +273,12 @@ class DSA(OpenSSLStruct):
   expectedValues={
     "pad": [0], 
     "version": [0], 
-    "references": RangeValue(0,0xfff)
+    "references": RangeValue(0,0xfff),
+    "p": [NotNull],
+    "q": [NotNull],
+    "g": [NotNull],
+    "pub_key": [NotNull],
+    "priv_key": [NotNull]
   }
   def printValid(self,mappings):
     log.debug( '----------------------- \npad: %d version %d ref %d'%(self.pad,self.version,self.write_params) )
@@ -250,18 +292,18 @@ class DSA(OpenSSLStruct):
     '''  pub_key = g^privKey mod p '''
     return
 
-  def loadMembers(self,process):
+  def loadMembers(self,process, mappings):
     # clean other structs
     # r and kinv can be null
     self.meth=None
     self._method_mod_p = None
     self.engine = None
     
-    if not LoadableMembers.loadMembers(self,process):
+    if not LoadableMembers.loadMembers(self,process, mappings):
       log.debug('DSA not loaded')
       return False
     #
-    self.loaded=True
+    #print self
     return True
 
 #ok

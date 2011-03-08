@@ -92,12 +92,6 @@ int extract_dsa_key( DSA * dsa, proc_t *p ) {
 
 
 
-def extract_rsa_key(rsa,process):
-  return rsa.loadMembers(process)
-  
-def extract_dsa_key(dsa,process):
-  return dsa.loadMembers(process)
-
 
 def get_valid_filename(prefix):
   filename_FMT="%s-%d.key"
@@ -223,22 +217,23 @@ def find_struct(process, memoryMap, struct, callback, hint=None, hintOffset=None
     if instance is not None:
       # do stuff with it.
       callback(instance)
+      return
       # XXX memory issues : the memory region is gonna die now.
   # XXX memory issues : la structure dies here. end of life for try_tomap returns
   return 
 
 def try_to_map(process,mappings,struct,offset):
   ''' '''
-  instance=process.readStruct(offset,struct)
+  instance=struct.from_buffer_copy(process.readStruct(offset,struct))
   # check if data matches
-  if instance.isValid(mappings): # refreshing would be better
-    log.debug('possible instance at 0x%lx'%(offset))
-    if ( instance.loadMembers(process) ):
-      log.info( "found instance @ 0x%lx"%(offset) )
-      #print 'before write', instance
-      #write_rsa_key(instance, "id_rsa",process)
-      #print 'after write', instance
-      return instance
+  #if instance.isValid(mappings): # refreshing would be better
+  #  log.debug('possible instance at 0x%lx'%(offset))
+  if ( instance.loadMembers(process,mappings) ):
+    log.info( "found instance @ 0x%lx"%(offset) )
+    #print 'before write', instance
+    #write_rsa_key(instance, "id_rsa",process)
+    #print 'after loadMembers', instance
+    return instance
   return None
 
 

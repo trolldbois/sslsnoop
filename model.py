@@ -60,6 +60,7 @@ def isBasicType(obj):
 def isStructType(obj):
   ''' a struct is what WE have created '''
   return isinstance(obj,LoadableMembers)
+  # or use obj.classRef
 
 def isPointerType(obj):
   if isBasicType(obj) or isStructType(obj):
@@ -76,21 +77,25 @@ class RangeValue:
   def __contains__(self,obj):
     return self.low <= obj <= self.high
 
+class NotNullComparable:
+  def __contains__(self,obj):
+    return bool(obj)
+
+NotNull=NotNullComparable()
+
 class LoadableMembers(ctypes.Structure):
-  loaded=False
-  valid=False
+  #loaded=False ## useless member instance doesn't stick
+  #valid=False ## useless members doesn't stick
   ''' ctypes.POINTER types for automatic address space checks '''
   classRef=[]  
-  validFields=set()
+  #validFields=set() #useless
   expectedValues=dict()
 
   def isValid(self,mappings):
     '''  checks if each members has coherent data  '''
-    if self.valid:
-      return self.valid
-    self.valid = self._isValid(mappings)
-    log.debug('isValid = %s'%self.valid)
-    return self.valid
+    valid = self._isValid(mappings)
+    log.debug('%s isValid = %s'%(self.__class__.__name__,valid))
+    return valid
 
   def _isValid(self,mappings):
     ''' For each Field, check on of the three case, 
@@ -120,7 +125,6 @@ class LoadableMembers(ctypes.Structure):
             log.debug('%s %s %s bad value not in self.expectedValues[attrname]:'%(attrname,attrtype,repr(attr) ))
             return False
         log.debug('%s %s %s ok'%(attrname,attrtype,repr(attr) ))
-        self.validFields.add(attrname)
         continue
       # b)
       if isStructType(attr):
@@ -128,16 +132,13 @@ class LoadableMembers(ctypes.Structure):
         if not attr.isValid(mappings):
           log.debug('%s %s %s isValid FALSE'%(attrname,attrtype,repr(attr) ))
           return False
-        log.info('%s %s %s isValid TRUE'%(attrname,attrtype,repr(attr) ))
-        if attr.__class__.__name__ == 'CRYPTO_EX_DATA':
-          print 'isValid field for inner struct, in super.isValid',attrname,attrtype,attr.valid
-          attr=getattr(self,attrname)
-          print 'isValid field for inner struct, in super.isValid',attrname,attrtype,attr.valid
-
-        self.validFields.add(attrname)
+        log.debug('%s %s %s isValid TRUE'%(attrname,attrtype,repr(attr) ))
         continue
       # c) 
       if isPointerType(attr):
+        #### try to debug mem
+        setattr(self,attrname+'ContentAddress',getaddress(attr))
+        ####
         if attrname in self.expectedValues:
           # test if NULL is an option
           if not bool(attr):
@@ -146,12 +147,11 @@ class LoadableMembers(ctypes.Structure):
               log.debug('%s %s %s isNULL and that is NOT EXPECTED'%(attrname,attrtype,repr(attr) ))
               return False
             log.debug('%s %s %s isNULL and that is OK'%(attrname,attrtype,repr(attr) ))
-            self.validFields.add(attrname)
             continue
         # all case, 
         _attrType=None
         if attrtype not in self.classRef:
-          log.debug("I can't know the size of the basic type behind the %s pointer, it's a pointer to basic type")
+          #log.debug("I can't know the size of the basic type behind the %s pointer, it's a pointer to basic type")
           _attrType=None
         else:
           # test valid address mapping
@@ -160,51 +160,39 @@ class LoadableMembers(ctypes.Structure):
           log.debug('%s %s %s 0x%lx INVALID'%(attrname,attrtype, repr(attr) ,getaddress(attr)))
           return False
         # null is accepted by default 
-        log.debug('%s %s %s 0x%lx OK'%(attrname,attrtype,repr(attr) ,getaddress(attr)))
-        self.validFields.add(attrname)
+        log.debug('%s %s 0x%lx OK'%(attrname,repr(attr) ,getaddress(attr)))
         continue
       # ?
       log.error('What type are You ?: %s'%attrname)
     # loop done
-    self.valid=True
-    return self.valid
+    return True
 
   def _isLoadableMember(self, attr):
     attrtype=type(attr)
     return ( (isPointerType(attr) and ( attrtype in self.classRef) and bool(attr) ) or
               isStructType(attr) )
 
-  def loadMembers(self,process):
+  def loadMembers(self,process,mappings):
     ''' 
     isValid() should have been tested before, otherwise.. it's gonna fail...
     we copy memory from process for each pointer
     and assign it to a python object _here, then we assign 
     the member to be a pointer to _here'''
-    #print 'LM.loadMemebrs'
-    if self.loaded:
-      print 'heu... a bit short'
-      return True
-    if not self.valid:
-      #if self.__class__.__name__ == 'CRYPTO_EX_DATA':
-      #  return False
-      log.error("%s not loaded, it's not even valid"%(self.__class__.__name__))
+    log.debug('%s loadMembers'%(self.__class__.__name__))
+    if not self.isValid(mappings):
       return False
-    mappings= readProcessMappings(process)
+    log.debug('%s do loadMembers ----------------'%(self.__class__.__name__))
     ## go through all members. if they are pointers AND not null AND in valid memorymapping AND a struct type, load them as struct pointers
     for attrname,attrtype in self._fields_:
       attr=getattr(self,attrname)
       if not self._isLoadableMember(attr):
-        if attr.__class__.__name__ == 'CRYPTO_EX_DATA':
-          print 'Internal valid field in loadMembers :',attr,attrtype,attr.valid
-        log.debug("%s %s not loadable  "%(attrname,attrtype) )
+        log.debug("%s %s not loadable  bool(attr) = %s"%(attrname,attrtype, bool(attr)) )
         continue
       # load it, fields are valid
       if isStructType(attr):
-        if self.__class__.__name__ == 'CRYPTO_EX_DATA':
-          print attr,attrtype
-        if not attr.loadMembers(process):
+        log.debug('%s %s is STRUCT'%(attrname,attrtype) )
+        if not attr.loadMembers(process,mappings):
           log.debug("%s %s not valid, erreur while loading inner struct "%(attrname,attrtype) )
-          print "cannot load %s but field in validFields ?",(attrname, attrname in self.validFields) 
           return False
         log.debug("%s %s inner struct LOADED "%(attrname,attrtype) )
         continue
@@ -213,85 +201,44 @@ class LoadableMembers(ctypes.Structure):
         _attrname='_'+attrname
         _attrType=self.classRef[attrtype]
         attr_obj_address=getaddress(attr)
+        ####
+        previous=getattr(self,attrname+'ContentAddress')
+        if attr_obj_address !=previous:
+          log.warning('Change of poitner value between validation and loading... 0x%lx 0x%lx'%(previous,attr_obj_address))
         # memcpy and save objet ref + pointer in attr
-        #print '0x%lx'%getaddress(getattr(self,attrname))
-        #print '0x%lx'%getaddress(attr)
-        #print 'avant'
+        # we know the field is considered valid, so if it's not in memory_space, we can ignore it
         fieldIsValid=is_valid_address( attr, mappings, _attrType)
-        log.debug("%s %s loading from 0x%lx (is_valid_address: %s)"%(attrname,attrtype,attr_obj_address, fieldIsValid ))
         if(not fieldIsValid):
-          log.error("%s %s loading from 0x%lx (is_valid_address: %s)"%(attrname,attrtype,attr_obj_address, fieldIsValid ))
+          # big BUG Badaboum, why did pointer changed validity/value ?
+          log.debug("%s %s not loadable 0x%lx but VALID "%(attrname, attr,attr_obj_address ))
           continue
+        log.debug("%s %s loading from 0x%lx (is_valid_address: %s)"%(attrname,attr,attr_obj_address, fieldIsValid ))
         ##### VALID INSTR.
-        obj=process.readStruct(attr_obj_address, _attrType )
-        obj_p=ctypes.pointer( obj)
-        setattr(self, attrname, obj_p )        
-        #setattr(self, attrname, ctypes.pointer( process.readStruct(attr_obj_address, _attrType ) ) )        
-        #setattr(self, _attrname, process.readStruct(attr_obj_address, _attrType ) ) 
-        #setattr(self, attrname, ctypes.pointer( getattr(self, _attrname) ) )
-        #attr=getattr(self,attrname)
-        #####
-        #print '0x%lx'%getaddress(getattr(self,attrname))
-        #print '0x%lx'%getaddress(attr)
-        #print '0x%lx'%ctypes.addressof(obj)
-        #print 'obj.top: ',obj.top
-        #print 'attr.contents: 0x%lx'%ctypes.addressof(attr.contents)
-        #print 'attr.contents.top',attr.contents.top
-        #print 'OK good'
+        attr.contents=_attrType.from_buffer_copy(process.readStruct(attr_obj_address, _attrType ))
 
-        log.debug("%s %s loaded memcopy from 0x%lx to 0x%lx"%(attrname, attrtype,attr_obj_address, (getaddress(attr))   ))
-        #print '0x%lx'%getaddress(getattr(self,attrname))
-        #print '0x%lx'%getaddress(attr)
-        #print '0x%lx'%ctypes.addressof(obj)
-        #print 'obj.top: ',obj.top
-        #print 'attr.contents: 0x%lx'%ctypes.addressof(attr.contents)
-        #print 'attr.contents.top',attr.contents.top
-        #print 'bad'
-
-        setattr(self, attrname, obj_p )        
-
-        #print '0x%lx'%getaddress(getattr(self,attrname))
-        #print '0x%lx'%getaddress(attr)
-        #print '0x%lx'%ctypes.addressof(obj)
-        #print 'obj.top: ',obj.top
-        #print 'attr.contents: 0x%lx'%ctypes.addressof(attr.contents)
-        #print 'attr.contents.top',attr.contents.top
-        #print 'OK good'
-        
+        log.debug("%s %s loaded memcopy from 0x%lx to 0x%lx"%(attrname, attr,attr_obj_address, (getaddress(attr))   ))
         # recursive validation checks on new struct
         if not bool(attr):
           log.warning('Member %s is null after copy: %s'%(attrname,attr))
           continue
-        print 'before 0x%lx'%getaddress(attr)
-        #print 'obj.top: ',obj.top
-        # attr.contents instance is always different, so keep the copy
-        contents=attr.contents
-        print 'dying 0x%lx'%getaddress(attr)
-        #print 'obj.top: ',obj.top
-        if (not contents.isValid(mappings) ):
-          log.debug('Member %s is invalid: %s'%(attrname,attr))
-          self.valid=False
-          return False
-        print 'in venise'
         # go and load the pointed struct members recursively
-        if not contents.loadMembers(process):
+        if not attr.contents.loadMembers(process,mappings):
           log.debug('member %s was not loaded'%(attrname))
           return False
-        print 'NEXT'
       #TATAFN
-    self.loaded=True
+    log.debug('%s END loadMembers ----------------'%(self.__class__.__name__))
     return True
     
   def __str__(self):
     s=repr(self)+'\n'
     for field,typ in self._fields_:
       attr=getattr(self,field)
-      if not bool(attr):
-        s+='%s: 0x0\n'%field
-      elif hasattr(attr,'contents'):
+      if isPointerType(attr):
         s+='%s: 0x%lx\n'%(field, getaddress(getattr(self,field)) )  
+      elif isStructType(attr):
+        s+='%s: {\t%s}\n'%(field, getattr(self,field) )  
       else:
-        s+='%s: %s'%(field,attr )  
+        s+='%s: %s\n'%(field,attr )  
     return s
 
 

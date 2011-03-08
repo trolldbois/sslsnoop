@@ -47,39 +47,43 @@ def dbg_read(addr):
 
 def readRsa(addr):
   dbg=PtraceDebugger()
-  process=dbg.addProcess(pid,is_attached=False)
+  process=dbg.addProcess(PID, is_attached=False)
   if process is None:
-    log.error("Error initializing Process debugging for %d"% pid)
+    log.error("Error initializing Process debugging for %d"% PID)
     sys.exit(-1)
   # read where it is
-  rsa=process.readStruct(addr,ctypes_openssl.RSA)
+  ######################### RAAAAAAAAAAAAH
+  rsa=ctypes_openssl.RSA.from_buffer_copy(process.readStruct(addr,ctypes_openssl.RSA))
   mappings=readProcessMappings(process)
   print "isValid : ", rsa.isValid(mappings)
   #rsa.printValid(maps)
-  #print rsa
+  print rsa
   #print rsa.n
   #print rsa.n.contents
   #print ctypes.byref(rsa.n.contents)
   #print rsa
-  rsa.loadMembers(process)
+  print '------------ === Loading members'
+  ret=rsa.loadMembers(process,mappings)
+  print '------------ === Loading members finished'
+  print ret,rsa
   return rsa
 
 def readDsa(addr):
   dbg=PtraceDebugger()
-  process=dbg.addProcess(pid,is_attached=False)
+  process=dbg.addProcess(PID, is_attached=False)
   if process is None:
     log.error("Error initializing Process debugging for %d"% pid)
     sys.exit(-1)
   # read where it is
-  dsa=process.readStruct(addr,ctypes_openssl.DSA)
+  dsa=ctypes_openssl.DSA.from_buffer_copy(process.readStruct(addr,ctypes_openssl.DSA))
   mappings=readProcessMappings(process)
   print "isValid : ", dsa.isValid(mappings)
   #dsa.printValid(maps)
   #print 'DSA1 -> ', dsa
   #print '------------'
   #print 'DSA1.q -> ', dsa.q
-  #print '------------ === '
-  dsa.loadMembers(process)
+  print '------------ === Loading members'
+  dsa.loadMembers(process,mappings)
   #print '------------  ===== ==== '
   #print 'DSA2.q -> ', dsa.q
   #print 'DSA2.q.contents -> ', dsa.q.contents
@@ -162,21 +166,30 @@ def isMemOf(addr,mpid):
 #abouchet.find_keys(process,stack)
 
 #dsa=readDsa(0xb835b4e8)
-#rsa=readRsa(0xb835a700)
+#print dsa
+rsa=readRsa(0xb835c9a0)
 #writeWithLibDSA(addr)
 
 #printSize()
 
 #x pourPEM_write_RSAPrivateKey
+
+class B(ctypes.Structure):
+  _fields_=[("b1",ctypes.c_ulong),('b2',ctypes.c_ulonglong)]
+
+class A(ctypes.Structure):
+  _fields_=[("a1",ctypes.c_ulong),('b',ctypes.POINTER(B)),('a2',ctypes.c_ulonglong)]
+
 myaddr=0xb7c16884
 # rsa-> n
 myaddr=0xb8359148
+pid=12563
 if len(sys.argv) == 2:
   myaddr=int(sys.argv[1],16)
-if isMemOf(myaddr, 8831):
-  print "isMemOf(0x%lx, 8831) - python"%myaddr
-if isMemOf(myaddr, 27477):
-  print "isMemOf(0x%lx, 27477) - ssh-agent"%myaddr
+  if isMemOf(myaddr, pid ):
+    print "isMemOf(0x%lx, 8831) - python"%myaddr
+  if isMemOf(myaddr, PID):
+    print "isMemOf(0x%lx, 27477) - ssh-agent"%myaddr
 
 #findCipherContext()
 
