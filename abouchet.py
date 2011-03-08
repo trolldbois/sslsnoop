@@ -147,7 +147,7 @@ def write_rsa_key(rsa,prefix):
   # need original data struct, loaded in our memory
   #rsa_p=ctypes.addressof(rsa)
   rsa_p=ctypes.pointer(rsa)
-  #print 'in rsa_p',rsa_p
+  print 'in rsa_p',rsa_p
   #print 'in rsa',rsa
   f=libc.fopen(filename,"w")
   
@@ -173,52 +173,6 @@ def write_dsa_key(dsa,prefix):
   log.info ("[X] Key saved to file %s"%filename)
   return True
   
-def find_keys(process,stackmap):
-
-  mappings= readProcessMappings(process)
-  log.debug("scanning 0x%lx --> 0x%lx %s"%(stackmap.start,stackmap.end,stackmap.pathname) )
-  
-  ## stackmap.search(bytestr) // won't cut it.
-  ## process.readBytes() is ok
-  ### copy data in rsa struct
-  #### test if rsa struct is ok ?
-  ##### extract rsa key
-  ###### save it
-
-  ### do the same for dsa.
-
-  data=stackmap.start  
-  ## todo change 4 by len char *
-  ##if ( j <= map->size - sizeof(RSA) ) {
-  plen=ctypes.sizeof(ctypes.c_char_p) # use aligned words only
-  rsalen=ctypes.sizeof(ctypes_openssl.RSA)
-  dsalen=ctypes.sizeof(ctypes_openssl.DSA)
-  
-  # parse for rsa
-  for j in range(stackmap.start, stackmap.end-rsalen, plen):
-    #log.debug("checking 0x%lx"% j)
-    rsa=process.readStruct(j,ctypes_openssl.RSA)
-    # check if data matches
-    if rsa.isValid(mappings): # refreshing would be better
-      log.debug('possible valid rsa key at 0x%lx'%(j))
-      if ( extract_rsa_key(rsa, process) ):
-        log.info( "found RSA key @ 0x%lx"%(j) )
-        write_rsa_key(rsa, "id_rsa")
-        continue
-
-  #do the same with dsa
-  for j in range(stackmap.start, stackmap.end-dsalen, plen):
-    #log.debug("checking 0x%lx"% j)
-    dsa=process.readStruct(j,ctypes_openssl.DSA)
-    # check if data matches
-    if dsa.isValid(mappings): # refreshing would be better
-      log.debug('possible valid dsa at 0x%lx'%(j))
-      if ( extract_dsa_key(dsa, process) ):
-        log.info( "found DSA key @ 0x%lx"%(j) )
-        write_dsa_key(dsa, "id_dsa")
-        continue
-  
-  return
 
 
 def find_struct(process, memoryMap, struct, callback, hint=None, hintOffset=None):
@@ -300,7 +254,7 @@ def usage(txt):
 
 
 def main(argv):
-  logging.basicConfig(level=logging.INFO)
+  logging.basicConfig(level=logging.DEBUG)
   logging.debug(argv)
   if ( len(argv) < 1 ):
     usage(argv[0])
@@ -344,16 +298,16 @@ def main(argv):
   dsaw=DSAFileWriter()
   for m in mappings:
     ##debug, rsa is on head
-    #if m.pathname != '[heap]':
-    #  continue
+    if m.pathname != '[heap]':
+      continue
     if not hasValidPermissions(m):
       continue
     
     print m,m.permissions
     ## method generic
-    # look for RSA
+    print 'look for RSA'
     find_struct(process, m, ctypes_openssl.RSA, rsaw.writeToFile)
-    # look for DSA
+    print 'look for DSA'
     find_struct(process, m, ctypes_openssl.DSA, dsaw.writeToFile)
 
   log.info("done for pid %d"%pid)

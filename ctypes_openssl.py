@@ -7,7 +7,7 @@
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
 import ctypes
-from model import is_valid_address,getaddress,sstr,LoadableMembers
+from model import is_valid_address,getaddress,sstr,LoadableMembers,RangeValue
 from ptrace.debugger.memory_mapping import readProcessMappings
 import logging
 log=logging.getLogger('openssl.model')
@@ -34,6 +34,9 @@ class BIGNUM(OpenSSLStruct):
   ('neg',ctypes.c_int),
   ('flags',ctypes.c_int)
   ]
+  expectedValues={
+    "neg": [0,1]
+  }
   def loadMembers(self,process):
     ''' 
     isValid() should have been tested before, otherwise.. it's gonna fail...
@@ -54,17 +57,18 @@ class BIGNUM(OpenSSLStruct):
     return True
   
   def isValid(self,mappings):
+    print 'BN.isValid'
     if ( self.dmax < 0 or self.top < 0 or self.dmax < self.top ):
       return False
-    if ( not (self.neg == 1 or self.neg == 0 ) ) :
-      return False 
-    #last test on memory address
-    self.valid=is_valid_address( self.d, mappings)
-    return self.valid
+    # TODO we could test if is_valid_address( self.d, mappings)
+    # but with the expected Array size of self.top
+    return LoadableMembers.isValid(mappings)
   
   def __str__(self):
+    print 'BN.__str__'
     #return repr(self)
-    d= getaddress(self.d)
+    d=0
+    #d= getaddress(self.d)
     return ("BN { d=0x%lx, top=%d, dmax=%d, neg=%d, flags=%d }"%
                 (d, self.top, self.dmax, self.neg, self.flags) )
 #ok
@@ -151,11 +155,11 @@ class RSA(OpenSSLStruct):
   ("version",  ctypes.c_long),
   ("meth",ctypes.POINTER(BIGNUM)),#const RSA_METHOD *meth;
   ("engine",ctypes.POINTER(BIGNUM)),#ENGINE *engine;
-  ('n', ctypes.POINTER(BIGNUM) ),
-  ('e', ctypes.POINTER(BIGNUM) ),
-  ('d', ctypes.POINTER(BIGNUM) ),
-  ('p', ctypes.POINTER(BIGNUM) ),
-  ('q', ctypes.POINTER(BIGNUM) ),
+  ('n', ctypes.POINTER(BIGNUM) ), ## still in ssh memap
+  ('e', ctypes.POINTER(BIGNUM) ), ## still in ssh memap
+  ('d', ctypes.POINTER(BIGNUM) ), ## still in ssh memap
+  ('p', ctypes.POINTER(BIGNUM) ), ## still in ssh memap
+  ('q', ctypes.POINTER(BIGNUM) ), ## still in ssh memap
   ('dmp1', ctypes.POINTER(BIGNUM) ),
   ('dmq1', ctypes.POINTER(BIGNUM) ),
   ('iqmp', ctypes.POINTER(BIGNUM) ),
@@ -169,6 +173,11 @@ class RSA(OpenSSLStruct):
   ("blinding",ctypes.POINTER(BIGNUM)),#BN_BLINDING *blinding;
   ("mt_blinding",ctypes.POINTER(BIGNUM))#BN_BLINDING *mt_blinding;
   ]
+  expectedValues={
+    "pad": [0], 
+    "version": [0], 
+    "references": RangeValue(0,0xfff)
+  }
   def printValid(self,mappings):
     print 'me',self.valid
     log.debug( '----------------------- LOADED: %s'%self.loaded)
@@ -191,7 +200,7 @@ class RSA(OpenSSLStruct):
     self._method_mod_q = None
     self.bignum_data = None
     self.blinding = None
-
+    print '******** loadMembers'
     if not LoadableMembers.loadMembers(self,process):
       log.debug('RSA not loaded')
       return False
@@ -200,22 +209,6 @@ class RSA(OpenSSLStruct):
     #  print e.contents
     self.loaded=True
     return True
-    
-  def isValid(self,mappings):
-    ''' struct is valid when :
-    '''
-    self.valid=(self.pad ==0 and self.version ==0 and
-          (0 <= self.references <= 0xfff)  and
-        is_valid_address( self.n, mappings)    and 
-        is_valid_address( self.e, mappings)    and
-        is_valid_address( self.d, mappings)    and
-        is_valid_address( self.p, mappings)    and
-        is_valid_address( self.q, mappings)    and
-        is_valid_address( self.dmp1, mappings) and
-        is_valid_address( self.dmq1, mappings) and
-        is_valid_address( self.iqmp, mappings) )
-    return self.valid
-
     
 #KO
 class DSA(OpenSSLStruct):
@@ -237,6 +230,11 @@ class DSA(OpenSSLStruct):
   ("meth",ctypes.POINTER(ctypes.c_int)),#  const DSA_METHOD *meth;
   ("engine",ctypes.POINTER(ENGINE))
   ]
+  expectedValues={
+    "pad": [0], 
+    "version": [0], 
+    "references": RangeValue(0,0xfff)
+  }
   def printValid(self,mappings):
     log.debug( '----------------------- \npad: %d version %d ref %d'%(self.pad,self.version,self.write_params) )
     log.debug(is_valid_address( self.p, mappings)    )
@@ -262,20 +260,6 @@ class DSA(OpenSSLStruct):
     #
     self.loaded=True
     return True
-    
-  def isValid(self,mappings):
-    self.valid= (
-        self.pad ==0 and self.version ==0 and
-        (0 <= self.references <= 0xfff)  and
-        is_valid_address( self.p, mappings)        and
-        is_valid_address( self.q, mappings)        and
-        is_valid_address( self.g, mappings)        and
-        is_valid_address( self.priv_key, mappings) and
-        is_valid_address( self.pub_key, mappings)  and
-        #is_valid_address( self.kinv, mappings) and  # kinv and r can be null
-        #is_valid_address( self.r, mappings)  ) 
-        True )
-    return self.valid
 
 #ok
 class EVP_CIPHER(OpenSSLStruct):

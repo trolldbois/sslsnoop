@@ -16,14 +16,15 @@ from ctypes import *
 from ptrace.ctypes_libc import libc
 
 
+log=logging.getLogger('test')
 
 def printBytes(data):
   for i in range(0,len(data)/8,8):
     print "0x%lx"%data[i],
     
 
-pid=27477
-addr=0xb835b4e8
+PID=27477
+ADDR=0xb835b4e8
 
 
 #dbg=PtraceDebugger()
@@ -45,8 +46,15 @@ def dbg_read(addr):
 
 
 def readRsa(addr):
+  dbg=PtraceDebugger()
+  process=dbg.addProcess(pid,is_attached=False)
+  if process is None:
+    log.error("Error initializing Process debugging for %d"% pid)
+    sys.exit(-1)
+  # read where it is
   rsa=process.readStruct(addr,ctypes_openssl.RSA)
-  print "isValid : ", rsa.isValid(maps)
+  mappings=readProcessMappings(process)
+  print "isValid : ", rsa.isValid(mappings)
   #rsa.printValid(maps)
   #print rsa
   #print rsa.n
@@ -57,8 +65,15 @@ def readRsa(addr):
   return rsa
 
 def readDsa(addr):
+  dbg=PtraceDebugger()
+  process=dbg.addProcess(pid,is_attached=False)
+  if process is None:
+    log.error("Error initializing Process debugging for %d"% pid)
+    sys.exit(-1)
+  # read where it is
   dsa=process.readStruct(addr,ctypes_openssl.DSA)
-  print "isValid : ", dsa.isValid(maps)
+  mappings=readProcessMappings(process)
+  print "isValid : ", dsa.isValid(mappings)
   #dsa.printValid(maps)
   #print 'DSA1 -> ', dsa
   #print '------------'
@@ -112,7 +127,7 @@ def printSize():
   ctypes_openssh.printSizeof()
 
 def printme(obj):
-  print obj
+  log.info(obj)
 
 def findCipherContext():
   dbg=PtraceDebugger()
@@ -130,20 +145,38 @@ def findCipherContext():
     print m,m.permissions
     abouchet.find_struct(process, m, ctypes_openssh.CipherContext, printme)
 
+def isMemOf(addr,mpid):
+  class p:
+    pid=mpid
+  myP=p()
+  for m in readProcessMappings(myP):
+    if addr in m:
+      print myP, m
+      return True
+  return False
+
 #rsa=readRsa(addr)
 
 #writeWithLibRSA(addr)
 #print '---------------'
 #abouchet.find_keys(process,stack)
 
-#dsa=readDsa(addr)
+#dsa=readDsa(0xb835b4e8)
+#rsa=readRsa(0xb835a700)
 #writeWithLibDSA(addr)
 
 #printSize()
 
-class a:
-  _plop=[1,2,3]
-  _plip=[l*2 for l in _plop]
+#x pourPEM_write_RSAPrivateKey
+myaddr=0xb7c16884
+# rsa-> n
+myaddr=0xb8359148
+if len(sys.argv) == 2:
+  myaddr=int(sys.argv[1],16)
+if isMemOf(myaddr, 8831):
+  print "isMemOf(0x%lx, 8831) - python"%myaddr
+if isMemOf(myaddr, 27477):
+  print "isMemOf(0x%lx, 27477) - ssh-agent"%myaddr
 
-findCipherContext()
+#findCipherContext()
 
