@@ -124,10 +124,16 @@ class LoadableMembers(ctypes.Structure):
         continue
       # b)
       if isStructType(attr):
+        ### do i need to load it first ? becaus it should be memcopied with the super()..
         if not attr.isValid(mappings):
           log.debug('%s %s %s isValid FALSE'%(attrname,attrtype,repr(attr) ))
           return False
-        log.debug('%s %s %s isValid TRUE'%(attrname,attrtype,repr(attr) ))
+        log.info('%s %s %s isValid TRUE'%(attrname,attrtype,repr(attr) ))
+        if attr.__class__.__name__ == 'CRYPTO_EX_DATA':
+          print 'isValid field for inner struct, in super.isValid',attrname,attrtype,attr.valid
+          attr=getattr(self,attrname)
+          print 'isValid field for inner struct, in super.isValid',attrname,attrtype,attr.valid
+
         self.validFields.add(attrname)
         continue
       # c) 
@@ -143,9 +149,10 @@ class LoadableMembers(ctypes.Structure):
             self.validFields.add(attrname)
             continue
         # all case, 
+        _attrType=None
         if attrtype not in self.classRef:
           log.debug("I can't know the size of the basic type behind the %s pointer, it's a pointer to basic type")
-          _addrType=None
+          _attrType=None
         else:
           # test valid address mapping
           _attrType=self.classRef[attrtype]
@@ -173,11 +180,13 @@ class LoadableMembers(ctypes.Structure):
     we copy memory from process for each pointer
     and assign it to a python object _here, then we assign 
     the member to be a pointer to _here'''
-    print 'LM.loadMemebrs'
+    #print 'LM.loadMemebrs'
     if self.loaded:
       print 'heu... a bit short'
       return True
     if not self.valid:
+      #if self.__class__.__name__ == 'CRYPTO_EX_DATA':
+      #  return False
       log.error("%s not loaded, it's not even valid"%(self.__class__.__name__))
       return False
     mappings= readProcessMappings(process)
@@ -185,12 +194,17 @@ class LoadableMembers(ctypes.Structure):
     for attrname,attrtype in self._fields_:
       attr=getattr(self,attrname)
       if not self._isLoadableMember(attr):
+        if attr.__class__.__name__ == 'CRYPTO_EX_DATA':
+          print 'Internal valid field in loadMembers :',attr,attrtype,attr.valid
         log.debug("%s %s not loadable  "%(attrname,attrtype) )
         continue
       # load it, fields are valid
       if isStructType(attr):
+        if self.__class__.__name__ == 'CRYPTO_EX_DATA':
+          print attr,attrtype
         if not attr.loadMembers(process):
           log.debug("%s %s not valid, erreur while loading inner struct "%(attrname,attrtype) )
+          print "cannot load %s but field in validFields ?",(attrname, attrname in self.validFields) 
           return False
         log.debug("%s %s inner struct LOADED "%(attrname,attrtype) )
         continue
@@ -200,68 +214,60 @@ class LoadableMembers(ctypes.Structure):
         _attrType=self.classRef[attrtype]
         attr_obj_address=getaddress(attr)
         # memcpy and save objet ref + pointer in attr
-        print '0x%lx'%getaddress(getattr(self,attrname))
-        print '0x%lx'%getaddress(attr)
-        print 'avant'
-        log.debug("%s %s loading from 0x%lx (is_valid_address: %s)"%(attrname,attrtype,attr_obj_address, is_valid_address( attr, mappings, _attrType) ))
+        #print '0x%lx'%getaddress(getattr(self,attrname))
+        #print '0x%lx'%getaddress(attr)
+        #print 'avant'
+        fieldIsValid=is_valid_address( attr, mappings, _attrType)
+        log.debug("%s %s loading from 0x%lx (is_valid_address: %s)"%(attrname,attrtype,attr_obj_address, fieldIsValid ))
+        if(not fieldIsValid):
+          log.error("%s %s loading from 0x%lx (is_valid_address: %s)"%(attrname,attrtype,attr_obj_address, fieldIsValid ))
+          continue
         ##### VALID INSTR.
         obj=process.readStruct(attr_obj_address, _attrType )
         obj_p=ctypes.pointer( obj)
-        #setattr(self, attrname, ctypes.pointer( process.readStruct(attr_obj_address, _attrType ) ) )        
         setattr(self, attrname, obj_p )        
-        #####
-        print '0x%lx'%getaddress(getattr(self,attrname))
-        print '0x%lx'%getaddress(attr)
-        print 'one'
+        #setattr(self, attrname, ctypes.pointer( process.readStruct(attr_obj_address, _attrType ) ) )        
         #setattr(self, _attrname, process.readStruct(attr_obj_address, _attrType ) ) 
-        print '0x%lx'%getaddress(getattr(self,attrname))
-        print '0x%lx'%getaddress(attr)
-        #print '0x%lx'%ctypes.addressof(getattr(self,_attrname))
-        print '0x%lx'%ctypes.addressof(obj)
-        print 'ko'
         #setattr(self, attrname, ctypes.pointer( getattr(self, _attrname) ) )
-        new=getaddress(attr)
-        print '0x%lx'%getaddress(getattr(self,attrname))
-        print '0x%lx'%getaddress(attr)
-        print '0x%lx'%ctypes.addressof(obj)
-        #print '0x%lx'%ctypes.addressof(getattr(self,_attrname))
-        print 'ko1 - GOOD'
-        # update local value for attr
         #attr=getattr(self,attrname)
-        new=getaddress(attr)
-        print 'a 0x%lx'%getaddress(attr)
-        print '0x%lx'%ctypes.addressof(obj)
-        log.debug("%s "%(attrname  ) )
-        print 'b 0x%lx'%getaddress(attr)
-        log.debug("%s %s loaded memcopy from 0x%lx to 0x%lx"%(attrname, attrtype,attr_obj_address, new  ) )
-        #log.debug("%s "%(attrtype  ) )
-        print 'c 0x%lx'%getaddress(attr)
-        print '0x%lx'%ctypes.addressof(obj)
-        log.debug("%s "%(attr_obj_address  ) )
-        print '0x%lx'%ctypes.addressof(obj)
-        print 'd 0x%lx'%getaddress(attr)
-        log.debug("%s "%(new  ) )
-        print 'e 0x%lx'%getaddress(attr)
-        log.debug("%s %s loaded memcopy from 0x%lx to 0x%lx"%(attrname, attrtype,attr_obj_address, new  ) )
-        print 'f 0x%lx'%getaddress(attr)
-        print '0x%lx'%ctypes.addressof(obj)        
-        print '0x%lx'%getaddress(getattr(self,attrname))
-        print '0x%lx'%getaddress(attr)
-        #print '0x%lx'%ctypes.addressof(getattr(self,_attrname))
-        print 'ko2'
+        #####
+        #print '0x%lx'%getaddress(getattr(self,attrname))
+        #print '0x%lx'%getaddress(attr)
+        #print '0x%lx'%ctypes.addressof(obj)
+        #print 'obj.top: ',obj.top
+        #print 'attr.contents: 0x%lx'%ctypes.addressof(attr.contents)
+        #print 'attr.contents.top',attr.contents.top
+        #print 'OK good'
+
         log.debug("%s %s loaded memcopy from 0x%lx to 0x%lx"%(attrname, attrtype,attr_obj_address, (getaddress(attr))   ))
-        print '0x%lx'%getaddress(getattr(self,attrname))
-        print '0x%lx'%getaddress(attr)
-        #print '0x%lx'%ctypes.addressof(getattr(self,_attrname))
-        print 'ko3'
+        #print '0x%lx'%getaddress(getattr(self,attrname))
+        #print '0x%lx'%getaddress(attr)
+        #print '0x%lx'%ctypes.addressof(obj)
+        #print 'obj.top: ',obj.top
+        #print 'attr.contents: 0x%lx'%ctypes.addressof(attr.contents)
+        #print 'attr.contents.top',attr.contents.top
+        #print 'bad'
+
+        setattr(self, attrname, obj_p )        
+
+        #print '0x%lx'%getaddress(getattr(self,attrname))
+        #print '0x%lx'%getaddress(attr)
+        #print '0x%lx'%ctypes.addressof(obj)
+        #print 'obj.top: ',obj.top
+        #print 'attr.contents: 0x%lx'%ctypes.addressof(attr.contents)
+        #print 'attr.contents.top',attr.contents.top
+        #print 'OK good'
+        
         # recursive validation checks on new struct
         if not bool(attr):
           log.warning('Member %s is null after copy: %s'%(attrname,attr))
           continue
-        print 'before'
+        print 'before 0x%lx'%getaddress(attr)
+        #print 'obj.top: ',obj.top
         # attr.contents instance is always different, so keep the copy
         contents=attr.contents
-        print 'dying'
+        print 'dying 0x%lx'%getaddress(attr)
+        #print 'obj.top: ',obj.top
         if (not contents.isValid(mappings) ):
           log.debug('Member %s is invalid: %s'%(attrname,attr))
           self.valid=False

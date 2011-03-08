@@ -58,11 +58,14 @@ class BIGNUM(OpenSSLStruct):
   
   def isValid(self,mappings):
     print 'BN.isValid'
+    print '0x%lx'%ctypes.addressof(self)
+    print 'self.top: ',self.top
+    
     if ( self.dmax < 0 or self.top < 0 or self.dmax < self.top ):
       return False
     # TODO we could test if is_valid_address( self.d, mappings)
     # but with the expected Array size of self.top
-    return LoadableMembers.isValid(mappings)
+    return LoadableMembers.isValid(self,mappings)
   
   def __str__(self):
     print 'BN.__str__'
@@ -200,7 +203,7 @@ class RSA(OpenSSLStruct):
     self._method_mod_q = None
     self.bignum_data = None
     self.blinding = None
-    print '******** loadMembers'
+    #print '******** loadMembers'
     if not LoadableMembers.loadMembers(self,process):
       log.debug('RSA not loaded')
       return False

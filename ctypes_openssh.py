@@ -53,6 +53,9 @@ class CipherContext(OpenSSHStruct):
   ("evp",  EVP_CIPHER_CTX),
   ("cipher", ctypes.POINTER(Cipher))
   ]
+  expectedValues = {
+  'plaintext': [0,1]
+  }
 
 class Enc(OpenSSHStruct):
   ''' kex.h:84 '''

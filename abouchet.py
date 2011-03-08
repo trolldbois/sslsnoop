@@ -254,7 +254,7 @@ def usage(txt):
 
 
 def main(argv):
-  logging.basicConfig(level=logging.DEBUG)
+  logging.basicConfig(level=logging.INFO)
   logging.debug(argv)
   if ( len(argv) < 1 ):
     usage(argv[0])
