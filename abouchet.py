@@ -169,7 +169,7 @@ def write_dsa_key(dsa,prefix):
   
 
 
-def find_struct(process, memoryMap, struct, callback, hint=None, hintOffset=None):
+def find_struct(process, memoryMap, struct, hint=None, hintOffset=None):
   '''
     Looks for struct in memory, using :
       hints from struct (default values, and such)
@@ -188,6 +188,8 @@ def find_struct(process, memoryMap, struct, callback, hint=None, hintOffset=None
   end=memoryMap.end
   plen=ctypes.sizeof(ctypes.c_char_p) # use aligned words only
   structlen=ctypes.sizeof(struct)
+  #ret vals
+  outputs=[]
   
   ## hinted search
   if not (hint is None or hintOffset is None ):
@@ -200,13 +202,12 @@ def find_struct(process, memoryMap, struct, callback, hint=None, hintOffset=None
       for offset in solutions:
         instance=try_to_map(process, mappings, struct, offset-hintOffset )
         if instance is not None:
-          callback(instance)
-          # XXX memory issues :the memory region is gonna die now.
+          outputs.append(instance)
           pass
     else:
       log.debug('Found no possible offsets for the hint')
     # get out
-    return
+    return outputs
   
   ## search without hint
   # parse for struct on each aligned word
@@ -216,23 +217,15 @@ def find_struct(process, memoryMap, struct, callback, hint=None, hintOffset=None
     instance=try_to_map(process,mappings,struct,j)
     if instance is not None:
       # do stuff with it.
-      callback(instance)
-      return
-      # XXX memory issues : the memory region is gonna die now.
-  # XXX memory issues : la structure dies here. end of life for try_tomap returns
-  return 
+      outputs.append(instance)
+  return outputs
 
 def try_to_map(process,mappings,struct,offset):
   ''' '''
   instance=struct.from_buffer_copy(process.readStruct(offset,struct))
   # check if data matches
-  #if instance.isValid(mappings): # refreshing would be better
-  #  log.debug('possible instance at 0x%lx'%(offset))
   if ( instance.loadMembers(process,mappings) ):
     log.info( "found instance @ 0x%lx"%(offset) )
-    #print 'before write', instance
-    #write_rsa_key(instance, "id_rsa",process)
-    #print 'after loadMembers', instance
     return instance
   return None
 
@@ -301,9 +294,13 @@ def main(argv):
     print m,m.permissions
     ## method generic
     print 'look for RSA'
-    find_struct(process, m, ctypes_openssl.RSA, rsaw.writeToFile)
+    outs=find_struct(process, m, ctypes_openssl.RSA )
+    for rsa in outs:
+      rsaw.writeToFile(rsa)
     print 'look for DSA'
-    find_struct(process, m, ctypes_openssl.DSA, dsaw.writeToFile)
+    outs=find_struct(process, m, ctypes_openssl.DSA)
+    for dsa in outs:
+      dsaw.writeToFile(dsa)
 
   log.info("done for pid %d"%pid)
 
