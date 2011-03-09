@@ -7,7 +7,7 @@
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
 import ctypes
-from model import is_valid_address,getaddress,sstr,LoadableMembers,RangeValue,NotNull
+from model import is_valid_address,getaddress,LoadableMembers,RangeValue,NotNull
 from ptrace.debugger.memory_mapping import readProcessMappings
 import logging
 log=logging.getLogger('openssl.model')
@@ -30,7 +30,6 @@ class OpenSSLStruct(LoadableMembers):
 class BIGNUM(OpenSSLStruct):
   _fields_ = [
   ("d",ctypes.POINTER(BN_ULONG) ),
-  #("d",ctypes.c_void_p ),
   ('top',ctypes.c_int),
   ('dmax',ctypes.c_int),
   ('neg',ctypes.c_int),
@@ -317,7 +316,7 @@ class EVP_CIPHER(OpenSSLStruct):
   ("set_asn1_parameters",  ctypes.POINTER(ctypes.c_int)), # function () 
   ("get_asn1_parameters",  ctypes.POINTER(ctypes.c_int)), # function () 
   ("ctrl",  ctypes.POINTER(ctypes.c_int)), # function () 
-  ("app_data",  ctypes.c_void_p) 
+  ("app_data",  ctypes.POINTER(ctypes.c_byte)) 
   ]
 
 #mok
@@ -328,17 +327,17 @@ class EVP_CIPHER_CTX(OpenSSLStruct):
   ("engine",  ctypes.POINTER(ctypes.c_int)), ## TODO ENGINE*
   ("encrypt",  ctypes.c_int), 
   ("buf_len",  ctypes.c_int), 
-  ("oiv",  ctypes.c_char*EVP_MAX_IV_LENGTH),## unsigned char  oiv[EVP_MAX_IV_LENGTH];
-  ("iv",  ctypes.c_char*EVP_MAX_IV_LENGTH), ##unsigned char  iv[EVP_MAX_IV_LENGTH];
-  ("buf",  ctypes.c_char*EVP_MAX_BLOCK_LENGTH), ##unsigned char buf[EVP_MAX_BLOCK_LENGTH];
+  ("oiv",  ctypes.c_byte*EVP_MAX_IV_LENGTH),## unsigned char  oiv[EVP_MAX_IV_LENGTH];
+  ("iv",  ctypes.c_byte*EVP_MAX_IV_LENGTH), ##unsigned char  iv[EVP_MAX_IV_LENGTH];
+  ("buf",  ctypes.c_byte*EVP_MAX_BLOCK_LENGTH), ##unsigned char buf[EVP_MAX_BLOCK_LENGTH];
   ("num",  ctypes.c_int), 
-  ("app_data",  ctypes.c_void_p), 
+  ("app_data",  ctypes.POINTER(ctypes.c_byte)), 
   ("key_len",  ctypes.c_int), 
   ("flags",  ctypes.c_ulong), 
-  ("cipher_data",  ctypes.c_void_p), 
+  ("cipher_data",  ctypes.POINTER(ctypes.c_byte)), 
   ("final_used",  ctypes.c_int), 
   ("block_mask",  ctypes.c_int), 
-  ("final",  ctypes.c_char*EVP_MAX_BLOCK_LENGTH) ###unsigned char final[EVP_MAX_BLOCK_LENGTH]
+  ("final",  ctypes.c_byte*EVP_MAX_BLOCK_LENGTH) ###unsigned char final[EVP_MAX_BLOCK_LENGTH]
   ]
 
 #mok
@@ -367,7 +366,7 @@ class EVP_MD_CTX(OpenSSLStruct):
   ("digest",  ctypes.POINTER(EVP_MD)),
   ("engine",  ctypes.POINTER(ENGINE) ), #
   ("flags",  ctypes.c_ulong),
-  ("md_data",  ctypes.c_void_p)
+  ("md_data",  ctypes.POINTER(ctypes.c_byte))
   ]
 
 class HMAC_CTX(OpenSSLStruct):

@@ -238,6 +238,8 @@ def main(argv):
   if process is None:
     log.error("Error initializing Process debugging for %d"% pid)
     return
+  # It's not possible to not block it ... maybe smarter ?
+  #process.cont()
   
   if (False):
     #When we have args ...
@@ -282,8 +284,15 @@ def main(argv):
     print 'look for session_state'
     outs=find_struct(process, m, ctypes_openssh.session_state)
     for ss in outs:
-      print ss
-
+      #print ss
+      print '---------'
+      print 'Cipher name : ', ss.receive_context.cipher.contents.name
+      #print ss.receive_context.evp
+      print 'Cipher name : ', ss.send_context.cipher.contents.name
+      #print ss.send_context.evp
+      print 'receive context Cipher : ', ss.receive_context.cipher.contents
+      print 'send context    Cipher : ', ss.send_context.cipher.contents
+    
   log.info("done for pid %d"%pid)
 
   return -1
