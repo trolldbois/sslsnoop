@@ -7,10 +7,12 @@
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
 import ctypes
-from model import is_valid_address,getaddress,LoadableMembers,RangeValue,NotNull
 from ptrace.debugger.memory_mapping import readProcessMappings
 import logging
 log=logging.getLogger('openssl.model')
+
+from model import is_valid_address,getaddress,LoadableMembers,RangeValue,NotNull,CString
+
 
 ''' hmac.h:69 '''
 HMAC_MAX_MD_CBLOCK=128
@@ -142,16 +144,16 @@ class EVP_PKEY(OpenSSLStruct):
 class ENGINE_CMD_DEFN(OpenSSLStruct):
 	_fields_ = [
   ('cmd_num',ctypes.c_uint),
-  ('cmd_name',ctypes.c_char_p),
-  ('cmd_desc',ctypes.c_char_p),
+  ('cmd_name', CString),
+  ('cmd_desc', CString),
   ('cmd_flags',ctypes.c_uint)
   ]  
 
 class ENGINE(OpenSSLStruct):
   pass
 ENGINE._fields_ = [
-  ('id',ctypes.c_char_p),
-  ('name',ctypes.c_char_p),
+  ('id', CString),
+  ('name', CString),
   ('rsa_meth',ctypes.POINTER(ctypes.c_int) ),
   ('dsa_meth',ctypes.POINTER(ctypes.c_int) ),
   ('dh_meth',ctypes.POINTER(ctypes.c_int) ),
