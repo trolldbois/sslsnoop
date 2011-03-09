@@ -36,8 +36,8 @@ class rijndael_ctx(OpenSSLStruct):
   _fields_ = [
   ('decrypt',ctypes.c_int),
   ('Nr',ctypes.c_int),
-  ('ek',  (ctypes.c_uint32*4 * (RIJNDAEL_MAXNR + 1))  ),
-  ('dk',  (ctypes.c_uint32*4 * (RIJNDAEL_MAXNR + 1))  ),
+  ('ek',  (ctypes.c_uint32*(4*RIJNDAEL_MAXNR + 1))  ),
+  ('dk',  (ctypes.c_uint32*(4*RIJNDAEL_MAXNR + 1))  ),
   ]  
 
 class RC4_KEY(OpenSSLStruct):
@@ -125,7 +125,7 @@ class BIGNUM(OpenSSLStruct):
 class STACK(OpenSSLStruct):
   _fields_ = [
   ("num",ctypes.c_int),
-  ("data",ctypes.POINTER(ctypes.c_byte)), 
+  ("data",ctypes.POINTER(ctypes.c_ubyte)), 
   ("sorted",ctypes.c_int),
   ("num_alloc",ctypes.c_int),
   ("comp",ctypes.POINTER(ctypes.c_int) ) ]
@@ -228,7 +228,7 @@ class RSA(OpenSSLStruct):
   ("_method_mod_n", ctypes.POINTER(BN_MONT_CTX) ),
   ("_method_mod_p", ctypes.POINTER(BN_MONT_CTX) ),
   ("_method_mod_q", ctypes.POINTER(BN_MONT_CTX) ),
-  ("bignum_data",ctypes.POINTER(ctypes.c_byte)), ## moue c_char_p ou POINTER(c_char) ?
+  ("bignum_data",ctypes.POINTER(ctypes.c_ubyte)), ## moue c_char_p ou POINTER(c_char) ?
   ("blinding",ctypes.POINTER(BIGNUM)),#BN_BLINDING *blinding;
   ("mt_blinding",ctypes.POINTER(BIGNUM))#BN_BLINDING *mt_blinding;
   ]
@@ -343,7 +343,7 @@ class EVP_CIPHER(OpenSSLStruct):
   ("set_asn1_parameters",  ctypes.POINTER(ctypes.c_int)), # function () 
   ("get_asn1_parameters",  ctypes.POINTER(ctypes.c_int)), # function () 
   ("ctrl",  ctypes.POINTER(ctypes.c_int)), # function () 
-  ("app_data",  ctypes.POINTER(ctypes.c_byte)) 
+  ("app_data",  ctypes.POINTER(ctypes.c_ubyte)) 
   ]
 
 #mok
@@ -354,9 +354,9 @@ class EVP_CIPHER_CTX(OpenSSLStruct):
   ("engine",  ctypes.POINTER(ctypes.c_int)), ## TODO ENGINE*
   ("encrypt",  ctypes.c_int), 
   ("buf_len",  ctypes.c_int), 
-  ("oiv",  ctypes.c_byte*EVP_MAX_IV_LENGTH),## unsigned char  oiv[EVP_MAX_IV_LENGTH];
-  ("iv",  ctypes.c_byte*EVP_MAX_IV_LENGTH), ##unsigned char  iv[EVP_MAX_IV_LENGTH];
-  ("buf",  ctypes.c_byte*EVP_MAX_BLOCK_LENGTH), ##unsigned char buf[EVP_MAX_BLOCK_LENGTH];
+  ("oiv",  ctypes.c_ubyte*EVP_MAX_IV_LENGTH),## unsigned char  oiv[EVP_MAX_IV_LENGTH];
+  ("iv",  ctypes.c_ubyte*EVP_MAX_IV_LENGTH), ##unsigned char  iv[EVP_MAX_IV_LENGTH];
+  ("buf",  ctypes.c_ubyte*EVP_MAX_BLOCK_LENGTH), ##unsigned char buf[EVP_MAX_BLOCK_LENGTH];
   ("num",  ctypes.c_int), 
   ("app_data",  EVP_CIPHER_CTX_APP_DATA_PTR), # utilise par ssh_aes/rijndael
   ("key_len",  ctypes.c_int), 
@@ -364,7 +364,7 @@ class EVP_CIPHER_CTX(OpenSSLStruct):
   ("cipher_data",  EVP_CIPHER_CTX_APP_DATA_PTR), ## utilise par rc4 ?
   ("final_used",  ctypes.c_int), 
   ("block_mask",  ctypes.c_int), 
-  ("final",  ctypes.c_byte*EVP_MAX_BLOCK_LENGTH) ###unsigned char final[EVP_MAX_BLOCK_LENGTH]
+  ("final",  ctypes.c_ubyte*EVP_MAX_BLOCK_LENGTH) ###unsigned char final[EVP_MAX_BLOCK_LENGTH]
   ]
 
 #mok
@@ -393,7 +393,7 @@ class EVP_MD_CTX(OpenSSLStruct):
   ("digest",  ctypes.POINTER(EVP_MD)),
   ("engine",  ctypes.POINTER(ENGINE) ), #
   ("flags",  ctypes.c_ulong),
-  ("md_data",  ctypes.POINTER(ctypes.c_byte))
+  ("md_data",  ctypes.POINTER(ctypes.c_ubyte))
   ]
 
 class HMAC_CTX(OpenSSLStruct):
@@ -410,7 +410,7 @@ class HMAC_CTX(OpenSSLStruct):
 class AES_KEY(OpenSSLStruct):
   ''' aes.h:78 '''
   _fields_ = [
-  ("rd_key",  ctypes.c_ulong * 4 * (AES_MAXNR+1)), 
+  ("rd_key",  ctypes.c_ulong * (4*AES_MAXNR+1)), 
   ("rounds",  ctypes.c_int)
   ] 
 

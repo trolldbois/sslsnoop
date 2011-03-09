@@ -114,21 +114,21 @@ NotNull=NotNullComparable()
 class CString(ctypes.Union):
   _fields_=[
   ("string", ctypes.c_char_p),
-  ("ptr", ctypes.POINTER(ctypes.c_byte) )
+  ("ptr", ctypes.POINTER(ctypes.c_ubyte) )
   ]
   pass
 
-class EVP_CIPHER_CTX_APP_DATA(ctypes.c_byte):
-#ByteArray=ctypes.c_byte*1
+class EVP_CIPHER_CTX_APP_DATA(ctypes.c_ubyte):
+#ByteArray=ctypes.c_ubyte*1
 #class EVP_CIPHER_CTX_APP_DATA(ByteArray):
   #_field_=[('_length_=1
 #  _length_=1024
-#  _type_=ctypes.c_byte
+#  _type_=ctypes.c_ubyte
   pass
 
 EVP_CIPHER_CTX_APP_DATA_PTR=ctypes.POINTER(EVP_CIPHER_CTX_APP_DATA)
-#MYEVP_CTX_PTR=ctypes.POINTER(ctypes.c_byte)
-#class EVP_CIPHER_CTX_APP_DATA_PTR(ctypes.POINTER(ctypes.c_byte)):
+#MYEVP_CTX_PTR=ctypes.POINTER(ctypes.c_ubyte)
+#class EVP_CIPHER_CTX_APP_DATA_PTR(ctypes.POINTER(ctypes.c_ubyte)):
 
 
 #debug
@@ -348,12 +348,12 @@ class LoadableMembers(ctypes.Structure):
       attr=getattr(self,field)
       if isStructType(attr):
         s+=prefix+'"%s": {\t%s%s},\n'%(field, attr.toString(prefix+'\t'),prefix )  
-      elif isBasicTypeArrayType(attr):
-        s+=prefix+'"%s": %s,\n'%(field, bytestr(attr) )  
+      #elif isBasicTypeArrayType(attr):
+      #  #s+=prefix+'"%s": %s,\n'%(field, bytestr(attr) )  
+      #  s+='['+','.join(["%lx"%(val) for val in attr ])
       elif isArrayType(attr): ## array of something else than int
-        nbElements=ctypes.sizeof(attr[0])/ctypes.sizeof(attr[0])
-        subs='\t'.join(["%s[%d]: %s,"%(field,i, attr[i]) for i in range(0,nbElements)])
-        s+=prefix+'"%s": [%s],\n'%(field, subs )  
+        s+=prefix+'"%s" :['%(field)+','.join(["0x%lx"%(val) for val in attr ])+'],\n'
+        continue
       elif isPointerType(attr):
         if not bool(attr) :
           s+=prefix+'"%s": 0x%lx,\n'%(field, getaddress(attr) )   # only print address/null
@@ -384,7 +384,7 @@ class LoadableMembers(ctypes.Structure):
         s+='%s: %s\n'%(field, bytestr(attr) )  
       elif isArrayType(attr): ## array of something else than int
         nbElements=ctypes.sizeof(attr[0])/ctypes.sizeof(attr[0])
-        subs='\t'.join(["%s[%d]: %s"%(field,i, attr[i]) for i in range(0,nbElements)])
+        subs='%s:'+'\t'.join([" %s"%(field, val) for val in attr])
         s+='%s: [%s]\n'%(field, subs )  
       elif isPointerType(attr):
         if not bool(attr) :

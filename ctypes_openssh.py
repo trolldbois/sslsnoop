@@ -45,18 +45,18 @@ class ssh_aes_ctr_ctx(OpenSSHStruct):
   '''
   _fields_ = [
 	('aes_ctx', AES_KEY),
-	('aes_counter', ctypes.c_byte*AES_BLOCK_SIZE)
+	('aes_counter', ctypes.c_ubyte*AES_BLOCK_SIZE)
 	]
 
 class ssh_rijndael_ctx(OpenSSHStruct):
   ''' cipher-aes.c:43 '''
   _fields_ = [
   ('r_ctx', rijndael_ctx),
-  ('r_iv', ctypes.c_byte*RIJNDAEL_BLOCKSIZE)
+  ('r_iv', ctypes.c_ubyte*RIJNDAEL_BLOCKSIZE)
   ]
 
 
-#EVP_CIPHER_CTX_APP_DATA_PTR._fields_=[ ('contents', ctypes.POINTER(ctypes.c_byte)) ,
+#EVP_CIPHER_CTX_APP_DATA_PTR._fields_=[ ('contents', ctypes.POINTER(ctypes.c_ubyte)) ,
 #        ('ssh_aes_ctr_ctx',ctypes.POINTER(ssh_aes_ctr_ctx)) ]
     
 class Cipher(OpenSSHStruct):
@@ -150,8 +150,8 @@ class Enc(OpenSSHStruct):
   ("enabled",  ctypes.c_int), 
   ("key_len",  ctypes.c_uint), 
   ("block_size",  ctypes.c_uint), 
-  ("key",  ctypes.POINTER(ctypes.c_byte)), #u_char ? -> ctypes.c_byte_p ?
-  ("iv",  ctypes.POINTER(ctypes.c_byte))
+  ("key",  ctypes.POINTER(ctypes.c_ubyte)), #u_char ? -> ctypes.c_ubyte_p ?
+  ("iv",  ctypes.POINTER(ctypes.c_ubyte))
   ]
 
 class nh_ctx(OpenSSHStruct):
@@ -198,7 +198,7 @@ class Mac(OpenSSHStruct):
   ("name",  CString ),  
   ("enabled",  ctypes.c_int), 
   ("mac_len",  ctypes.c_uint), 
-  ("key",  ctypes.POINTER(ctypes.c_byte)), #u_char ? 
+  ("key",  ctypes.POINTER(ctypes.c_ubyte)), #u_char ? 
   ("key_len",  ctypes.c_uint), 
   ("type",  ctypes.c_int), 
   ("evp_md",  ctypes.POINTER(EVP_MD)),
@@ -225,7 +225,7 @@ class Newkeys(OpenSSHStruct):
 class Buffer(OpenSSHStruct):
   ''' buffer.h:19 '''
   _fields_ = [
-  ("buf", ctypes.POINTER(ctypes.c_byte) ), 
+  ("buf", ctypes.POINTER(ctypes.c_ubyte) ), 
   ("alloc", ctypes.c_uint ), 
   ("offset", ctypes.c_uint ), 
   ("end", ctypes.c_uint)
@@ -294,9 +294,9 @@ class session_state(OpenSSHStruct):
   ("max_blocks_in", UINT64 ), 
   ("max_blocks_out", UINT64 ), 
   ("rekey_limit", UINT32 ), 
-  ("ssh1_key", ctypes.c_byte * SSH_SESSION_KEY_LENGTH ), #	u_char ssh1_key[SSH_SESSION_KEY_LENGTH];
+  ("ssh1_key", ctypes.c_ubyte * SSH_SESSION_KEY_LENGTH ), #	u_char ssh1_key[SSH_SESSION_KEY_LENGTH];
   ("ssh1_keylen", ctypes.c_uint ), 
-  ("extra_pad", ctypes.c_byte ), 
+  ("extra_pad", ctypes.c_ubyte ), 
   ("packet_discard", ctypes.c_uint ), 
   ("packet_discard_mac", ctypes.POINTER(Mac) ), 
   ("packlen", ctypes.c_uint ), 
