@@ -343,35 +343,35 @@ class LoadableMembers(ctypes.Structure):
     return True
     
   def toString(self,prefix=''):
-    s=prefix+repr(self)+'\n'
+    s="%s # %s\n"%(prefix,repr(self) )
     for field,typ in self._fields_:
       attr=getattr(self,field)
       if isStructType(attr):
-        s+=prefix+'%s: {\t%s%s}\n'%(field, attr.toString(prefix+'\t'),prefix )  
+        s+=prefix+'"%s": {\t%s%s},\n'%(field, attr.toString(prefix+'\t'),prefix )  
       elif isBasicTypeArrayType(attr):
-        s+=prefix+'%s: %s\n'%(field, bytestr(attr) )  
+        s+=prefix+'"%s": %s,\n'%(field, bytestr(attr) )  
       elif isArrayType(attr): ## array of something else than int
         nbElements=ctypes.sizeof(attr[0])/ctypes.sizeof(attr[0])
-        subs='\t'.join(["%s[%d]: %s"%(field,i, attr[i]) for i in range(0,nbElements)])
-        s+=prefix+'%s: [%s]\n'%(field, subs )  
+        subs='\t'.join(["%s[%d]: %s,"%(field,i, attr[i]) for i in range(0,nbElements)])
+        s+=prefix+'"%s": [%s],\n'%(field, subs )  
       elif isPointerType(attr):
         if not bool(attr) :
-          s+=prefix+'%s: 0x%lx\n'%(field, getaddress(attr) )   # only print address/null
+          s+=prefix+'"%s": 0x%lx,\n'%(field, getaddress(attr) )   # only print address/null
         elif not is_address_local(attr) :
-          s+=prefix+'%s: 0x%lx (FIELD NOT LOADED)\n'%(field, getaddress(attr) )   # only print address in target space
+          s+=prefix+'"%s": 0x%lx, #(FIELD NOT LOADED)\n'%(field, getaddress(attr) )   # only print address in target space
         else:
           # we can read the pointers contents
           # if isBasicType(attr.contents): ?
           # if isArrayType(attr.contents): ?
           contents=attr.contents
           if isStructType(contents):
-            s+=prefix+'%s (0x%lx) -> {%s%s}\n'%(field, getaddress(attr), attr.contents.toString(prefix+'\t'),prefix) # use struct printer
+            s+=prefix+'"%s": { #(0x%lx) -> %s%s},\n'%(field, getaddress(attr), attr.contents.toString(prefix+'\t'),prefix) # use struct printer
           else:
-            s+=prefix+'%s (0x%lx) -> {%s}\n'%(field, getaddress(attr), attr.contents) # use struct printer
+            s+=prefix+'"%s": { #(0x%lx) -> %s\n%s},\n'%(field, getaddress(attr), attr.contents, prefix) # use struct printer
       elif isCStringPointer(attr):
-        s+=prefix+'%s: %s (CString) \n'%(field, attr.string)  
+        s+=prefix+'"%s": "%s" , #(CString) \n'%(field, attr.string)  
       else:
-        s+=prefix+'%s: %s\n'%(field, repr(attr) )  
+        s+=prefix+'"%s": %s,\n'%(field, repr(attr) )  
     return s
 
   def __str__(self):

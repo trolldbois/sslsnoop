@@ -284,7 +284,7 @@ def main(argv):
     print 'look for session_state'
     outs=find_struct(process, m, ctypes_openssh.session_state)
     for ss in outs:
-      #print ss.toString()
+      print ss.toString()
       #print '---------'
       #print 'Cipher name : ', ss.receive_context.cipher.contents.name
       #print ss.receive_context.evp
@@ -292,8 +292,8 @@ def main(argv):
       #print ss.send_context.evp
       #print 'receive context Cipher : ', ss.receive_context.cipher.contents
       #print 'send context    Cipher : ', ss.send_context.cipher.contents
-      print 'receive context Cipher app_data: ', ctypes_openssh.getEvpAppData(ss.receive_context)
-      print 'send context    Cipher app_data: ', ctypes_openssh.getEvpAppData(ss.send_context)
+      print 'receive context Cipher app_data: ', ctypes_openssh.getEvpAppData(ss.receive_context).toString()
+      print 'send context    Cipher app_data: ', ctypes_openssh.getEvpAppData(ss.send_context).toString()
       
   log.info("done for pid %d"%pid)
 

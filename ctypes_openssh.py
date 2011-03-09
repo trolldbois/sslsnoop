@@ -7,17 +7,18 @@
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
 import ctypes
-from model import is_valid_address,getaddress,sstr,LoadableMembers
 from ptrace.debugger.memory_mapping import readProcessMappings
 from ptrace import ctypes_stdint
 import logging
 log=logging.getLogger('openssh.model')
 
-from ctypes_openssl import is_valid_address,getaddress,sstr
-from ctypes_openssl import EVP_CIPHER_CTX, EVP_MD, HMAC_CTX, AES_KEY
+from model import is_valid_address,getaddress,LoadableMembers,RangeValue,NotNull,CString,EVP_CIPHER_CTX_APP_DATA_PTR
+from ctypes_openssl import EVP_CIPHER_CTX, EVP_MD, HMAC_CTX, AES_KEY,rijndael_ctx,EVP_RC4_KEY
 
 MODE_MAX=2 #kex.h:62
 AES_BLOCK_LEN=16 #umac.c:168
+AES_BLOCK_SIZE=16 
+RIJNDAEL_BLOCKSIZE=16
 L1_KEY_LEN=1024 #umac.c:298
 L1_KEY_SHIFT=16 #umac.c:316
 UMAC_OUTPUT_LEN=8 #umac.c:55
@@ -30,21 +31,62 @@ UINT64=ctypes_stdint.uint64_t
 UINT32=ctypes_stdint.uint32_t
 UINT8=ctypes_stdint.uint8_t
 
+
+
 class OpenSSHStruct(LoadableMembers):
   ''' defines classRef '''
   pass
-  
+
+## Cipher's custom contexts
+## cf EVP_CIPHER_CTX.app_data
+class ssh_aes_ctr_ctx(OpenSSHStruct):
+  ''' cipher-ctr.c:39 
+  Cipher-custom context
+  '''
+  _fields_ = [
+	('aes_ctx', AES_KEY),
+	('aes_counter', ctypes.c_byte*AES_BLOCK_SIZE)
+	]
+
+class ssh_rijndael_ctx(OpenSSHStruct):
+  ''' cipher-aes.c:43 '''
+  _fields_ = [
+  ('r_ctx', rijndael_ctx),
+  ('r_iv', ctypes.c_byte*RIJNDAEL_BLOCKSIZE)
+  ]
+
+
+#EVP_CIPHER_CTX_APP_DATA_PTR._fields_=[ ('contents', ctypes.POINTER(ctypes.c_byte)) ,
+#        ('ssh_aes_ctr_ctx',ctypes.POINTER(ssh_aes_ctr_ctx)) ]
+    
 class Cipher(OpenSSHStruct):
   ''' cipher.c:60 '''
   _fields_ = [
-  ("name",  ctypes.c_char_p), 
-  ("number",  ctypes.c_int), 
+  ("name",  CString ), # yeah,  c_char_p can't handle us
+  ("number",  ctypes.c_int), # for ssh1 only cipher.c and cipher.h:45 // -3 == SSH_CIPHER_SSH2
   ("block_size",  ctypes.c_uint), 
   ("key_len",  ctypes.c_uint), 
   ("discard_len",  ctypes.c_uint), 
   ("cbc_mode",  ctypes.c_uint), 
-  ("evptype",  ctypes.POINTER(ctypes.c_int)) ## pointer function() 
+  ("evptype",  ctypes.POINTER(ctypes.c_int)) ## fn const EVP_CIPHER * function() qui renvoit & de la structure EVP_CIPHER
   ]
+  expectedValues = {
+  'name': NotNull,
+  }
+
+def getEvpAppData(cipherContext):
+  if cipherContext.cipher.contents.name.string in cipherContext.cipherContexts:
+    struct,fieldname=cipherContext.cipherContexts[cipherContext.cipher.contents.name.string]
+    if(struct is None):
+      log.warning("Unsupported cipher %s"%(cipherContext.cipher.contents.name.string))
+      return True
+    log.debug('CAST evp.%s Into %s'%(fieldname,struct))
+    attr=getattr(cipherContext.evp,fieldname)
+    #print attr
+    st=struct.from_address(getaddress(attr))
+    return st
+  return None
+  
 
 class CipherContext(OpenSSHStruct):
   ''' cipher.h:65 '''
@@ -54,19 +96,62 @@ class CipherContext(OpenSSHStruct):
   ("cipher", ctypes.POINTER(Cipher))
   ]
   expectedValues = {
-  'plaintext': [0,1]
+  'plaintext': [0,1],
+  'cipher': NotNull
   }
+  cipherContexts={ # we could check SSH_CIPHER_XXX in self.cipher.contents.number
+	 "none": (None,None),
+	 "des": (None,None),
+	 "3des": (None,None),
+	 "blowfish": (None,None),
+	 "3des-cbc": (None,None),
+	 "blowfish-cbc": (None,None),
+	 "cast128-cbc": (None,None),
+	 "arcfour": (EVP_RC4_KEY,'cipher_data'),
+	 "arcfour128": (EVP_RC4_KEY,'cipher_data'),
+	 "arcfour256": (EVP_RC4_KEY,'cipher_data'),
+	 "aes128-cbc": (ssh_rijndael_ctx, 'app_data'), # aes*cbc == rijndael
+	 "aes192-cbc": (ssh_rijndael_ctx, 'app_data'),
+	 "aes256-cbc": (ssh_rijndael_ctx, 'app_data'),
+	 "rijndael-cbc@lysator.liu.se": (ssh_rijndael_ctx, 'app_data'),
+	 "aes128-ctr": (ssh_aes_ctr_ctx, 'app_data'),
+	 "aes192-ctr": (ssh_aes_ctr_ctx, 'app_data'),
+	 "aes256-ctr": (ssh_aes_ctr_ctx, 'app_data'),
+	 "acss@openssh.org": None,
+  }
+  def loadMembers(self,process,mappings):
+    if not LoadableMembers.loadMembers(self,process,mappings):
+      return False
+    # cast evp.app_data into a valid struct
+    if self.cipher.contents.name.string in self.cipherContexts:
+      struct,fieldname=self.cipherContexts[self.cipher.contents.name.string]
+      if(struct is None):
+        log.warning("Unsupported cipher %s"%(self.cipher.contents.name.string))
+        return True
+      log.debug('CAST evp.%s Into %s'%(fieldname,struct))
+      attr=getattr(self.evp,fieldname)
+      #print attr
+      attr_obj_address=getaddress(attr)
+      
+      #print "CAST %s into : %s "%(fieldname, struct)
+      st=struct.from_buffer_copy(process.readStruct(attr_obj_address, struct ) )
+      attr.contents=(type(attr.contents)).from_buffer(st)
+      
+      #print getEvpAppData(self)
+    else:
+      log.warning("Unknown cipher %s, can't load a data struct for the EVP_CIPHER_CTX->app_data"%(self.cipher.contents.name.string))
+    return True
 
 class Enc(OpenSSHStruct):
   ''' kex.h:84 '''
   _fields_ = [
-  ("name",  ctypes.c_char_p), 
+  ("name",  CString ),  
   ("cipher", ctypes.POINTER(Cipher)),
   ("enabled",  ctypes.c_int), 
   ("key_len",  ctypes.c_uint), 
   ("block_size",  ctypes.c_uint), 
-  ("key",  ctypes.c_char_p), #u_char ? -> ctypes.c_byte_p ?
-  ("iv",  ctypes.c_char_p)
+  ("key",  ctypes.POINTER(ctypes.c_byte)), #u_char ? -> ctypes.c_byte_p ?
+  ("iv",  ctypes.POINTER(ctypes.c_byte))
   ]
 
 class nh_ctx(OpenSSHStruct):
@@ -90,7 +175,7 @@ class uhash_ctx(OpenSSHStruct):
   ("msg_len",  UINT32)
   ]
 
-#AES_KEY
+
 class pdf_ctx(OpenSSHStruct):
   ''' umac:221 '''
   _fields_ = [
@@ -110,10 +195,10 @@ class umac_ctx(OpenSSHStruct):
 class Mac(OpenSSHStruct):
   ''' kex.h:90 '''
   _fields_ = [
-  ("name",  ctypes.c_char_p), 
+  ("name",  CString ),  
   ("enabled",  ctypes.c_int), 
   ("mac_len",  ctypes.c_uint), 
-  ("key",  ctypes.c_char_p), #u_char ? 
+  ("key",  ctypes.POINTER(ctypes.c_byte)), #u_char ? 
   ("key_len",  ctypes.c_uint), 
   ("type",  ctypes.c_int), 
   ("evp_md",  ctypes.POINTER(EVP_MD)),
@@ -126,7 +211,7 @@ class Comp(OpenSSHStruct):
   _fields_ = [
   ("type",  ctypes.c_int), 
   ("enabled",  ctypes.c_int), 
-  ("name",  ctypes.c_char_p)
+  ("name",  CString ) 
   ]
 
 class Newkeys(OpenSSHStruct):
@@ -140,7 +225,7 @@ class Newkeys(OpenSSHStruct):
 class Buffer(OpenSSHStruct):
   ''' buffer.h:19 '''
   _fields_ = [
-  ("buf", ctypes.c_char_p ), 
+  ("buf", ctypes.POINTER(ctypes.c_byte) ), 
   ("alloc", ctypes.c_uint ), 
   ("offset", ctypes.c_uint ), 
   ("end", ctypes.c_uint)
@@ -209,9 +294,9 @@ class session_state(OpenSSHStruct):
   ("max_blocks_in", UINT64 ), 
   ("max_blocks_out", UINT64 ), 
   ("rekey_limit", UINT32 ), 
-  ("ssh1_key", ctypes.c_char * SSH_SESSION_KEY_LENGTH ), #	u_char ssh1_key[SSH_SESSION_KEY_LENGTH];
+  ("ssh1_key", ctypes.c_byte * SSH_SESSION_KEY_LENGTH ), #	u_char ssh1_key[SSH_SESSION_KEY_LENGTH];
   ("ssh1_keylen", ctypes.c_uint ), 
-  ("extra_pad", ctypes.c_char ), 
+  ("extra_pad", ctypes.c_byte ), 
   ("packet_discard", ctypes.c_uint ), 
   ("packet_discard_mac", ctypes.POINTER(Mac) ), 
   ("packlen", ctypes.c_uint ), 
@@ -220,6 +305,22 @@ class session_state(OpenSSHStruct):
   ("set_maxsize_called", ctypes.c_int ), 
   ("outgoing", TAILQ_HEAD_PACKET ) 
   ]
+  expectedValues={
+    "connection_in": RangeValue(-1,1024), # FD number
+    "connection_out": RangeValue(-1,1024), # FD number
+    "max_packet_size": RangeValue(4 * 1024,1024 * 1024), # packet.c:1781
+    "packlen": RangeValue(0,1024 * 1024), # is 0 or < max_pack_size
+    "initialized": [1], # mostly should be 1
+    "interactive_mode": [0,1], 
+    "server_side": [0,1] , 
+    "after_authentication": [0,1], # mostly should be 1
+    #"keep_alive_timeouts", [0], ## ?? 
+    #"packet_timeout_ms", [], 
+    #"max_blocks_in", UINT64 , #packet.c:794 1<<enc.block_size*2   ou si block_size < 16 (1<<30)/enc.block_size
+    #"max_blocks_out", UINT64 , # ou si rekey_limit , max_blocks = MIN(max_block, rekey_limit/block_size )
+    "max_blocks_in": NotNull, #mmh
+    "max_blocks_out": NotNull
+  }
 
 
 def printSizeof():
