@@ -52,6 +52,13 @@ class EVP_RC4_KEY(OpenSSLStruct):
   ('ks',RC4_KEY)
   ]
 
+class AES_KEY(OpenSSLStruct):
+  ''' aes.h:78 '''
+  _fields_ = [
+  ("rd_key",  ctypes.c_ulong * (4*AES_MAXNR+1)), 
+  ("rounds",  ctypes.c_int)
+  ] 
+
 
 #ok
 class BIGNUM(OpenSSLStruct):
@@ -407,12 +414,6 @@ class HMAC_CTX(OpenSSLStruct):
   ("key",  ctypes.c_char * HMAC_MAX_MD_CBLOCK)
   ] 
 
-class AES_KEY(OpenSSLStruct):
-  ''' aes.h:78 '''
-  _fields_ = [
-  ("rd_key",  ctypes.c_ulong * (4*AES_MAXNR+1)), 
-  ("rounds",  ctypes.c_int)
-  ] 
 
 def printSizeof():
   print 'BIGNUM:',ctypes.sizeof(BIGNUM)

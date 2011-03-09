@@ -351,8 +351,11 @@ class LoadableMembers(ctypes.Structure):
       #elif isBasicTypeArrayType(attr):
       #  #s+=prefix+'"%s": %s,\n'%(field, bytestr(attr) )  
       #  s+='['+','.join(["%lx"%(val) for val in attr ])
-      elif isArrayType(attr): ## array of something else than int
+      elif isBasicTypeArrayType(attr): ## array of something else than int
         s+=prefix+'"%s" :['%(field)+','.join(["0x%lx"%(val) for val in attr ])+'],\n'
+        continue
+      elif isArrayType(attr): ## array of something else than int/byte
+        s+=prefix+'"%s" :['%(field)+','.join(["%s"%(val) for val in attr ])+'],\n'
         continue
       elif isPointerType(attr):
         if not bool(attr) :
