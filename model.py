@@ -14,12 +14,6 @@ log=logging.getLogger('model')
 
 MEMCACHE=[]
 
-class CString(ctypes.Union):
-  _fields_=[
-  ("string", ctypes.c_char_p),
-  ("ptr", ctypes.POINTER(ctypes.c_byte) )
-  ]
-  pass
 
 ''' returns if the address of the struct is in the mapping area
 '''
@@ -77,14 +71,13 @@ def bytestr(obj):
   return repr(sb)
     
 def isBasicType(obj):
-  return ( (obj.__class__.__name__ not in ['c_char_p','str'] ) and
-    (type(obj).__module__ in ['ctypes','_ctypes','__builtin__']) )
+  return  (type(obj).__module__ in ['ctypes','_ctypes','__builtin__']) 
 
 def isStructType(obj):
   ''' a struct is what WE have created '''
   return isinstance(obj,LoadableMembers)
   # or use obj.classRef
-
+  
 def isPointerType(obj):
   if isBasicType(obj) or isStructType(obj):
     return False
@@ -98,6 +91,10 @@ def isArrayType(obj):
 
 def isCStringPointer(obj):
   return obj.__class__.__name__ == 'CString'
+
+def isUnionType(obj):
+  return isinstance(obj,ctypes.Union) and not isCStringPointer(obj)
+
 
 class RangeValue:
   def __init__(self,low,high):
@@ -114,7 +111,27 @@ class NotNullComparable:
 
 NotNull=NotNullComparable()
 
+class CString(ctypes.Union):
+  _fields_=[
+  ("string", ctypes.c_char_p),
+  ("ptr", ctypes.POINTER(ctypes.c_byte) )
+  ]
+  pass
 
+class EVP_CIPHER_CTX_APP_DATA(ctypes.c_byte):
+#ByteArray=ctypes.c_byte*1
+#class EVP_CIPHER_CTX_APP_DATA(ByteArray):
+  #_field_=[('_length_=1
+#  _length_=1024
+#  _type_=ctypes.c_byte
+  pass
+
+EVP_CIPHER_CTX_APP_DATA_PTR=ctypes.POINTER(EVP_CIPHER_CTX_APP_DATA)
+#MYEVP_CTX_PTR=ctypes.POINTER(ctypes.c_byte)
+#class EVP_CIPHER_CTX_APP_DATA_PTR(ctypes.POINTER(ctypes.c_byte)):
+
+
+#debug
 def printWhois(attr):
   print ' : isBasicType(attr): %s bool(attr): %s'%(isBasicType(attr) ,bool(attr)) 
   print ' : isCStringPointer(attr): %s isStructType(attr): %s'%(isCStringPointer(attr) ,isStructType(attr)) 
@@ -234,12 +251,18 @@ class LoadableMembers(ctypes.Structure):
         log.debug('%s %s 0x%lx OK'%(attrname,repr(attr) ,getaddress(attr)))
         continue
       # ?
+      if isUnionType(attr):
+        #log.warning('Union are not validated , yet ')
+        continue
       log.error('What type are You ?: %s'%attrname)
       print '====== What type are You ?: %s'%attrname
     # loop done
     return True
 
   def _isLoadableMember(self, attr):
+    '''
+      Un VoidPointer ne doit pas etre Loadable
+    '''
     attrtype=type(attr)
     return ( (isPointerType(attr) and ( attrtype in self.classRef) and bool(attr) ) or
               isStructType(attr)  or isCStringPointer(attr) )
@@ -261,6 +284,7 @@ class LoadableMembers(ctypes.Structure):
       if attrname in []:
         print repr(self)
         printWhois(attr)
+        print ' : _isLoadableMember() %s'%(self._isLoadableMember(attr) )
       # skip static basic data members
       if not self._isLoadableMember(attr):
         log.debug("%s %s not loadable  bool(attr) = %s"%(attrname,attrtype, bool(attr)) )
@@ -318,6 +342,38 @@ class LoadableMembers(ctypes.Structure):
     log.debug('%s END loadMembers ----------------'%(self.__class__.__name__))
     return True
     
+  def toString(self,prefix=''):
+    s=prefix+repr(self)+'\n'
+    for field,typ in self._fields_:
+      attr=getattr(self,field)
+      if isStructType(attr):
+        s+=prefix+'%s: {\t%s%s}\n'%(field, attr.toString(prefix+'\t'),prefix )  
+      elif isBasicTypeArrayType(attr):
+        s+=prefix+'%s: %s\n'%(field, bytestr(attr) )  
+      elif isArrayType(attr): ## array of something else than int
+        nbElements=ctypes.sizeof(attr[0])/ctypes.sizeof(attr[0])
+        subs='\t'.join(["%s[%d]: %s"%(field,i, attr[i]) for i in range(0,nbElements)])
+        s+=prefix+'%s: [%s]\n'%(field, subs )  
+      elif isPointerType(attr):
+        if not bool(attr) :
+          s+=prefix+'%s: 0x%lx\n'%(field, getaddress(attr) )   # only print address/null
+        elif not is_address_local(attr) :
+          s+=prefix+'%s: 0x%lx (FIELD NOT LOADED)\n'%(field, getaddress(attr) )   # only print address in target space
+        else:
+          # we can read the pointers contents
+          # if isBasicType(attr.contents): ?
+          # if isArrayType(attr.contents): ?
+          contents=attr.contents
+          if isStructType(contents):
+            s+=prefix+'%s (0x%lx) -> {%s%s}\n'%(field, getaddress(attr), attr.contents.toString(prefix+'\t'),prefix) # use struct printer
+          else:
+            s+=prefix+'%s (0x%lx) -> {%s}\n'%(field, getaddress(attr), attr.contents) # use struct printer
+      elif isCStringPointer(attr):
+        s+=prefix+'%s: %s (CString) \n'%(field, attr.string)  
+      else:
+        s+=prefix+'%s: %s\n'%(field, repr(attr) )  
+    return s
+
   def __str__(self):
     s=repr(self)+'\n'
     for field,typ in self._fields_:
@@ -344,6 +400,18 @@ class LoadableMembers(ctypes.Structure):
         s+='%s: %s (CString) \n'%(field, attr.string)  
       else:
         s+='%s: %s\n'%(field, repr(attr) )  
+    return s
+
+def APP_DATA_value(obj,struct):
+    return struct.from_buffer(obj.contents)
+
+def APP_DATA_toString(obj,struct,prefix='\t'):
+    print 'ok',
+    s=prefix+repr(obj)+'\n'
+    print 'building ',
+    contents=APP_DATA_value(obj,struct)
+    print '__str__ '
+    s+=prefix+'%s: {\t%s%s}\n'%(struct.__name__, contents.toString(prefix+'\t'),prefix )  
     return s
 
 

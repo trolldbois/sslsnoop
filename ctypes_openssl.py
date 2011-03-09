@@ -11,7 +11,7 @@ from ptrace.debugger.memory_mapping import readProcessMappings
 import logging
 log=logging.getLogger('openssl.model')
 
-from model import is_valid_address,getaddress,LoadableMembers,RangeValue,NotNull,CString
+from model import is_valid_address,getaddress,LoadableMembers,RangeValue,NotNull,CString,EVP_CIPHER_CTX_APP_DATA_PTR
 
 
 ''' hmac.h:69 '''
@@ -20,6 +20,7 @@ HMAC_MAX_MD_CBLOCK=128
 EVP_MAX_BLOCK_LENGTH=32
 EVP_MAX_IV_LENGTH=16
 AES_MAXNR=14 # aes.h:66
+RIJNDAEL_MAXNR=14
 
 # we have to alloc a big chunk
 BN_ULONG=ctypes.c_ulong
@@ -27,6 +28,30 @@ BN_ULONG=ctypes.c_ulong
 class OpenSSLStruct(LoadableMembers):
   ''' defines classRef '''
   pass
+
+
+
+
+class rijndael_ctx(OpenSSLStruct):
+  _fields_ = [
+  ('decrypt',ctypes.c_int),
+  ('Nr',ctypes.c_int),
+  ('ek',  (ctypes.c_uint32*4 * (RIJNDAEL_MAXNR + 1))  ),
+  ('dk',  (ctypes.c_uint32*4 * (RIJNDAEL_MAXNR + 1))  ),
+  ]  
+
+class RC4_KEY(OpenSSLStruct):
+  _fields_ = [
+  ('x',ctypes.c_uint), #RC4_INT opensslconf.h:61
+  ('x',ctypes.c_uint),
+  ('data',ctypes.c_uint*256)
+  ]
+
+class EVP_RC4_KEY(OpenSSLStruct):
+  _fields_ = [
+  ('ks',RC4_KEY)
+  ]
+
 
 #ok
 class BIGNUM(OpenSSLStruct):
@@ -333,10 +358,10 @@ class EVP_CIPHER_CTX(OpenSSLStruct):
   ("iv",  ctypes.c_byte*EVP_MAX_IV_LENGTH), ##unsigned char  iv[EVP_MAX_IV_LENGTH];
   ("buf",  ctypes.c_byte*EVP_MAX_BLOCK_LENGTH), ##unsigned char buf[EVP_MAX_BLOCK_LENGTH];
   ("num",  ctypes.c_int), 
-  ("app_data",  ctypes.POINTER(ctypes.c_byte)), 
+  ("app_data",  EVP_CIPHER_CTX_APP_DATA_PTR), # utilise par ssh_aes/rijndael
   ("key_len",  ctypes.c_int), 
   ("flags",  ctypes.c_ulong), 
-  ("cipher_data",  ctypes.POINTER(ctypes.c_byte)), 
+  ("cipher_data",  EVP_CIPHER_CTX_APP_DATA_PTR), ## utilise par rc4 ?
   ("final_used",  ctypes.c_int), 
   ("block_mask",  ctypes.c_int), 
   ("final",  ctypes.c_byte*EVP_MAX_BLOCK_LENGTH) ###unsigned char final[EVP_MAX_BLOCK_LENGTH]
