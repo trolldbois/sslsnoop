@@ -12,6 +12,14 @@ from ptrace.debugger.memory_mapping import readProcessMappings
 import logging
 log=logging.getLogger('model')
 
+MEMCACHE=[]
+
+class CString(ctypes.Union):
+  _fields_=[
+  ("string", ctypes.c_char_p),
+  ("ptr", ctypes.POINTER(ctypes.c_byte) )
+  ]
+  pass
 
 ''' returns if the address of the struct is in the mapping area
 '''
@@ -22,6 +30,9 @@ def is_valid_address(obj,mappings, structType=None):
   addr=getaddress(obj)
   if addr == 0:
     return False
+  return is_valid_address_value(addr,mappings,structType)
+
+def is_valid_address_value(addr,mappings,structType=None):
   for m in mappings:
     if addr in m:
       # check if end of struct is ALSO in m
@@ -66,8 +77,8 @@ def bytestr(obj):
   return repr(sb)
     
 def isBasicType(obj):
-  return ( (not obj.__class__.__name__ == 'c_char_p') and
-    (type(obj).__module__=='ctypes' or type(obj).__module__=='_ctypes' or type(obj).__module__=='__builtin__') )
+  return ( (obj.__class__.__name__ not in ['c_char_p','str'] ) and
+    (type(obj).__module__ in ['ctypes','_ctypes','__builtin__']) )
 
 def isStructType(obj):
   ''' a struct is what WE have created '''
@@ -92,8 +103,9 @@ def isCStringPointer(obj):
   #return type(obj) == str
   #return obj.__class__.__name__ == 'c_char_p' or obj.__class__.__name__ == 'str'
   #return isPointerType(obj) and obj.__class__.__name__ == 'LP_c_char'
-  return bool(obj) and obj.__class__.__name__ == 'LP_c_char'
+  #return obj.__class__.__name__ == 'LP_c_char'
   #return obj.__class__.__name__ == 'c_char_p'
+  return obj.__class__.__name__ == 'CString'
 
 class RangeValue:
   def __init__(self,low,high):
@@ -112,11 +124,11 @@ NotNull=NotNullComparable()
 
 
 def printWhois(attr):
+  print ' : isBasicType(attr): %s bool(attr): %s'%(isBasicType(attr) ,bool(attr)) 
   print ' : isCStringPointer(attr): %s isStructType(attr): %s'%(isCStringPointer(attr) ,isStructType(attr)) 
   print ' : isArrayType(attr): %s isBasicTypeArrayType(attr): %s'%(isArrayType(attr) ,isBasicTypeArrayType(attr)) 
   print ' : isPointerType(attr): %s type(attr) %s '%(isPointerType(attr),type(attr) ) 
   print ' : ',attr.__class__.__name__, type(attr)
-  print attr.__class__.__name__
 
 
 class LoadableMembers(ctypes.Structure):
@@ -157,7 +169,7 @@ class LoadableMembers(ctypes.Structure):
     for attrname,attrtype in self._fields_:
       attr=getattr(self,attrname)
       if attrname =='name':
-        print repr(self)
+        print 'Ivalid ',repr(self)
         printWhois(attr)
       # a) 
       if isBasicType(attr):
@@ -176,10 +188,39 @@ class LoadableMembers(ctypes.Structure):
         log.debug('%s %s %s isValid TRUE'%(attrname,attrtype,repr(attr) ))
         continue
       # c)
-      if isArrayType(attr):
-        #log.info('attr is arraytype %s',repr(attr))#
+      if isBasicTypeArrayType(attr):
+        #log.info('%s is arraytype %s we decided it was valid',attrname,repr(attr))#
         continue
-      # d) 
+      elif isArrayType(attr):
+        log.info('%s is arraytype %s we decided it was valid',attrname,repr(attr))#
+        continue
+      # d)
+      
+      if isCStringPointer(attr):
+        print '====== What type are You ?: i AM a CSTRING'
+        #check expected values
+        # ya pas d'address a un str...
+        print '%s 0x%lx'%(repr(attr),ctypes.addressof(attr))
+        #print 'value',attr.value
+        '''
+        myaddress=ctypes.addressof(attr)
+        if attrname in self.expectedValues:
+          # test if NULL is an option
+          if (not bool(myaddress)) or (not bool(attr) ):
+            if not ( (None in self.expectedValues[attrname]) or
+                     (0 in self.expectedValues[attrname]) ):
+              log.debug('%s %s %s isNULL and that is NOT EXPECTED'%(attrname,attrtype,repr(attr) ))
+              return False
+            log.debug('%s %s %s isNULL and that is OK'%(attrname,attrtype,repr(attr) ))
+            continue
+        # check if adress is valid
+        myaddress=ctypes.addressof(attr)
+        if ( not is_valid_address_value( myaddress, mappings) ) :
+          log.debug('%s %s %s 0x%lx INVALID'%(attrname,attrtype, repr(attr) ,myaddress))
+          print 'CString %s is INVALID 0x%lx'%(attrname,myaddress)
+          return False
+      '''
+      # e) 
       if isPointerType(attr):
         #### try to debug mem
         setattr(self,attrname+'ContentAddress',getaddress(attr))
@@ -252,6 +293,14 @@ class LoadableMembers(ctypes.Structure):
         print 'I am a CString',attrname,attrtype
         #tmp_p=ctypes.cast(attr,ctypes.POINTER(ctypes.c_byte))
         attr_obj_address=getaddress(attr)
+        #if attr_obj_address == 0:
+        #  print '%s CSTRING address is null '%(attrname)
+        #  attr_obj_address=ctypes.addressof(attr)
+        if attr_obj_address == 0:
+          print '%s CSTRING address is STILL null '%(attrname)
+          attr_obj_address=getaddress(attr.ptr)
+          
+        print "%s -> 0x%lx"%(attrname, attr_obj_address ) 
         print 'I am a CString at 0x%lx'%attr_obj_address
         MAX_SIZE=255
         log.debug("%s %s is defined as a CString, loading from 0x%lx is_valid_address %s"%(
@@ -260,7 +309,12 @@ class LoadableMembers(ctypes.Structure):
         print 'read CString',process.readCString(attr_obj_address, MAX_SIZE )
         #attr.contents=ctypes.c_char.from_buffer_copy(process.readCString(attr_obj_address, MAX_SIZE )[0] )
         txt=process.readCString(attr_obj_address, MAX_SIZE )[0]
+        MEMCACHE.append(txt)
         print 'txt',repr(txt)
+        attr.string=txt
+        print attr.string
+
+        '''
         tmp=ctypes.c_char_p(txt)
         print tmp
         if not bool(tmp):
@@ -272,6 +326,7 @@ class LoadableMembers(ctypes.Structure):
           setattr(self,attrname+"_StringValue",txt)
           print 'ok'
         print 'read CString',attr.contents
+        '''
         continue
       else:
         _attrname='_'+attrname
@@ -329,15 +384,16 @@ class LoadableMembers(ctypes.Structure):
           s+='%s (0x%lx) -> {%s}\n'%(field, getaddress(attr), attr.contents) # use struct printer
       elif isCStringPointer(attr):
         # we should have a CString starting at addr.contents
-        ###s+='%s: %s (CString) \n'%(field, attr.value )  
-        if not bool(attr):
-          print 'CString is null ?'
-          s+='%s: %s/NULL\n'%(field, repr(attr) )  
-        else:
-          subs=ctypes.string_at(getaddress(attr),5)
-          print ' Sub is : %s'%repr(subs)
-          s+='%s: %s (CString) \n'%(field, subs )  
-          #print getattr(self,field+"_StringValue")
+        ##s+='%s: %s (CString) \n'%(field, attr.string.value )  
+        s+='%s: %s (CString) \n'%(field, attr.string)  
+        #if not bool(attr):
+        #  print 'CString is null ?'
+        #  s+='%s: %s/NULL\n'%(field, repr(attr) )  
+        #else:
+        #  subs=ctypes.string_at(getaddress(attr),5)
+        #  print ' Sub is : %s'%repr(subs)
+        #  s+='%s: %s (CString) \n'%(field, subs )  
+        #  #print getattr(self,field+"_StringValue")
       else:
         s+='%s: %s\n'%(field, repr(attr) )  
     return s
