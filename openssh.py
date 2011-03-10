@@ -10,53 +10,71 @@ import os,logging,sys
 #use volatility?
 
 import abouchet
-
-import ctypes_openssl,ctypes_openssh
-#from  model import DSA,RSA
-import ctypes
-from ctypes import *
-from ptrace.ctypes_libc import libc
+import ctypes_openssh
 
 # linux only
 from ptrace.debugger.debugger import PtraceDebugger
 from ptrace.debugger.memory_mapping import readProcessMappings
 
+from paramiko.packet import Packetizer
 
 
-log=logging.getLogger('abouchet')
-MAX_KEYS=255
-
-verbose = 0
+log=logging.getLogger('sslsnoop.openssh')
 
 
-def testScapyThread():
-  import socket_scapy,select
+
+def activate_cipher(packetizer,cipher):
+  "switch on newly negotiated encryption parameters for inbound traffic"
+  block_size = cipher.block_size
+  print 'block_size:',block_size
+  '''if self.server_mode:
+      IV_in = self._compute_key('A', block_size)
+      key_in = self._compute_key('C', self._cipher_info[self.remote_cipher]['key-size'])
+  else:
+      IV_in = self._compute_key('B', block_size)
+      key_in = self._compute_key('D', self._cipher_info[self.remote_cipher]['key-size'])
+  
+  engine = self._get_cipher(self.remote_cipher, key_in, IV_in)
+  mac_size = self._mac_info[self.remote_mac]['size']
+  mac_engine = self._mac_info[self.remote_mac]['class']
+  # initial mac keys are done in the hash's natural size (not the potentially truncated
+  # transmission size)
+  if self.server_mode:
+      mac_key = self._compute_key('E', mac_engine.digest_size)
+  else:
+      mac_key = self._compute_key('F', mac_engine.digest_size)
+  self.packetizer.set_inbound_cipher(engine, block_size, mac_engine, mac_size, mac_key)
+  compress_in = self._compression_info[self.remote_compression][1]
+  if (compress_in is not None) and ((self.remote_compression != 'zlib@openssh.com') or self.authenticated):
+      self._log(DEBUG, 'Switching on inbound compression ...')
+      self.packetizer.set_inbound_compressor(compress_in())
+  '''
+
+  
+def decryptSSHTraffic(scapySocket,ciphers):
+  # 
+  inC,outC=ciphers.getCiphers()
+  # Inbound
+  inbound=Packetizer(scapySocket.getInboundSocket())
+  activate_cipher(inbound, inC )
+  # out bound
+  outbound=Packetizer(scapySocket.getOutboundSocket())
+  activate_cipher(outbound, outC )
+  return
+
+def launchScapyThread():
+  import socket_scapy
   from threading import Thread
+  # @ at param
   port=22
   sshfilter="tcp and port %d"%(port)
+  #
   soscapy=socket_scapy.socket_scapy(sshfilter,packetCount=100)
-  log.info('Please make some ssh  traffic')
   sniffer = Thread(target=soscapy.run)
+  soscapy.setThread(sniffer)
   sniffer.start()
-  # sniffer is strted, let's consume
-  nbblocks=0
-  data=''
-  readso=soscapy.getReadSocket()
-  while sniffer.isAlive():
-    r,w,oo=select.select([readso],[],[],1)
-    if len(r)>0:
-      data+=readso.recv(16)
-      nbblocks+=1
-  # try to finish socket
-  print 'sniffer is finished'
-  r,w,oo=select.select([readso],[],[],0)
-  while len(r)>0:
-    data+=readso.recv(16)
-    nbblocks+=1
-    r,w,oo=select.select([readso],[],[],0)
-  #end      
-  print "received %d blocks/ %d bytes"%(nbblocks,len(data))
-  print 'sniffer captured : ',soscapy
+  log.info('Please make some ssh  traffic')
+  return soscapy
 
 
 class SessionCiphers():
@@ -64,20 +82,25 @@ class SessionCiphers():
     self.sessions_state=session_state
     # read cipher
     self.receiveCtx=session_state.receive_context
-    self.receiveCipher=receiveCtx.cipher.contents
-    self.receiveCipherName=receiveCipher.name
-    self.receiveKey=ctypes_openssh.getEvpAppData(receiveCtx)
+    self.receiveCipherOpenSSH=self.receiveCtx.cipher.contents
+    self.receiveCipherName=self.receiveCipherOpenSSH.name.toString()
+    self.receiveCipherEVP=self.receiveCtx.evp.cipher.contents
+    self.receiveKey=ctypes_openssh.getEvpAppData(self.receiveCtx)
     # write cipher
     self.sendCtx=session_state.send_context
-    self.sendCipher=sendCtx.cipher.contents
-    self.sendCipherName=sendCipher.name
-    self.sendKey=ctypes_openssh.getEvpAppData(sendCtx)
-  def getReceiveKey(self):
-    return self.receiveKey
-  def getSendKey(self):
-    return self.sendKey
+    self.sendCipherOpenSSH=self.sendCtx.cipher.contents
+    self.sendCipherName=self.sendCipherOpenSSH.name.toString()
+    self.sendCipherEVP=self.sendCtx.evp.cipher.contents
+    self.sendKey=ctypes_openssh.getEvpAppData(self.sendCtx)
+    return
+  def getCiphers(self):
+    return self.receiveCipherEVP, self.sendCipherEVP
+ 
+  def getKeys(self):
+    return self.receiveKey, self.sendKey
+  
   def __str__(self):
-    return "<SessionCiphers RECEIVE: %s SEND: %s>"%(self.receiveCipherName,self.sendCipherName)
+    return "<SessionCiphers RECEIVE: '%s' SEND: '%s' >"%(self.receiveCipherName,self.sendCipherName)
 
 def findActiveSession(pid):
   
@@ -93,7 +116,7 @@ def findActiveSession(pid):
     ##debug, rsa is on head
     if m.pathname != '[heap]':
       continue
-    if not hasValidPermissions(m):
+    if not abouchet.hasValidPermissions(m):
       continue
     ## method generic
     log.info('looking for struct session_state')
@@ -106,7 +129,7 @@ def findActiveSession(pid):
     elif len(outs) > 1:
       log.warning("Mmmh, multiple session_state. That is odd. I'll try with the first one.")
     #
-    session_state=out[0]
+    session_state=outs[0]
   return session_state
   
 def findActiveKeys(pid):
@@ -137,10 +160,12 @@ def main(argv):
   # use optarg on v, a and to
   pid = int(argv[0])
   log.info("Target has pid %d"%pid)
+  soscapy=launchScapyThread()
   ciphers=findActiveKeys(pid)
-      
+  # process is running... sniffer is listening
+  decryptSSHTraffic(soscapy,ciphers)
   log.info("done for pid %d"%pid)
-
+  sys.exit(0)
   return -1
 
 

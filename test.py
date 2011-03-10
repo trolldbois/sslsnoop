@@ -175,7 +175,7 @@ def testScapyThread():
   # sniffer is strted, let's consume
   nbblocks=0
   data=''
-  readso=soscapy.getReadSocket()
+  readso=soscapy.getInboundSocket()
   while sniffer.isAlive():
     r,w,oo=select.select([readso],[],[],1)
     if len(r)>0:
