@@ -61,13 +61,42 @@ def getaddress(obj):
     #print 'object pointer is null'
     return 0  
 
-def bytestr(obj):
-  #print obj, ctypes.addressof(obj),
-  if not isBasicTypeArrayType(obj):
-    return "NOT-AN-BasicType-ARRAY"
+''' MISSING
+d 	double 	float 	8 	(4)
+p 	char[] 	string 	  	 
+'''
+bytestr_fmt={
+  'c_bool': '?',
+  'c_char': 'c',
+  'c_byte': 'b',
+  'c_ubyte': 'B',
+  'c_short': 'h',
+  'c_ushort': 'H',
+  'c_int': 'i', #c_int is c_long
+  'c_uint': 'I',
+  'int': 'i', 
+  'c_long': 'l', #c_int is c_long
+  'c_ulong': 'L',
+  'c_longlong': 'q',
+  'c_ulonglong': 'Q',
+  'c_float': 'f', ## and double float ?
+  'c_char_p': 's',
+  'c_void_p': 'P'
+  }
+def array2bytes(array):
+  #print obj, ctypes.addressof(array),
+  if not isBasicTypeArrayType(array):
+    return b'NOT-AN-BasicType-ARRAY'
+  arrayLen=len(array)
+  if arrayLen == 0:
+    return b''
+  if type(array[0]).__name__ not in bytestr_fmt:
+    log.warning('Unknown ctypes to pack: %s'%(type(array[0])))
+    return '?'
+  fmt=bytestr_fmt[type(array[0]).__name__]
   sb=b''
-  for i in range(0, ctypes.sizeof(obj) ):
-    sb+=pack("b",obj[i])
+  for el in array:
+    sb+=pack(fmt, el)
   return repr(sb)
     
 def isBasicType(obj):
@@ -169,7 +198,7 @@ class LoadableMembers(ctypes.Structure):
         check if the inner struct isValid()
         if False, return False, else continue
       
-      c) is an array ?
+      c) is an array , recurse validation
       
       d) Pointer(check valid_address or expectedValues is None == NULL )
         if field as some expected values in expectedValues 
@@ -181,86 +210,100 @@ class LoadableMembers(ctypes.Structure):
     '''
     for attrname,attrtype in self._fields_:
       attr=getattr(self,attrname)
-      if attrname in [] :
-        print 'Ivalid ',repr(self)
-        printWhois(attr)
-      # a) 
-      if isBasicType(attr):
-        if attrname in self.expectedValues:
-          if attr not in self.expectedValues[attrname]:
-            log.debug('%s %s %s bad value not in self.expectedValues[attrname]:'%(attrname,attrtype,repr(attr) ))
-            return False
-        log.debug('%s %s %s ok'%(attrname,attrtype,repr(attr) ))
-        continue
-      # b)
-      if isStructType(attr):
-        ### do i need to load it first ? becaus it should be memcopied with the super()..
-        if not attr.isValid(mappings):
-          log.debug('%s %s %s isValid FALSE'%(attrname,attrtype,repr(attr) ))
-          return False
-        log.debug('%s %s %s isValid TRUE'%(attrname,attrtype,repr(attr) ))
-        continue
-      # c)
-      if isBasicTypeArrayType(attr):
-        #log.info('%s is arraytype %s we decided it was valid',attrname,repr(attr))#
-        continue
-      elif isArrayType(attr):
-        log.info('%s is arraytype %s we decided it was valid',attrname,repr(attr))#
-        continue
-      # d)
-      
-      if isCStringPointer(attr):
-        myaddress=getaddress(attr.ptr)
-        if attrname in self.expectedValues:
-          # test if NULL is an option
-          if not bool(myaddress) :
-            if not ( (None in self.expectedValues[attrname]) or
-                     (0 in self.expectedValues[attrname]) ):
-              log.debug('%s %s %s isNULL and that is NOT EXPECTED'%(attrname,attrtype,repr(attr) ))
-              return False
-            log.debug('%s %s %s isNULL and that is OK'%(attrname,attrtype,repr(attr) ))
-            continue
-        if ( not is_valid_address_value( myaddress, mappings) ) :
-          log.debug('%s %s %s 0x%lx INVALID'%(attrname,attrtype, repr(attr) ,myaddress))
-          print 'CString %s is INVALID 0x%lx'%(attrname,myaddress)
-          return False
-        log.debug('%s %s %s is at 0x%lx OK'%(attrname,attrtype,repr(attr),myaddress ))
-        continue
-      # e) 
-      if isPointerType(attr):
-        #### try to debug mem
-        setattr(self,attrname+'ContentAddress',getaddress(attr))
-        ####
-        if attrname in self.expectedValues:
-          # test if NULL is an option
-          if not bool(attr):
-            if not ( (None in self.expectedValues[attrname]) or
-                     (0 in self.expectedValues[attrname]) ):
-              log.debug('%s %s %s isNULL and that is NOT EXPECTED'%(attrname,attrtype,repr(attr) ))
-              return False
-            log.debug('%s %s %s isNULL and that is OK'%(attrname,attrtype,repr(attr) ))
-            continue
-        # all case, 
-        _attrType=None
-        if attrtype not in self.classRef:
-          #log.debug("I can't know the size of the basic type behind the %s pointer, it's a pointer to basic type")
-          _attrType=None
-        else:
-          # test valid address mapping
-          _attrType=self.classRef[attrtype]
-        if ( not is_valid_address( attr, mappings, _attrType) ) and (getaddress(attr) != 0):
-          log.debug('%s %s %s 0x%lx INVALID'%(attrname,attrtype, repr(attr) ,getaddress(attr)))
-          return False
-        # null is accepted by default 
-        log.debug('%s %s 0x%lx OK'%(attrname,repr(attr) ,getaddress(attr)))
-        continue
-      # ?
-      if isUnionType(attr):
-        #log.warning('Union are not validated , yet ')
-        continue
-      log.error('What type are You ?: %s'%attrname)
-      print '====== What type are You ?: %s'%attrname
+      if not self._isValidAttr(attr,attrname,attrtype,mappings):
+        return False
+      #continue
     # loop done
+    return True
+    
+  def _isValidAttr(self,attr,attrname,attrtype,mappings):
+    # check this attr
+    if attrname in [] :
+      print 'Ivalid ',repr(self)
+      printWhois(attr)
+    # a) 
+    if isBasicType(attr):
+      if attrname in self.expectedValues:
+        if attr not in self.expectedValues[attrname]:
+          log.debug('%s %s %s bad value not in self.expectedValues[attrname]:'%(attrname,attrtype,repr(attr) ))
+          return False
+      log.debug('%s %s %s ok'%(attrname,attrtype,repr(attr) ))
+      return True
+    # b)
+    if isStructType(attr):
+      ### do i need to load it first ? becaus it should be memcopied with the super()..
+      if not attr.isValid(mappings):
+        log.debug('%s %s %s isValid FALSE'%(attrname,attrtype,repr(attr) ))
+        return False
+      log.debug('%s %s %s isValid TRUE'%(attrname,attrtype,repr(attr) ))
+      return True
+    # c)
+    if isBasicTypeArrayType(attr):
+      #log.info('%s is arraytype %s we decided it was valid',attrname,repr(attr))#
+      return True
+    if isArrayType(attr):
+      log.info('%s is arraytype %s recurse validate',attrname,repr(attr))#
+      attrLen=len(attr)
+      if attrLen == 0:
+        return True
+      elType=type(attr[0])
+      for i in range(0,attrLen):
+        if not self._isValidAttr(attr[i], "%s[%d]"%(attrname,i), elType, mappings):
+          return False
+      return True
+    # d)
+    
+    if isCStringPointer(attr):
+      myaddress=getaddress(attr.ptr)
+      if attrname in self.expectedValues:
+        # test if NULL is an option
+        if not bool(myaddress) :
+          if not ( (None in self.expectedValues[attrname]) or
+                   (0 in self.expectedValues[attrname]) ):
+            log.debug('%s %s %s isNULL and that is NOT EXPECTED'%(attrname,attrtype,repr(attr) ))
+            return False
+          log.debug('%s %s %s isNULL and that is OK'%(attrname,attrtype,repr(attr) ))
+          return True
+      if ( not is_valid_address_value( myaddress, mappings) ) :
+        log.debug('%s %s %s 0x%lx INVALID'%(attrname,attrtype, repr(attr) ,myaddress))
+        print 'CString %s is INVALID 0x%lx'%(attrname,myaddress)
+        return False
+      log.debug('%s %s %s is at 0x%lx OK'%(attrname,attrtype,repr(attr),myaddress ))
+      return True
+    # e) 
+    if isPointerType(attr):
+      #### try to debug mem
+      setattr(self,attrname+'ContentAddress',getaddress(attr))
+      ####
+      if attrname in self.expectedValues:
+        # test if NULL is an option
+        if not bool(attr):
+          if not ( (None in self.expectedValues[attrname]) or
+                   (0 in self.expectedValues[attrname]) ):
+            log.debug('%s %s %s isNULL and that is NOT EXPECTED'%(attrname,attrtype,repr(attr) ))
+            return False
+          log.debug('%s %s %s isNULL and that is OK'%(attrname,attrtype,repr(attr) ))
+          return True
+      # all case, 
+      _attrType=None
+      if attrtype not in self.classRef:
+        #log.debug("I can't know the size of the basic type behind the %s pointer, it's a pointer to basic type")
+        _attrType=None
+      else:
+        # test valid address mapping
+        _attrType=self.classRef[attrtype]
+      if ( not is_valid_address( attr, mappings, _attrType) ) and (getaddress(attr) != 0):
+        log.debug('%s %s %s 0x%lx INVALID'%(attrname,attrtype, repr(attr) ,getaddress(attr)))
+        return False
+      # null is accepted by default 
+      log.debug('%s %s 0x%lx OK'%(attrname,repr(attr) ,getaddress(attr)))
+      return True
+    # ?
+    if isUnionType(attr):
+      #log.warning('Union are not validated , yet ')
+      return True
+    log.error('What type are You ?: %s'%attrname)
+    print '====== What type are You ?: %s'%attrname
     return True
 
   def _isLoadableMember(self, attr):
@@ -269,7 +312,8 @@ class LoadableMembers(ctypes.Structure):
     '''
     attrtype=type(attr)
     return ( (isPointerType(attr) and ( attrtype in self.classRef) and bool(attr) ) or
-              isStructType(attr)  or isCStringPointer(attr) )
+              isStructType(attr)  or isCStringPointer(attr) or
+              (isArrayType(attr) and not isBasicTypeArrayType(attr) ) ) # should we iterate on Basictypes ? no
 
   def loadMembers(self,process,mappings):
     ''' 
@@ -284,66 +328,84 @@ class LoadableMembers(ctypes.Structure):
     ## go through all members. if they are pointers AND not null AND in valid memorymapping AND a struct type, load them as struct pointers
     for attrname,attrtype in self._fields_:
       attr=getattr(self,attrname)
-      ### debug
-      if attrname in []:
-        print repr(self)
-        printWhois(attr)
-        print ' : _isLoadableMember() %s'%(self._isLoadableMember(attr) )
-      # skip static basic data members
-      if not self._isLoadableMember(attr):
-        log.debug("%s %s not loadable  bool(attr) = %s"%(attrname,attrtype, bool(attr)) )
-        continue
-      # load it, fields are valid
-      if isStructType(attr):
-        log.debug('%s %s is STRUCT'%(attrname,attrtype) )
-        if not attr.loadMembers(process,mappings):
-          log.debug("%s %s not valid, erreur while loading inner struct "%(attrname,attrtype) )
-          return False
-        log.debug("%s %s inner struct LOADED "%(attrname,attrtype) )
-        continue
-      # we have PointerType here . Basic or complex
-      # exception cases
-      if isCStringPointer(attr):
-        # can't use basic c_char_p because we can't load in foreign memory
-        attr_obj_address=getaddress(attr.ptr)
-        MAX_SIZE=255
-        log.debug("%s %s is defined as a CString, loading from 0x%lx is_valid_address %s"%(
-                        attrname,attr,attr_obj_address, is_valid_address(attr,mappings) ))
-        txt,full=process.readCString(attr_obj_address, MAX_SIZE )
-        if not full:
-          log.warning('buffer size was too small for this CString')
-        attr.string=txt
-        continue
-      else:
-        _attrname='_'+attrname
-        _attrType=self.classRef[attrtype]
-        attr_obj_address=getaddress(attr)
-        ####
-        previous=getattr(self,attrname+'ContentAddress')
-        if attr_obj_address !=previous:
-          log.warning('Change of pointer value between validation and loading... 0x%lx 0x%lx'%(previous,attr_obj_address))
-        # memcpy and save objet ref + pointer in attr
-        # we know the field is considered valid, so if it's not in memory_space, we can ignore it
-        fieldIsValid=is_valid_address( attr, mappings, _attrType)
-        if(not fieldIsValid):
-          # big BUG Badaboum, why did pointer changed validity/value ?
-          log.warning("%s %s not loadable 0x%lx but VALID "%(attrname, attr,attr_obj_address ))
-          continue
-        log.debug("%s %s loading from 0x%lx (is_valid_address: %s)"%(attrname,attr,attr_obj_address, fieldIsValid ))
-        ##### VALID INSTR.
-        attr.contents=_attrType.from_buffer_copy(process.readStruct(attr_obj_address, _attrType ))
-        #####
-        log.debug("%s %s loaded memcopy from 0x%lx to 0x%lx"%(attrname, attr,attr_obj_address, (getaddress(attr))   ))
-        # recursive validation checks on new struct
-        if not bool(attr):
-          log.warning('Member %s is null after copy: %s'%(attrname,attr))
-          continue
-        # go and load the pointed struct members recursively
-        if not attr.contents.loadMembers(process,mappings):
-          log.debug('member %s was not loaded'%(attrname))
-          return False
-      #TATAFN
+      if not self._loadMember(attr,attrname,attrtype,process,mappings):
+        return False
     log.debug('%s END loadMembers ----------------'%(self.__class__.__name__))
+    return True
+    
+  def _loadMember(self,attr,attrname,attrtype,process,mappings):
+    ### debug
+    if attrname in ['newkeys']:
+      print repr(self)
+      printWhois(attr)
+      print ' : _isLoadableMember() %s'%(self._isLoadableMember(attr) )
+    # skip static basic data members
+    if not self._isLoadableMember(attr):
+      log.debug("%s %s not loadable  bool(attr) = %s"%(attrname,attrtype, bool(attr)) )
+      return True
+    # load it, fields are valid
+    if isStructType(attr):
+      log.debug('%s %s is STRUCT'%(attrname,attrtype) )
+      if not attr.loadMembers(process,mappings):
+        log.debug("%s %s not valid, erreur while loading inner struct "%(attrname,attrtype) )
+        return False
+      log.debug("%s %s inner struct LOADED "%(attrname,attrtype) )
+      return True
+    # maybe an array
+    if isBasicTypeArrayType(attr):
+      return True
+    if isArrayType(attr):
+      log.info('%s is arraytype %s recurse load',attrname,repr(attr))#
+      attrLen=len(attr)
+      if attrLen == 0:
+        return True
+      elType=type(attr[0])
+      for i in range(0,attrLen):
+        if not self._loadMember(attr[i], "%s[%d]"%(attrname,i), elType, process, mappings):
+          return False
+      return True
+    # we have PointerType here . Basic or complex
+    # exception cases
+    if isCStringPointer(attr):
+      # can't use basic c_char_p because we can't load in foreign memory
+      attr_obj_address=getaddress(attr.ptr)
+      MAX_SIZE=255
+      log.debug("%s %s is defined as a CString, loading from 0x%lx is_valid_address %s"%(
+                      attrname,attr,attr_obj_address, is_valid_address(attr,mappings) ))
+      txt,full=process.readCString(attr_obj_address, MAX_SIZE )
+      if not full:
+        log.warning('buffer size was too small for this CString')
+      attr.string=txt
+      return True
+    else:
+      _attrname='_'+attrname
+      _attrType=self.classRef[attrtype]
+      attr_obj_address=getaddress(attr)
+      ####
+      previous=getattr(self,attrname+'ContentAddress')
+      if attr_obj_address !=previous:
+        log.warning('Change of pointer value between validation and loading... 0x%lx 0x%lx'%(previous,attr_obj_address))
+      # memcpy and save objet ref + pointer in attr
+      # we know the field is considered valid, so if it's not in memory_space, we can ignore it
+      fieldIsValid=is_valid_address( attr, mappings, _attrType)
+      if(not fieldIsValid):
+        # big BUG Badaboum, why did pointer changed validity/value ?
+        log.warning("%s %s not loadable 0x%lx but VALID "%(attrname, attr,attr_obj_address ))
+        return True
+      log.debug("%s %s loading from 0x%lx (is_valid_address: %s)"%(attrname,attr,attr_obj_address, fieldIsValid ))
+      ##### VALID INSTR.
+      attr.contents=_attrType.from_buffer_copy(process.readStruct(attr_obj_address, _attrType ))
+      #####
+      log.debug("%s %s loaded memcopy from 0x%lx to 0x%lx"%(attrname, attr,attr_obj_address, (getaddress(attr))   ))
+      # recursive validation checks on new struct
+      if not bool(attr):
+        log.warning('Member %s is null after copy: %s'%(attrname,attr))
+        return True
+      # go and load the pointed struct members recursively
+      if not attr.contents.loadMembers(process,mappings):
+        log.debug('member %s was not loaded'%(attrname))
+        return False
+    #TATAFN
     return True
     
   def toString(self,prefix=''):
@@ -353,7 +415,7 @@ class LoadableMembers(ctypes.Structure):
       if isStructType(attr):
         s+=prefix+'"%s": {\t%s%s},\n'%(field, attr.toString(prefix+'\t'),prefix )  
       #elif isBasicTypeArrayType(attr):
-      #  #s+=prefix+'"%s": %s,\n'%(field, bytestr(attr) )  
+      #  #s+=prefix+'"%s": %s,\n'%(field, array2bytes(attr) )  
       #  s+='['+','.join(["%lx"%(val) for val in attr ])
       elif isBasicTypeArrayType(attr): ## array of something else than int
         s+=prefix+'"%s" :['%(field)+','.join(["0x%lx"%(val) for val in attr ])+'],\n'
@@ -388,11 +450,14 @@ class LoadableMembers(ctypes.Structure):
       if isStructType(attr):
         s+='%s: {\t%s}\n'%(field, attr )  
       elif isBasicTypeArrayType(attr):
-        s+='%s: %s\n'%(field, bytestr(attr) )  
+        try:
+          s+='%s: %s\n'%(field, array2bytes(attr) )  
+        except IndexError,e:
+          print 'error while reading',repr(attr),type(attr)
+          
       elif isArrayType(attr): ## array of something else than int
-        nbElements=ctypes.sizeof(attr[0])/ctypes.sizeof(attr[0])
-        subs='%s:'+'\t'.join([" %s"%(field, val) for val in attr])
-        s+='%s: [%s]\n'%(field, subs )  
+        s+=prefix+'"%s" :['%(field)+','.join(["%s"%(val) for val in attr ])+'],\n'
+        continue
       elif isPointerType(attr):
         if not bool(attr) :
           s+='%s: 0x%lx\n'%(field, getaddress(attr) )   # only print address/null

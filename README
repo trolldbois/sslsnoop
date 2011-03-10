@@ -139,6 +139,9 @@ use paramiko packet.py to decrypt packet.
    => use scapy to get a stream ( sniff)
    => use scapy in a thread (OK)
 
+openssh clientloop, packet.c:1120 
+c'est newkeys qui contiens les cles....
+bon. aller. on va loadMembers les array de pointers :)
 
 
 

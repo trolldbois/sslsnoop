@@ -284,7 +284,7 @@ def main(argv):
     print 'look for session_state'
     outs=find_struct(process, m, ctypes_openssh.session_state)
     for ss in outs:
-      print ss.toString()
+      #print ss.toString()
       #print '---------'
       #print 'Cipher name : ', ss.receive_context.cipher.contents.name
       #print ss.receive_context.evp
@@ -292,35 +292,17 @@ def main(argv):
       #print ss.send_context.evp
       #print 'receive context Cipher : ', ss.receive_context.cipher.contents
       #print 'send context    Cipher : ', ss.send_context.cipher.contents
-      print 'receive context Cipher app_data: ', ctypes_openssh.getEvpAppData(ss.receive_context).toString()
-      print 'send context    Cipher app_data: ', ctypes_openssh.getEvpAppData(ss.send_context).toString()
+      #print 'receive context Cipher app_data: ', ctypes_openssh.getEvpAppData(ss.receive_context).toString()
+      #print 'send context    Cipher app_data: ', ctypes_openssh.getEvpAppData(ss.send_context).toString()
+      print ss.newkeys
+      for k in ss.newkeys:
+        print 'K is ',k
+        print 'k contents is',k.contents
       
   log.info("done for pid %d"%pid)
 
   return -1
 
-def decryptSSH(receiveContext):
-  # paramiko/transport.py:1814
-  '''
-        # remote_cipher, key_in ,IV_in sont connu
-        # la mac_key aussi ( a verifier ) 
-        # compression A voir 
-        
-        engine = self._get_cipher(self.remote_cipher, key_in, IV_in)
-        mac_size = self._mac_info[self.remote_mac]['size']
-        mac_engine = self._mac_info[self.remote_mac]['class']
-        # mac_key 
-        
-        ->>>> self.packetizer.set_inbound_cipher(engine, block_size, mac_engine, mac_size, mac_key)
-        
-        # puis la compression (             self.packetizer.set_inbound_compressor(compress_in())
-        
-        et c'est bon...
-        format attentu , un bytestring, de 16 bytes ( pour aes128-ctr )
-        
-        4×4 matrix of bytes, termed the state 
-  '''
-  pass
 
 if __name__ == "__main__":
   main(sys.argv[1:])

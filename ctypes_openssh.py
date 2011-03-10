@@ -153,6 +153,23 @@ class Enc(OpenSSHStruct):
   ("key",  ctypes.POINTER(ctypes.c_ubyte)), #u_char ? -> ctypes.c_ubyte_p ?
   ("iv",  ctypes.POINTER(ctypes.c_ubyte))
   ]
+  def loadMembers(self,process,mappings):
+    if not LoadableMembers.loadMembers(self,process,mappings):
+      return False
+    # Load and memcopy key and iv
+    log.debug('Memcopying a Key with %d bytes'%self.key_len)
+    attr_obj_address=getaddress(self.key)
+    array=(ctypes.c_ubyte*self.key_len).from_buffer_copy(process.readArray(attr_obj_address, ctypes.c_ubyte, self.key_len))
+    self.key.contents=ctypes.c_ubyte.from_buffer(array)
+    
+    log.debug('Memcopying a IV with %d bytes'%( self.block_size) )
+    attr_obj_address=getaddress(self.iv)
+    array=(ctypes.c_ubyte*self.block_size).from_buffer_copy(process.readArray(attr_obj_address, ctypes.c_ubyte,self.block_size))
+    self.iv.contents=ctypes.c_ubyte.from_buffer(array)
+    
+    log.debug('ENC KEY(%d bytes) and IV(%d bytes) acquired'%(self.key_len,self.block_size))
+    return True
+
 
 class nh_ctx(OpenSSHStruct):
   ''' umac.c:323 '''
@@ -205,6 +222,17 @@ class Mac(OpenSSHStruct):
   ("evp_ctx",  HMAC_CTX),
   ("umac_ctx",  ctypes.POINTER(umac_ctx)) 
   ]
+  def loadMembers(self,process,mappings):
+    if not LoadableMembers.loadMembers(self,process,mappings):
+      return False
+    # Load and memcopy key 
+    log.debug('Memcopying a Key with %d bytes'%self.key_len)
+    attr_obj_address=getaddress(self.key)
+    array=(ctypes.c_ubyte*self.key_len).from_buffer_copy(process.readArray(attr_obj_address, ctypes.c_ubyte, self.key_len))
+    self.key.contents=ctypes.c_ubyte.from_buffer(array)
+    
+    log.debug('MAC KEY(%d bytes) acquired'%(self.key_len))
+    return True
 
 class Comp(OpenSSHStruct):
   ''' kex.h:100 '''
