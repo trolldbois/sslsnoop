@@ -14,9 +14,17 @@ from scapy.all import sniff
 log=logging.getLogger('socket.scapy')
 
 
+def isdestport22(packet):
+  return  packet.dport == 22
+
+def isNotdestport22(packet):
+  return  not isdestport22(packet)
+
+
 class socket_scapy():
   ''' what you write in writeso, gets read in readso '''
-  def __init__(self,filterRules,protocolName='TCP',packetCount=0,timeout=None):
+  def __init__(self,filterRules, protocolName='TCP', packetCount=0, timeout=None,
+            isInboundPacketCallback=None,isOutboundPacketCallback=None):
     ''' 
     @param filterRules: a pcap compatible filter string 
     @param protocolName: the name of the scapy proto layer 
@@ -27,22 +35,39 @@ class socket_scapy():
     self.protocolName=protocolName
     self.packetCount=packetCount
     self.timeout=timeout
-    self.wcnt=0
+    #
+    self._inbound_cnt=0
+
+
+    self._outbound_cnt=0
+
+    self._running_thread=None
+    # distinguish between incoming and outgoing packets // classic ssh client
+    if ( isInboundPacketCallback is None):
+      self.__is_inboundPacket=isNotdestport22
+    if ( isOutboundPacketCallback is None):
+      self.__is_outboundPacket=isdestport22
+    # make socket
     try:
         isWindows = socket.AF_UNIX
-        self._readso,self._writeso=socket.socketpair()
+        self._inbound_readso,self._inbound_writeso=socket.socketpair()
+        self._outbound_readso,self._outbound_writeso=socket.socketpair()
     except NameError:
         # yes || no socketpair support anyway
-        self._initPipe()
+        self._initPipes()
     return
-  def _initPipe(self):
-    self.__pipe=pipe_socketpair()
-    self._readso,self._writeso=self.__pipe.socketpair()
+  
+  def _initPipes(self):
+    self._inbound_pipe=pipe_socketpair()
+    self._inbound_readso,self._inbound_writeso=self._inbound_pipe.socketpair()
+    self._outbound_pipe=pipe_socketpair()
+    self._outbound_readso,self._outbound_writeso=self._outbound_pipe.socketpair()
     return
-  def getReadSocket(self):
-    return self._readso
-  def getWriteSocket(self):
-    return self._writeso
+
+  def getInboundSocket(self):
+    return self._inbound_readso
+  def getOutboundSocket(self):
+    return self._outbound_readso
 
   def run(self):
     # scapy
@@ -51,15 +76,35 @@ class socket_scapy():
   
   def cbSSHPacket(self, obj):
     ''' callback function to pile packets in socket'''
-    pLen=len(obj['TCP'].payload)
+    packet=obj[self.protocolName]
+    pLen=len(packet.payload)
     if pLen > 0:
-      self.addPacket( obj['TCP'].payload.load )
+      if self.__is_inboundPacket(packet):
+        self.addInboundPacket( packet.payload.load )
+      elif self.__is_outboundPacket(packet):
+        self.addOutboundPacket( packet.payload.load )
+      else:
+        log.error('the packet is neither inbound nor outbound. You messed up your filter and callbacks.')
     return None
-  def addPacket(self,payload):
-    self.wcnt+=self._writeso.send(payload)
-    return
+    
+  def setThread(self,thread):
+    ''' the thread using the pipes '''
+    self._running_thread=thread
+    return 
+  
+  def addInboundPacket(self,payload):
+    self._inbound_cnt+=self.addPacket(payload,self._inbound_writeso)
+    return 
+    
+  def addOutboundPacket(self,payload):
+    self._outbound_cnt+=self.addPacket(payload,self._outbound_writeso)
+    return 
+    
+  def addPacket(self,payload,so):
+    return so.send(payload)
+  
   def __str__(self):
-    return "'sent': %d "%(self.wcnt)
+    return "inbound: %d bytes, outbound: %d bytes"%(self._inbound_cnt,self._outbound_cnt)
 
 # if Linux use socket.socketpair()
 class pipe_socketpair(object):
@@ -83,9 +128,9 @@ sniff(count=0, store=1, offline=None, prn=None, lfilter=None, L2socket=None, tim
   print 'sniff finished'
   # we get Ether()'s...
   print soscapy.stats()
-  l=soscapy.wcnt
+  l=soscapy._inbound_cnt
   print 'trying to read'
-  data=soscapy.getReadSocket().recv(l)
+  data=soscapy.getInboundSocket().recv(l)
   print 'recv %d bytes ->',len(data),repr(data)
   return soscapy
 
