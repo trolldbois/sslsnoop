@@ -294,10 +294,7 @@ def main(argv):
       #print 'send context    Cipher : ', ss.send_context.cipher.contents
       #print 'receive context Cipher app_data: ', ctypes_openssh.getEvpAppData(ss.receive_context).toString()
       #print 'send context    Cipher app_data: ', ctypes_openssh.getEvpAppData(ss.send_context).toString()
-      print ss.newkeys
-      for k in ss.newkeys:
-        print 'K is ',k
-        print 'k contents is',k.contents
+      print ss.newkeys[0].contents.enc.toString()
       
   log.info("done for pid %d"%pid)
 

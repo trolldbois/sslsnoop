@@ -98,6 +98,15 @@ def array2bytes(array):
   for el in array:
     sb+=pack(fmt, el)
   return repr(sb)
+
+def pointer2bytes(attr,nbElement):
+  # attr is a pointer and we want to read elementSize of type(attr.contents))
+  if not is_address_local(attr):
+    return 'POINTER NOT LOCAL'
+  firstElementAddr=getaddress(attr)
+  array=(type(attr.contents)*nbElement).from_address(firstElementAddr)
+  # we have an array type starting at attr.contents[0]
+  return array2bytes(array)
     
 def isBasicType(obj):
   return  (type(obj).__module__ in ['ctypes','_ctypes','__builtin__']) 
@@ -412,35 +421,35 @@ class LoadableMembers(ctypes.Structure):
     s="%s # %s\n"%(prefix,repr(self) )
     for field,typ in self._fields_:
       attr=getattr(self,field)
-      if isStructType(attr):
-        s+=prefix+'"%s": {\t%s%s},\n'%(field, attr.toString(prefix+'\t'),prefix )  
-      #elif isBasicTypeArrayType(attr):
-      #  #s+=prefix+'"%s": %s,\n'%(field, array2bytes(attr) )  
-      #  s+='['+','.join(["%lx"%(val) for val in attr ])
-      elif isBasicTypeArrayType(attr): ## array of something else than int
-        s+=prefix+'"%s" :['%(field)+','.join(["0x%lx"%(val) for val in attr ])+'],\n'
-        continue
-      elif isArrayType(attr): ## array of something else than int/byte
-        s+=prefix+'"%s" :['%(field)+','.join(["%s"%(val) for val in attr ])+'],\n'
-        continue
-      elif isPointerType(attr):
-        if not bool(attr) :
-          s+=prefix+'"%s": 0x%lx,\n'%(field, getaddress(attr) )   # only print address/null
-        elif not is_address_local(attr) :
-          s+=prefix+'"%s": 0x%lx, #(FIELD NOT LOADED)\n'%(field, getaddress(attr) )   # only print address in target space
-        else:
-          # we can read the pointers contents
-          # if isBasicType(attr.contents): ?
-          # if isArrayType(attr.contents): ?
-          contents=attr.contents
-          if isStructType(contents):
-            s+=prefix+'"%s": { #(0x%lx) -> %s%s},\n'%(field, getaddress(attr), attr.contents.toString(prefix+'\t'),prefix) # use struct printer
-          else:
-            s+=prefix+'"%s": { #(0x%lx) -> %s\n%s},\n'%(field, getaddress(attr), attr.contents, prefix) # use struct printer
-      elif isCStringPointer(attr):
-        s+=prefix+'"%s": "%s" , #(CString) \n'%(field, attr.string)  
+      s+=self._attrToString(s,attr,field,typ,prefix)
+    return s
+    
+  def _attrToString(self,s,attr,field,typ,prefix):
+    if isStructType(attr):
+      s=prefix+'"%s": {\t%s%s},\n'%(field, attr.toString(prefix+'\t'),prefix )  
+    #elif isBasicTypeArrayType(attr):
+    #  #s=prefix+'"%s": %s,\n'%(field, array2bytes(attr) )  
+    #  s='['+','.join(["%lx"%(val) for val in attr ])
+    elif isBasicTypeArrayType(attr): ## array of something else than int
+      s=prefix+'"%s" :['%(field)+','.join(["0x%lx"%(val) for val in attr ])+'],\n'
+    elif isArrayType(attr): ## array of something else than int/byte
+      s=prefix+'"%s" :['%(field)+','.join(["%s"%(val) for val in attr ])+'],\n'
+    elif isPointerType(attr):
+      if not bool(attr) :
+        s=prefix+'"%s": 0x%lx,\n'%(field, getaddress(attr) )   # only print address/null
+      elif not is_address_local(attr) :
+        s=prefix+'"%s": 0x%lx, #(FIELD NOT LOADED)\n'%(field, getaddress(attr) )   # only print address in target space
       else:
-        s+=prefix+'"%s": %s,\n'%(field, repr(attr) )  
+        # we can read the pointers contents # if isBasicType(attr.contents): ?  # if isArrayType(attr.contents): ?
+        contents=attr.contents
+        if isStructType(contents):
+          s=prefix+'"%s": { #(0x%lx) -> %s%s},\n'%(field, getaddress(attr), attr.contents.toString(prefix+'\t'),prefix) # use struct printer
+        else:
+          s=prefix+'"%s": { #(0x%lx) -> %s\n%s},\n'%(field, getaddress(attr), attr.contents, prefix) # use struct printer
+    elif isCStringPointer(attr):
+      s=prefix+'"%s": "%s" , #(CString) \n'%(field, attr.string)  
+    else:
+      s=prefix+'"%s": %s,\n'%(field, repr(attr) )  
     return s
 
   def __str__(self):

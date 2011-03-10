@@ -12,7 +12,7 @@ from ptrace import ctypes_stdint
 import logging
 log=logging.getLogger('openssh.model')
 
-from model import is_valid_address,getaddress,LoadableMembers,RangeValue,NotNull,CString,EVP_CIPHER_CTX_APP_DATA_PTR
+from model import is_valid_address,pointer2bytes,getaddress,LoadableMembers,RangeValue,NotNull,CString,EVP_CIPHER_CTX_APP_DATA_PTR
 from ctypes_openssl import EVP_CIPHER_CTX, EVP_MD, HMAC_CTX, AES_KEY,rijndael_ctx,EVP_RC4_KEY
 
 MODE_MAX=2 #kex.h:62
@@ -169,7 +169,22 @@ class Enc(OpenSSHStruct):
     
     log.debug('ENC KEY(%d bytes) and IV(%d bytes) acquired'%(self.key_len,self.block_size))
     return True
-
+  def getKey(self):
+    return pointer2bytes(self.key, self.key_len)
+  def getIV(self):
+    return pointer2bytes(self.iv, self.block_size) 
+  
+  def toString(self,prefix=''):
+    s="%s # %s\n"%(prefix,repr(self) )
+    for field,typ in self._fields_:
+      attr=getattr(self,field)
+      if field == 'key':
+        s+=prefix+'"%s": %s\n'%(field, self.getKey() )  
+      elif field == 'iv':
+        s+=prefix+'"%s": %s\n'%(field, self.getIV() )  
+      else:
+        s+=self._attrToString(s,attr,field,typ,prefix)
+    return s
 
 class nh_ctx(OpenSSHStruct):
   ''' umac.c:323 '''
@@ -233,6 +248,18 @@ class Mac(OpenSSHStruct):
     
     log.debug('MAC KEY(%d bytes) acquired'%(self.key_len))
     return True
+  def getKey(self):
+    return pointer2bytes(self.key,self.key_len)
+  
+  def toString(self,prefix=''):
+    s="%s # %s\n"%(prefix,repr(self) )
+    for field,typ in self._fields_:
+      attr=getattr(self,field)
+      if field == 'key':
+        s+=prefix+'"%s": %s\n'%(field, self.getKey() )  
+      else:
+        s+=self._attrToString(s,attr,field,typ,prefix)
+    return s
 
 class Comp(OpenSSHStruct):
   ''' kex.h:100 '''
