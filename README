@@ -109,6 +109,7 @@ WHERE ARE THE KEY:
 enc->name
 enc->key
 enc->iv
+&active_state->receive_context.evp->app_data
 
 and they must be in OpenSSL format... EVP in CypherContext struct
 
@@ -129,4 +130,23 @@ ptrace it .
 
 print CipherContext.cipher.name .
 
-ENGINE est tellement bourre de pointer, que si t'en trouve un , tu statifie ta memoire...
+ok working 08/03/2011
+
+NEXT :
+
+use paramiko packet.py to decrypt packet.
+ -> use a wrapper socket class around scapy for reading network streams into paramiko ( OK)
+   => use scapy to get a stream ( sniff)
+   => use scapy in a thread (OK)
+
+
+
+
+
+
+
+
+
+
+
+

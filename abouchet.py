@@ -292,8 +292,8 @@ def main(argv):
       #print ss.send_context.evp
       #print 'receive context Cipher : ', ss.receive_context.cipher.contents
       #print 'send context    Cipher : ', ss.send_context.cipher.contents
-      #print 'receive context Cipher app_data: ', ctypes_openssh.getEvpAppData(ss.receive_context).toString()
-      #print 'send context    Cipher app_data: ', ctypes_openssh.getEvpAppData(ss.send_context).toString()
+      print 'receive context Cipher app_data: ', ctypes_openssh.getEvpAppData(ss.receive_context).toString()
+      print 'send context    Cipher app_data: ', ctypes_openssh.getEvpAppData(ss.send_context).toString()
       
   log.info("done for pid %d"%pid)
 
@@ -317,6 +317,8 @@ def decryptSSH(receiveContext):
         
         et c'est bon...
         format attentu , un bytestring, de 16 bytes ( pour aes128-ctr )
+        
+        4×4 matrix of bytes, termed the state 
   '''
   pass
 

@@ -159,6 +159,42 @@ def isMemOf(addr,mpid):
       return True
   return False
 
+def testScapy():
+  import socket_scapy
+  socket_scapy.test()
+
+def testScapyThread():
+  import socket_scapy,select
+  from threading import Thread
+  port=22
+  sshfilter="tcp and port %d"%(port)
+  soscapy=socket_scapy.socket_scapy(sshfilter,packetCount=100)
+  log.info('Please make some ssh  traffic')
+  sniffer = Thread(target=soscapy.run)
+  sniffer.start()
+  # sniffer is strted, let's consume
+  nbblocks=0
+  data=''
+  readso=soscapy.getReadSocket()
+  while sniffer.isAlive():
+    r,w,oo=select.select([readso],[],[],1)
+    if len(r)>0:
+      data+=readso.recv(16)
+      nbblocks+=1
+  # try to finish socket
+  print 'sniffer is finished'
+  r,w,oo=select.select([readso],[],[],0)
+  while len(r)>0:
+    data+=readso.recv(16)
+    nbblocks+=1
+    r,w,oo=select.select([readso],[],[],0)
+  #end      
+  print "received %d blocks/ %d bytes"%(nbblocks,len(data))
+  print 'sniffer captured : ',soscapy
+
+
+
+
 #rsa=readRsa(addr)
 
 #writeWithLibRSA(addr)
@@ -167,7 +203,7 @@ def isMemOf(addr,mpid):
 
 #dsa=readDsa(0xb835b4e8)
 #print dsa
-rsa=readRsa(0xb835c9a0)
+#rsa=readRsa(0xb835c9a0)
 #writeWithLibDSA(addr)
 
 #printSize()
@@ -192,4 +228,11 @@ if len(sys.argv) == 2:
     print "isMemOf(0x%lx, 27477) - ssh-agent"%myaddr
 
 #findCipherContext()
+
+
+soscapy=testScapyThread()
+
+
+
+
 
