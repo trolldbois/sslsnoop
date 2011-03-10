@@ -116,6 +116,10 @@ class CString(ctypes.Union):
   ("string", ctypes.c_char_p),
   ("ptr", ctypes.POINTER(ctypes.c_ubyte) )
   ]
+  def toString(self):
+    if not bool(self.ptr):
+      return "<NULLPTR>"
+    return self.string
   pass
 
 class EVP_CIPHER_CTX_APP_DATA(ctypes.c_ubyte):
