@@ -55,7 +55,7 @@ class EVP_RC4_KEY(OpenSSLStruct):
 class AES_KEY(OpenSSLStruct):
   ''' aes.h:78 '''
   _fields_ = [
-  ("rd_key",  ctypes.c_ulong * (4*AES_MAXNR+1)), 
+  ("rd_key",  ctypes.c_ulong * (4* (AES_MAXNR+1))), 
   ("rounds",  ctypes.c_int)
   ] 
   def getKey(self):
@@ -437,7 +437,7 @@ def printSizeof():
   print 'EVP_MD:',ctypes.sizeof(EVP_MD)
   print 'EVP_MD_CTX:',ctypes.sizeof(EVP_MD_CTX)
   print 'HMAC_CTX:',ctypes.sizeof(HMAC_CTX)
-  print 'AES_KEY:',ctypes.sizeof(AES_KEY)
+  print 'AES_KEY:',ctypes.sizeof(AES_KEY) #AES_KEY: 232 au lieu de 244 .. chiotote..
   print 'HMAC_MAX_MD_CBLOCK:',HMAC_MAX_MD_CBLOCK
   print 'EVP_MAX_BLOCK_LENGTH:',EVP_MAX_BLOCK_LENGTH
   print 'EVP_MAX_IV_LENGTH:',EVP_MAX_IV_LENGTH
@@ -447,4 +447,6 @@ import inspect,sys
 ''' Load all openSSL classes to local classRef '''
 OpenSSLStruct.classRef=dict([ (ctypes.POINTER( klass), klass) for (name,klass) in inspect.getmembers(sys.modules[__name__], inspect.isclass) if klass.__module__ == __name__])
 
+if __name__ == '__main__':
+  printSizeof()
 
