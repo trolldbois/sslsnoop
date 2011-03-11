@@ -42,7 +42,8 @@ class Engine:
     for i in range(0, bLen ):
       #print i, block[i] 
       data[i]=ord(block[i])
-      return self._decrypt(data,bLen)
+    # no way....
+    return self._decrypt(data,bLen)
   
   def _decrypt(self,data,bLen):
     raise NotImplementedError
@@ -69,10 +70,10 @@ class StatefulAESEngine(Engine):
     #      const unsigned char *in, unsigned char *out, const unsigned long length, 
     #           const AES_KEY *key, unsigned char ivec[AES_BLOCK_SIZE],     
     #        	  unsigned char ecount_buf[AES_BLOCK_SIZE],  unsigned int *num)
-    #self._AES_ctr( ctypes.byref(block), ctypes.byref(dest), bLen, ctypes.byref(self.key), 
-    #          ctypes.byref(self.aes_key_ctx.aes_counter), ctypes.byref(buf), ctypes.byref(num) ) 
-    self._AES_ctr( block, dest, bLen, ctypes.byref(self.key), 
-              ctypes.byref(self.aes_key_ctx.aes_counter), (buf), ctypes.byref(num) ) 
+    self._AES_ctr( ctypes.byref(block), ctypes.byref(dest), bLen, ctypes.byref(self.key), 
+              ctypes.byref(self.aes_key_ctx.aes_counter), ctypes.byref(buf), ctypes.byref(num) ) 
+    #self._AES_ctr( block, dest, bLen, ctypes.byref(self.key), 
+    #          ctypes.byref(self.aes_key_ctx.aes_counter), (buf), ctypes.byref(num) ) 
     log.info(self.aes_key_ctx.toString())
     log.debug("Num ret: %d"%num.value)
     return model.array2bytes(dest)
