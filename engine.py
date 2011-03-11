@@ -30,10 +30,49 @@ log=logging.getLogger('sslsnoop.openssh')
 libopenssl=cdll.LoadLibrary('libssl.so')
 
 
+class Engine:
+
+  def decrypt(self,block):
+    ''' decrypts '''
+    bLen=len(block)
+    if bLen % AES_BLOCK_SIZE:
+      log.error("Sugar, why do you give me a block the wrong size: %d not modulo of %d"%(bLen, AES_BLOCK_SIZE))
+      return None
+    data=(ctypes.c_ubyte*bLen )()
+    for i in range(0, bLen ):
+      #print i, block[i] 
+      data[i]=ord(block[i])
+      return self._decrypt(data,bLen)
+  
+  def _decrypt(self,data,bLen):
+    raise NotImplementedError
+
+class StatefulAESEngine(Engine):
+  #ctx->cipher->do_cipher(ctx,out,in,inl);
+  # -> openssl.AES_ctr128_encrypt(&in,&out,length,&aes_key, ivecArray, ecount_bufArray, &num )
+  #AES_encrypt(ivec, ecount_buf, key); # aes_key is struct with cnt, key is really AES_KEY->aes_ctx
+  #AES_ctr128_inc(ivec); #ssh_Ctr128_inc semble etre different, mais paramiko le fait non ?
+  def __init__(self, context ):
+    self.aes_key = type(context.app_data).from_buffer_copy(context.app_data)
+    # we need nothing else
+    self.key = self.aes_key.aes_ctx
+    self._AES_ctr=libopenssl.AES_ctr128_encrypt
+    print 'cipher:%s block_size: %d key_len: %d '%(context.name, context.block_size, context.key_len)
+  
+  def _decrypt(self,block, bLen):
+    buf=(ctypes.c_ubyte*AES_BLOCK_SIZE)()
+    dest=(ctypes.c_ubyte*bLen)()
+    num=ctypes.c_uint()
+    #TODO test, openssl aes128_ctr_encrypt
+    # in , out, lenght, key
+    self._AES_ctr( ctypes.byref(block), ctypes.byref(dest), bLen, ctypes.byref(self.aes_key.aes_ctx), 
+              ctypes.byref(self.aes_key.aes_counter), ctypes.byref(buf), ctypes.byref(num) ) 
+    return model.array2bytes(dest)
+        
 
 
 
-class StatefulAESEngine():
+class MyStatefulAESEngine(Engine):
   #ctx->cipher->do_cipher(ctx,out,in,inl);
   # -> openssl.AES_ctr128_encrypt(&in,&out,length,&aes_key, ivecArray, ecount_bufArray, &num )
   #AES_encrypt(ivec, ecount_buf, key); # aes_key is struct with cnt, key is really AES_KEY->aes_ctx
@@ -45,11 +84,7 @@ class StatefulAESEngine():
     self._AES_encrypt=libopenssl.AES_encrypt
     print 'cipher:%s block_size: %d key_len: %d '%(context.name, context.block_size, context.key_len)
   
-  def decrypt(self,block):
-    bLen=len(block)
-    if bLen % AES_BLOCK_SIZE:
-      log.error("Sugar, why do you give me a block the wrong size: %d not modulo of %d"%(bLen, AES_BLOCK_SIZE))
-      return None
+  def _decrypt(self,block, bLen):
     dest=(ctypes.c_ubyte*bLen)()
     #TODO test, openssl aes128_ctr_encrypt
     if not self.ssh_aes_ctr(self.aes_key, dest, block, bLen ) :
@@ -65,7 +100,7 @@ class StatefulAESEngine():
       return True
     if not bool(aes_key):
       return False
-    #print 'src is a %s , dest is a %s and buf is a %s'%(type(src), dest, buf)
+    print 'src is a %s , dest is a %s and buf is a %s'%(type(src), dest, buf)
     #print 'src[0] is a %s , dest[0] is a %s and buf[0] is a %s'%(type(src[0]), dest[0], buf[0])
     #print len(src),len(dest),len(buf)
     #print 'srcLen ',srcLen

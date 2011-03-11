@@ -13,7 +13,7 @@ import abouchet
 import ctypes, model, ctypes_openssh
 from ctypes import cdll
 from ctypes_openssh import AES_BLOCK_SIZE
-from engine import StatefulAESEngine
+from engine import StatefulAESEngine,MyStatefulAESEngine
 
 # linux only
 from ptrace.debugger.debugger import PtraceDebugger
@@ -68,7 +68,9 @@ def testDecrypt(packetizer):
 
 def activate_cipher(packetizer, context):
   "switch on newly negotiated encryption parameters for inbound traffic"
-  #packetizer.set_log(log)
+  packetizer.set_log(log)
+  packetizer.set_hexdump(True)
+  
   engine = StatefulAESEngine(context)
   print 'cipher:%s block_size: %d key_len: %d '%(context.name, context.block_size, context.key_len )
   print engine, type(engine)
@@ -93,6 +95,7 @@ def decryptSSHTraffic(scapySocket,ciphers):
   inbound = Packetizer(scapySocket.getInboundSocket())
   activate_cipher(inbound, receiveCtx )
   
+  testDecrypt(inbound)
   
   # out bound
   outbound = Packetizer(scapySocket.getOutboundSocket())
@@ -123,7 +126,8 @@ class SessionCiphers():
     self.sendCtx=CipherContext()
     # read cipher MODE_IN == 0
     MODE=0
-    for ctx in [self.receiveCtx, self.sendCtx]:
+    #for ctx in [self.sendCtx, self.receiveCtx ]:
+    for ctx in [self.receiveCtx, self.sendCtx ]:
       ctx.enc =  self.sessions_state.newkeys[MODE].contents.enc
       ctx.mac =  self.sessions_state.newkeys[MODE].contents.mac
       ctx.comp = self.sessions_state.newkeys[MODE].contents.comp
@@ -193,38 +197,6 @@ def findActiveKeys(pid):
   log.info('Active state ciphers : %s at 0x%lx'%(ciphers,addr))
   return ciphers,addr
 
-def usage(txt):
-  log.error("Usage : %s <pid of ssh>"% txt)
-  sys.exit(-1)
-
-
-def main(argv):
-  logging.basicConfig(level=logging.INFO)
-  logging.debug(argv)
-  if ( len(argv) < 1 ):
-    usage(argv[0])
-    return
-
-  # we must have big privileges...
-  if os.getuid() + os.geteuid() != 0:
-    log.error("You must be root/using sudo to read memory and sniff traffic.")
-    return
-    
-  # use optarg on v, a and to
-  pid = int(argv[0])
-  log.info("Target has pid %d"%pid)
-  soscapy=launchScapyThread()
-  ciphers,addr=findActiveKeys(pid)
-  # process is running... sniffer is listening
-  print addr
-  #decryptSSHTraffic(soscapy,ciphers)
-  log.info("done for pid %d, struct at 0x%lx"%(pid,addr))
-  sys.exit(0)
-  return -1
-
-
-if __name__ == "__main__":
-  main(sys.argv[1:])
 
 def testEncDec(pid):
   logging.basicConfig(level=logging.INFO)
@@ -232,7 +204,7 @@ def testEncDec(pid):
   ciphers,addr=findActiveKeys(pid)
   logging.basicConfig(level=logging.DEBUG)
   engine = StatefulAESEngine(ciphers.receiveCtx)
-  engine2 = StatefulAESEngine(ciphers.receiveCtx)
+  engine2 = MyStatefulAESEngine(ciphers.receiveCtx)
   app_data=ciphers.receiveCtx.app_data
   key,rounds=app_data.getCtx()
   print "key=",repr(key)
@@ -241,13 +213,15 @@ def testEncDec(pid):
   print ''
   
   print "waiting for packet:"
-  buf='AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
-  print '"aes_counter" : "%s"'%repr(app_data.getCounter())
-  encrypted=engine.decrypt(buf[:AES_BLOCK_SIZE])
+  buf=b'1234567890ABCDEF1234567890ABCDEF'
+  
+  print '"aes_counter" : "%s"'%repr(engine.getCounter())
+  #encrypted=engine.decrypt(buf)
+  encrypted=engine.decrypt(buf)
   print 'Encrypted len', len(encrypted)
-  print '"aes_counter" : "%s"'%repr(app_data.getCounter())
-  decrypted=engine2.decrypt(encrypted[:AES_BLOCK_SIZE])
-  print '"aes_counter" : "%s"'%repr(app_data.getCounter())
+  decrypted=engine2.decrypt(encrypted)
+  print 'engine 1 "aes_counter" : "%s"'%repr(engine.getCounter())
+  print 'engine 2 "aes_counter" : "%s"'%repr(engine2.getCounter())
   print 'decrypted=',decrypted
   return engine,key
 
@@ -266,7 +240,7 @@ def test(pid):
   print "rounds=",rounds
   print ''
   print "waiting for packet:"
-  import time,select
+  import time,select,struct
   start=time.time()
   while( True):
     r,w,o=select.select([readso],[],[],2)
@@ -281,6 +255,10 @@ def test(pid):
       decrypted=engine.decrypt(encrypted)
       print '"aes_counter" : "%s"'%repr(engine.aes_key.getCounter())
       print 'decrypted=',decrypted
+      packet_size = struct.unpack('>I', decrypted[:4])[0]
+      print 'packet_size BE',packet_size
+      packet_size = struct.unpack('<I', decrypted[:4])[0]
+      print 'packet_size LE',packet_size
   
   # find it again
   ciphers,addr=findActiveKeys(pid)
@@ -295,21 +273,56 @@ def test(pid):
   return engine,key
 
 
+def usage(txt):
+  log.error("Usage : %s <pid of ssh>"% txt)
+  sys.exit(-1)
+
+
+def main(argv):
+  logging.basicConfig(level=logging.INFO)
+  logging.getLogger('model').setLevel(logging.INFO)
+  if ( len(argv) < 1 ):
+    usage(argv[0])
+    return
+
+  # we must have big privileges...
+  if os.getuid() + os.geteuid() != 0:
+    log.error("You must be root/using sudo to read memory and sniff traffic.")
+    return
+    
+  # use optarg on v, a and to
+  pid = int(argv[0])
+  log.info("Target has pid %d"%pid)
+
+  #logging.getLogger('model').setLevel(logging.INFO)
+  ###engine,key=openssh.test(16634)
+  #engine,key=testEncDec(16634)
+
+  #return 0
+  soscapy=launchScapyThread()
+  ciphers,addr=findActiveKeys(pid)
+  # process is running... sniffer is listening
+  decryptSSHTraffic(soscapy,ciphers)
+  log.info("done for pid %d, struct at 0x%lx"%(pid,addr))
+  sys.exit(0)
+  return -1
+
+
+if __name__ == "__main__":
+  main(sys.argv[1:])
+
+
 logging.basicConfig(level=logging.INFO)
 '''  
 
 import openssh,logging
 logging.getLogger('model').setLevel(logging.INFO)
-engine,key=openssh.test(10986)
-
+##engine,key=openssh.test(16634)
+engine,key=openssh.testEncDec(16634)
 
 
 '''
 
-  
-  
-  
-  
   
   
   

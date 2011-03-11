@@ -10,6 +10,7 @@ import logging,os,socket
 logging.basicConfig(level=logging.DEBUG)
 
 from scapy.all import sniff
+from paramiko import util
 
 log=logging.getLogger('socket.scapy')
 
@@ -87,6 +88,8 @@ class socket_scapy():
         self.addOutboundPacket( packet.payload.load )
       else:
         log.error('the packet is neither inbound nor outbound. You messed up your filter and callbacks.')
+    else:
+      log.info("empty payload isInbound %s"%self.__is_inboundPacket(packet))
     return None
     
   def setThread(self,thread):
@@ -95,7 +98,9 @@ class socket_scapy():
     return 
   
   def addInboundPacket(self,payload):
+    log.info("add inbound")
     self._inbound_cnt+=self.addPacket(payload,self._inbound_writeso)
+    log.debug( ('\n'.join(util.format_binary(payload, 'IN: '))).lower() )
     return 
     
   def addOutboundPacket(self,payload):
@@ -103,6 +108,7 @@ class socket_scapy():
     return 
     
   def addPacket(self,payload,so):
+    #XXX is ntohl ?
     return so.send(payload)
   
   def __str__(self):

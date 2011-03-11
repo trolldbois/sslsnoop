@@ -141,15 +141,50 @@ use paramiko packet.py to decrypt packet.
 
 openssh clientloop, packet.c:1120 
 c'est newkeys qui contiens les cles....
-bon. aller. on va loadMembers les array de pointers :)
+bon. aller. on va loadMembers les array de pointers :) DONE
+
+3 instances de 'p':
+DEBUG:sslsnoop.openssh:IN: FB F9 3D DC 6D 05 13 C1 0F C7 53 20 30 93 78 89    ..=.m.....S 0.x.
+DEBUG:sslsnoop.openssh:IN: BD F9 3D DC 6D 05 13 C1 0F C7 53 20 30 93 78 89    ..=.m.....S 0.x.
+DEBUG:sslsnoop.openssh:IN: CA F9 3D DC 6D 05 13 C1 0F C7 53 20 30 93 78 89    ..=.m.....S 0.x.
+'q':
+DEBUG:sslsnoop.openssh:IN: AE F9 3D DC 6D 05 13 C1 0F C7 53 20 30 93 78 89    ..=.m.....S 0.x.
+
+retry
+
+from ssh
+plain:     0000 0000 005e 0000 0000 0000 0001 70
+encrypted: (send1)
+5d78 2a52 79f7 929d bf34 f860 70ee 1230
+3be1 7bb4 5127 6ed8 5884 2393 797b 71a2
+3394 babe d290 b61f 3e88 296b 138f 4da6
+
+read_poll enc/full: (aftr dec header but before dec rest)
+c861 c37e cc5f 91a3 dd69 515e 5f6f 36f6
+4683 7394 3774 37d9 11f3 2f97 c185 06d9
+
+read/plain[94]:
+0000 0000 0000 0001 70
 
 
+DEBUG:socket.scapy:in: encrypted
+91 c5 07 80 26 d4 44 21 d9 95 8f 77 dc 69 e5 79    ....&.d!...w.i.y
+c8 61 c3 7e cc 5f 91 a3 dd 69 51 5e 5f 6f 36 f6    .a.~._...iq^_o6.
+46 83 73 94 37 74 37 d9 11 f3 2f 97 c1 85 06 d9    f.s.7t7.../.....
+
+DEBUG:sslsnoop.openssh:IN: plain
+98 F1 DC 47 11 54 20 0D 9C F3 EF 23 16 4F 41 F3    ...G.T ....#.OA.
 
 
-
-
-
-
-
+def hexify(data):
+  s=''
+  for i in range(0,len(data)):
+    s+="%02x"% ord(data[i])
+    if i%16==15:
+      s+="\r\n"
+    elif i%2==1:
+      s+=" "
+  s+="\r\n"
+  print s
 
 
