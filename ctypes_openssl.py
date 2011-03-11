@@ -11,7 +11,7 @@ from ptrace.debugger.memory_mapping import readProcessMappings
 import logging
 log=logging.getLogger('openssl.model')
 
-from model import is_valid_address,getaddress,LoadableMembers,RangeValue,NotNull,CString,EVP_CIPHER_CTX_APP_DATA_PTR
+from model import is_valid_address,getaddress,array2bytes,LoadableMembers,RangeValue,NotNull,CString,EVP_CIPHER_CTX_APP_DATA_PTR
 
 
 ''' hmac.h:69 '''
@@ -58,6 +58,10 @@ class AES_KEY(OpenSSLStruct):
   ("rd_key",  ctypes.c_ulong * (4*AES_MAXNR+1)), 
   ("rounds",  ctypes.c_int)
   ] 
+  def getKey(self):
+    return array2bytes(self.rd_key)
+  def getRounds(self):
+    return self.rounds
 
 
 #ok

@@ -52,12 +52,14 @@ class socket_scapy():
         isWindows = socket.AF_UNIX
         self._inbound_readso,self._inbound_writeso=socket.socketpair()
         self._outbound_readso,self._outbound_writeso=socket.socketpair()
+        print 'USING ************* socketpair'
     except NameError:
         # yes || no socketpair support anyway
         self._initPipes()
     return
   
   def _initPipes(self):
+    print 'USING ************* PIPES'
     self._inbound_pipe=pipe_socketpair()
     self._inbound_readso,self._inbound_writeso=self._inbound_pipe.socketpair()
     self._outbound_pipe=pipe_socketpair()
@@ -109,6 +111,7 @@ class socket_scapy():
 # if Linux use socket.socketpair()
 class pipe_socketpair(object):
   def __init__(self):
+    print 'USING socketpair'
     self.readfd,self.writefd=os.pipe()
     self.readso=socket.fromfd(self.readfd,socket.AF_UNIX,socket.SOCK_STREAM)
     self.writeso=socket.fromfd(self.writefd,socket.AF_UNIX,socket.SOCK_STREAM)

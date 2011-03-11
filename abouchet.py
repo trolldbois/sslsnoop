@@ -291,7 +291,11 @@ def main(argv):
       #print ss.send_context.evp
       #print 'receive context Cipher : ', ss.receive_context.cipher.contents
       #print 'send context    Cipher : ', ss.send_context.cipher.contents
-      #print 'receive context Cipher app_data: ', ctypes_openssh.getEvpAppData(ss.receive_context).toString()
+      app_data=ss.receive_context.getEvpAppData()
+      print '"aes_counter" : "'+','.join(["0x%lx"%(val) for val in app_data.aes_counter ])+'"\n'
+      #print 'receive context Cipher app_data: ', app_data.toString()
+      (rd_key,rounds)=ss.receive_context.getEvpAppData().getCtx()
+      #print 'rounds', rounds
       #print 'send context    Cipher app_data: ', ctypes_openssh.getEvpAppData(ss.send_context).toString()
       #print ss.newkeys[0].contents.toString()
       pass

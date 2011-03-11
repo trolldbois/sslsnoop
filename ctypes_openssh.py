@@ -47,6 +47,10 @@ class ssh_aes_ctr_ctx(OpenSSHStruct):
 	('aes_ctx', AES_KEY),
 	('aes_counter', ctypes.c_ubyte*AES_BLOCK_SIZE)
 	]
+  def getCtx(self):
+    rd_key = self.aes_ctx.getKey()
+    rounds = self.aes_ctx.getRounds()
+    return (rd_key,rounds) 
   def getCounter(self):
     return array2bytes(self.aes_counter)
   

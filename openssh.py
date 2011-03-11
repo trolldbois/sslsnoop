@@ -11,7 +11,9 @@ import os,logging,sys
 
 import abouchet
 import ctypes, model, ctypes_openssh
+from ctypes import cdll
 from ctypes_openssh import AES_BLOCK_SIZE
+from engine import StatefulAESEngine
 
 # linux only
 from ptrace.debugger.debugger import PtraceDebugger
@@ -23,11 +25,13 @@ from paramiko import util
 from paramiko.util import Counter
 from paramiko.common import *
 
+
+import socket_scapy
+from threading import Thread
+
 log=logging.getLogger('sslsnoop.openssh')
 
-from ctypes import cdll
 
-libopenssl=cdll.LoadLibrary('libssl.so')
 
 
 
@@ -62,67 +66,6 @@ def testDecrypt(packetizer):
 
 
 
-
-class StatefulAESEngine():
-  #ctx->cipher->do_cipher(ctx,out,in,inl);
-  # -> openssl.AES_ctr128_encrypt(&in,&out,length,&aes_key, ivecArray, ecount_bufArray, &num )
-  #AES_encrypt(ivec, ecount_buf, key); # aes_key is struct with cnt, key is really AES_KEY->aes_ctx
-  #AES_ctr128_inc(ivec); #ssh_Ctr128_inc semble etre different, mais paramiko le fait non ?
-  def __init__(self, context ):
-    self.context= context
-    self.aes_key = context.app_data 
-    # we need nothing else
-    self.key = self.aes_key.aes_ctx
-    self._AES_encrypt=libopenssl.AES_encrypt
-    print 'cipher:%s block_size: %d key_len: %d '%(context.name, context.block_size, context.key_len)
-  
-  def decrypt(self,block):
-    bLen=len(block)
-    if bLen % AES_BLOCK_SIZE:
-      log.error("Sugar, why do you give me a block the wrong size: %d not modulo of %d"%(bLen, AES_BLOCK_SIZE))
-      return None
-    dest=(ctypes.c_ubyte*bLen)()
-    if not self.ssh_aes_ctr(self.aes_key, dest, block, bLen ) :
-      return None
-    return model.array2bytes(dest)
-        
-  def ssh_aes_ctr(self, aes_key, dest, src, srcLen ):
-    # a la difference de ssh on ne prends pas l'EVP_context mais le ssh context
-    #  parceque j'ai pas un evp_cipher_ctx_evp_app_data pour l'isntant
-    n = 0
-    buf=(ctypes.c_ubyte*AES_BLOCK_SIZE)()
-    if srcLen==0:
-      return True
-    if not bool(aes_key):
-      return False
-    print 'src is a %s , dest is a %s and buf is a %s'%(type(src), dest, buf)
-    print 'src[0] is a %s , dest[0] is a %s and buf[0] is a %s'%(type(src[0]), dest[0], buf[0])
-    for i in range(0,srcLen):
-      if (n == 0):
-        # on ne bosse que sur le block_size ( ivec, dst, key )
-        self._AES_encrypt(ctypes.byref(aes_key.aes_counter), ctypes.byref(buf), ctypes.byref(aes_key.aes_ctx))
-        self.ssh_ctr_inc(aes_key.aes_counter, AES_BLOCK_SIZE)
-      # on recopie le resultat pour chaque byte du block
-      dest[i] = ord(src[i]) ^ buf[i]
-      n = (n + 1) % AES_BLOCK_SIZE
-    return True
-
-  def ssh_ctr_inc(self, ctr, ctrLen):
-    '''
-    @param ctr: a ubyte array
-        l'implementation ssh semble etre differente de l'implementation Openssl...
-    int i=0;
-    for (i = len - 1; i >= 0; i--)
-      if (++ctr[i])  /* continue on overflow */
-        return;
-    '''
-    for i in range(len(ctr)-1,-1,-1):
-      ctr[i]+=1
-      if ctr[i] != 0:
-        return
-
-
-
 def activate_cipher(packetizer, context):
   "switch on newly negotiated encryption parameters for inbound traffic"
   #packetizer.set_log(log)
@@ -150,7 +93,6 @@ def decryptSSHTraffic(scapySocket,ciphers):
   inbound = Packetizer(scapySocket.getInboundSocket())
   activate_cipher(inbound, receiveCtx )
   
-  testDecrypt(inbound)
   
   # out bound
   outbound = Packetizer(scapySocket.getOutboundSocket())
@@ -158,8 +100,6 @@ def decryptSSHTraffic(scapySocket,ciphers):
   return
 
 def launchScapyThread():
-  import socket_scapy
-  from threading import Thread
   # @ at param
   port=22
   sshfilter="tcp and port %d"%(port)
@@ -173,15 +113,6 @@ def launchScapyThread():
 
 
 class CipherContext:
-  '''
-  fields=    enc. mac , comp 
-      sshCtx ,  sshCipher 
-      evpCtx , evpCipher 
-      name #cipher name
-      key , key_len 
-      iv  , block_size 
-      app_data  
-  '''
   pass
 
 class SessionCiphers():
@@ -202,11 +133,12 @@ class SessionCiphers():
       ctx.evpCipher = ctx.sshCtx.evp.cipher.contents
       # useful stuff
       ctx.name = ctx.sshCipher.name.toString()
-      ctx.key  = ctx.enc.getKey()
-      ctx.key_len  = ctx.enc.key_len
-      ctx.iv   = ctx.enc.getIV()
-      ctx.block_size  = ctx.enc.block_size
-      ctx.app_data  = ctx.sshCtx.getEvpAppData() 
+      ctx.app_data  = ctx.sshCtx.getEvpAppData()
+      # original key and IV are ctx.getKey() and ctx.getIV()
+      # stateful AES_key key is at ctx.app_data.aes_ctx #&c->aes_ctx
+      # stateful ctr counter is at ctx.app_data.aes_ctr
+      ctx.key_len  = ctx.evpCipher.key_len
+      ctx.block_size  = ctx.evpCipher.block_size
       MODE+=1
     # 
     return
@@ -244,11 +176,13 @@ def findActiveSession(pid):
     process.cont()
     if len(outs) == 0:
       log.error("The session_state has not been found. maybe it's not OpenSSH ?")
-      return None
+      break
     elif len(outs) > 1:
       log.warning("Mmmh, multiple session_state. That is odd. I'll try with the first one.")
     #
     session_state,addr=outs[0]
+  dbg.deleteProcess(process)
+  dbg.quit()
   return session_state,addr
   
 def findActiveKeys(pid):
@@ -275,7 +209,7 @@ def main(argv):
   if os.getuid() + os.geteuid() != 0:
     log.error("You must be root/using sudo to read memory and sniff traffic.")
     return
-  
+    
   # use optarg on v, a and to
   pid = int(argv[0])
   log.info("Target has pid %d"%pid)
@@ -283,7 +217,7 @@ def main(argv):
   ciphers,addr=findActiveKeys(pid)
   # process is running... sniffer is listening
   print addr
-  decryptSSHTraffic(soscapy,ciphers)
+  #decryptSSHTraffic(soscapy,ciphers)
   log.info("done for pid %d, struct at 0x%lx"%(pid,addr))
   sys.exit(0)
   return -1
@@ -292,3 +226,91 @@ def main(argv):
 if __name__ == "__main__":
   main(sys.argv[1:])
 
+def testEncDec(pid):
+  logging.basicConfig(level=logging.INFO)
+  soscapy=launchScapyThread()
+  ciphers,addr=findActiveKeys(pid)
+  logging.basicConfig(level=logging.DEBUG)
+  engine = StatefulAESEngine(ciphers.receiveCtx)
+  engine2 = StatefulAESEngine(ciphers.receiveCtx)
+  app_data=ciphers.receiveCtx.app_data
+  key,rounds=app_data.getCtx()
+  print "key=",repr(key)
+  print len(key)
+  print "rounds=",rounds
+  print ''
+  
+  print "waiting for packet:"
+  buf='AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+  print '"aes_counter" : "%s"'%repr(app_data.getCounter())
+  encrypted=engine.decrypt(buf[:AES_BLOCK_SIZE])
+  print 'Encrypted len', len(encrypted)
+  print '"aes_counter" : "%s"'%repr(app_data.getCounter())
+  decrypted=engine2.decrypt(encrypted[:AES_BLOCK_SIZE])
+  print '"aes_counter" : "%s"'%repr(app_data.getCounter())
+  print 'decrypted=',decrypted
+  return engine,key
+
+def test(pid):
+  logging.basicConfig(level=logging.INFO)
+  soscapy=launchScapyThread()
+  ciphers,addr=findActiveKeys(pid)
+  logging.basicConfig(level=logging.DEBUG)
+  
+  readso=soscapy.getInboundSocket()
+  engine = StatefulAESEngine(ciphers.receiveCtx)
+  app_data=ciphers.receiveCtx.app_data
+  key,rounds=app_data.getCtx()
+  print "key=",repr(key)
+  print len(key)
+  print "rounds=",rounds
+  print ''
+  print "waiting for packet:"
+  import time,select
+  start=time.time()
+  while( True):
+    r,w,o=select.select([readso],[],[],2)
+    if len(r) > 0:
+      if time.time()-start > 20:
+        break
+    else: 
+      encrypted=readso.recv(1024)
+      #print '"aes_counter" : "%s"'%repr(engine.aes_key.getCounter())
+      #print 'Encrypted len', len(encrypted)
+      print '"aes_counter" : "%s"'%repr(engine.aes_key.getCounter())
+      decrypted=engine.decrypt(encrypted)
+      print '"aes_counter" : "%s"'%repr(engine.aes_key.getCounter())
+      print 'decrypted=',decrypted
+  
+  # find it again
+  ciphers,addr=findActiveKeys(pid)
+  app_data=ciphers.receiveCtx.app_data
+  print 'our aes_counter : "%s"'%repr(engine.aes_key.getCounter())
+  print 'its aes_counter : "%s"'%repr(app_data.aes_key.getCounter())
+
+  #print "key=",repr(key)
+  #buf=readso.recv(1024)
+  #decrypted=engine.decrypt(encrypted[:AES_BLOCK_SIZE])
+  
+  return engine,key
+
+
+logging.basicConfig(level=logging.INFO)
+'''  
+
+import openssh,logging
+logging.getLogger('model').setLevel(logging.INFO)
+engine,key=openssh.test(10986)
+
+
+
+'''
+
+  
+  
+  
+  
+  
+  
+  
+  
