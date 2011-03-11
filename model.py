@@ -84,21 +84,25 @@ bytestr_fmt={
   'c_char_p': 's',
   'c_void_p': 'P'
   }
-def array2bytes(array):
-  #print obj, ctypes.addressof(array),
-  if not isBasicTypeArrayType(array):
-    return b'NOT-AN-BasicType-ARRAY'
+def array2bytes_(array, typ):
   arrayLen=len(array)
   if arrayLen == 0:
     return b''
-  if type(array[0]).__name__ not in bytestr_fmt:
-    log.warning('Unknown ctypes to pack: %s'%(type(array[0])))
-    return '?'
-  fmt=bytestr_fmt[type(array[0]).__name__]
+  if typ not in bytestr_fmt:
+    log.warning('Unknown ctypes to pack: %s'%(typ))
+    return None
+  fmt=bytestr_fmt[typ]
   sb=b''
   for el in array:
     sb+=pack(fmt, el)
   return sb
+
+def array2bytes(array):
+  if not isBasicTypeArrayType(array):
+    return b'NOT-AN-BasicType-ARRAY'
+  # BEURK
+  typ='_'.join(type(array).__name__.split('_')[:2])
+  return array2bytes_(array,typ)
 
 def pointer2bytes(attr,nbElement):
   # attr is a pointer and we want to read elementSize of type(attr.contents))
@@ -437,7 +441,8 @@ class LoadableMembers(ctypes.Structure):
     #  #s=prefix+'"%s": %s,\n'%(field, array2bytes(attr) )  
     #  s='['+','.join(["%lx"%(val) for val in attr ])
     elif isBasicTypeArrayType(attr): ## array of something else than int
-      s=prefix+'"%s" :['%(field)+','.join(["0x%lx"%(val) for val in attr ])+'],\n'
+      s=prefix+'"%s": "%s"\n'%(field, repr(array2bytes(attr)) )  
+      #s=prefix+'"%s" :['%(field)+','.join(["0x%lx"%(val) for val in attr ])+'],\n'
     elif isArrayType(attr): ## array of something else than int/byte
       s=prefix+'"%s" :['%(field)+','.join(["%s"%(val) for val in attr ])+'],\n'
     elif isPointerType(attr):
@@ -466,7 +471,7 @@ class LoadableMembers(ctypes.Structure):
         s+='%s: {\t%s}\n'%(field, attr )  
       elif isBasicTypeArrayType(attr):
         try:
-          s+='%s: %s\n'%(field, array2bytes(attr) )  
+          s+='%s: %s\n'%(field, repr(array2bytes(attr)) )  
         except IndexError,e:
           print 'error while reading',repr(attr),type(attr)
           
