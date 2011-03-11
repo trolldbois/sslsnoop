@@ -373,6 +373,9 @@ class EVP_CIPHER_CTX(OpenSSLStruct):
   ("block_mask",  ctypes.c_int), 
   ("final",  ctypes.c_ubyte*EVP_MAX_BLOCK_LENGTH) ###unsigned char final[EVP_MAX_BLOCK_LENGTH]
   ]
+  def getAppData(self,structType):
+    log.debug('CAST app_data into %s'%(structType))
+    return structType.from_address(getaddress(self.app_data))
 
 #mok
 class EVP_MD(OpenSSLStruct):

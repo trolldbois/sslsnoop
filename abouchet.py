@@ -189,11 +189,11 @@ def find_struct(process, memoryMap, struct, hintOffset=None):
   # parse for struct on each aligned word
   log.debug("checking 0x%lx-0x%lx by increment of %d"%(start, (end-structlen), plen))
   instance=None
-  for j in range(start, end-structlen, plen):
-    instance=try_to_map(process,mappings,struct,j)
+  for offset in range(start, end-structlen, plen):
+    instance=try_to_map(process, mappings,struct, offset)
     if instance is not None:
       # do stuff with it.
-      outputs.append(instance)
+      outputs.append( (instance,offset) )
   return outputs
 
 def try_to_map(process,mappings,struct,offset):
@@ -283,7 +283,7 @@ def main(argv):
     '''
     print 'look for session_state'
     outs=find_struct(process, m, ctypes_openssh.session_state)
-    for ss in outs:
+    for ss, addr in outs:
       #print ss.toString()
       #print '---------'
       #print 'Cipher name : ', ss.receive_context.cipher.contents.name

@@ -143,6 +143,19 @@ class CipherContext(OpenSSHStruct):
     else:
       log.warning("Unknown cipher %s, can't load a data struct for the EVP_CIPHER_CTX->app_data"%(self.cipher.contents.name.string))
     return True
+  # MACRO
+  def getEvpAppData(self):
+    if self.cipher.contents.name.string in self.cipherContexts:
+      struct,fieldname=self.cipherContexts[self.cipher.contents.name.string]
+      if(struct is None):
+        log.warning("Unsupported cipher %s"%(self.cipher.contents.name.string))
+        return True
+      log.debug('CAST evp.%s Into %s'%(fieldname,struct))
+      attr=getattr(self.evp,fieldname)
+      #print attr
+      st=struct.from_address(getaddress(attr))
+      return st
+    return None
 
 class Enc(OpenSSHStruct):
   ''' kex.h:84 '''
