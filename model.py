@@ -77,6 +77,7 @@ bytestr_fmt={
   'int': 'i', 
   'c_long': 'l', #c_int is c_long
   'c_ulong': 'L',
+  'long': 'q', 
   'c_longlong': 'q',
   'c_ulonglong': 'Q',
   'c_float': 'f', ## and double float ?
@@ -97,7 +98,7 @@ def array2bytes(array):
   sb=b''
   for el in array:
     sb+=pack(fmt, el)
-  return repr(sb)
+  return sb
 
 def pointer2bytes(attr,nbElement):
   # attr is a pointer and we want to read elementSize of type(attr.contents))
