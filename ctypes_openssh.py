@@ -12,7 +12,7 @@ from ptrace import ctypes_stdint
 import logging
 log=logging.getLogger('openssh.model')
 
-from model import is_valid_address,pointer2bytes,getaddress,LoadableMembers,RangeValue,NotNull,CString,EVP_CIPHER_CTX_APP_DATA_PTR
+from model import is_valid_address,pointer2bytes,array2bytes,getaddress,LoadableMembers,RangeValue,NotNull,CString,EVP_CIPHER_CTX_APP_DATA_PTR
 from ctypes_openssl import EVP_CIPHER_CTX, EVP_MD, HMAC_CTX, AES_KEY,rijndael_ctx,EVP_RC4_KEY
 
 MODE_MAX=2 #kex.h:62
@@ -47,7 +47,9 @@ class ssh_aes_ctr_ctx(OpenSSHStruct):
 	('aes_ctx', AES_KEY),
 	('aes_counter', ctypes.c_ubyte*AES_BLOCK_SIZE)
 	]
-
+  def getCounter(self):
+    return array2bytes(self.aes_counter)
+  
 class ssh_rijndael_ctx(OpenSSHStruct):
   ''' cipher-aes.c:43 '''
   _fields_ = [

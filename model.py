@@ -344,7 +344,7 @@ class LoadableMembers(ctypes.Structure):
     
   def _loadMember(self,attr,attrname,attrtype,process,mappings):
     ### debug
-    if attrname in ['newkeys']:
+    if attrname in []:
       print repr(self)
       printWhois(attr)
       print ' : _isLoadableMember() %s'%(self._isLoadableMember(attr) )
