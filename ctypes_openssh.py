@@ -121,8 +121,8 @@ class CipherContext(OpenSSHStruct):
 	 "aes256-ctr": (ssh_aes_ctr_ctx, 'app_data'),
 	 "acss@openssh.org": None,
   }
-  def loadMembers(self,process,mappings):
-    if not LoadableMembers.loadMembers(self,process,mappings):
+  def loadMembers(self,process, mappings, maxDepth):
+    if not LoadableMembers.loadMembers(self,process, mappings, maxDepth):
       return False
     # cast evp.app_data into a valid struct
     if self.cipher.contents.name.string in self.cipherContexts:
@@ -168,8 +168,8 @@ class Enc(OpenSSHStruct):
   ("key",  ctypes.POINTER(ctypes.c_ubyte)), #u_char ? -> ctypes.c_ubyte_p ?
   ("iv",  ctypes.POINTER(ctypes.c_ubyte))
   ]
-  def loadMembers(self,process,mappings):
-    if not LoadableMembers.loadMembers(self,process,mappings):
+  def loadMembers(self,process, mappings, maxDepth):
+    if not LoadableMembers.loadMembers(self,process, mappings, maxDepth):
       return False
     # Load and memcopy key and iv
     log.debug('Memcopying a Key with %d bytes'%self.key_len)
@@ -252,8 +252,8 @@ class Mac(OpenSSHStruct):
   ("evp_ctx",  HMAC_CTX),
   ("umac_ctx",  ctypes.POINTER(umac_ctx)) 
   ]
-  def loadMembers(self,process,mappings):
-    if not LoadableMembers.loadMembers(self,process,mappings):
+  def loadMembers(self,process, mappings, maxDepth):
+    if not LoadableMembers.loadMembers(self,process, mappings, maxDepth):
       return False
     # Load and memcopy key 
     log.debug('Memcopying a Key with %d bytes'%self.key_len)

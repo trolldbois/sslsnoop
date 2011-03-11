@@ -257,7 +257,7 @@ class LoadableMembers(ctypes.Structure):
         return True
       elType=type(attr[0])
       for i in range(0,attrLen):
-        if not self._isValidAttr(attr[i], "%s[%d]"%(attrname,i), elType, mappings):
+        if not self._isValidAttr(attr[i], "%s[%d]"%(attrname,i), elType, mappings ):
           return False
       return True
     # d)
@@ -324,12 +324,17 @@ class LoadableMembers(ctypes.Structure):
               isStructType(attr)  or isCStringPointer(attr) or
               (isArrayType(attr) and not isBasicTypeArrayType(attr) ) ) # should we iterate on Basictypes ? no
 
-  def loadMembers(self,process,mappings):
+  def loadMembers(self,process,mappings, maxDepth):
     ''' 
     isValid() should have been tested before, otherwise.. it's gonna fail...
     we copy memory from process for each pointer
     and assign it to a python object _here, then we assign 
     the member to be a pointer to _here'''
+    if maxDepth == 0:
+      log.warning('Maximum depth reach. Not loading any deeper members.')
+      log.warning('Struct partially LOADED. %s not loaded'%(self.__class__.__name__))
+      return True
+    maxDepth-=1
     log.debug('%s loadMembers'%(self.__class__.__name__))
     if not self.isValid(mappings):
       return False
@@ -337,12 +342,12 @@ class LoadableMembers(ctypes.Structure):
     ## go through all members. if they are pointers AND not null AND in valid memorymapping AND a struct type, load them as struct pointers
     for attrname,attrtype in self._fields_:
       attr=getattr(self,attrname)
-      if not self._loadMember(attr,attrname,attrtype,process,mappings):
+      if not self._loadMember(attr,attrname,attrtype,process,mappings, maxDepth):
         return False
     log.debug('%s END loadMembers ----------------'%(self.__class__.__name__))
     return True
     
-  def _loadMember(self,attr,attrname,attrtype,process,mappings):
+  def _loadMember(self,attr,attrname,attrtype,process,mappings, maxDepth):
     ### debug
     if attrname in []:
       print repr(self)
@@ -355,7 +360,7 @@ class LoadableMembers(ctypes.Structure):
     # load it, fields are valid
     if isStructType(attr):
       log.debug('%s %s is STRUCT'%(attrname,attrtype) )
-      if not attr.loadMembers(process,mappings):
+      if not attr.loadMembers(process,mappings, maxDepth):
         log.debug("%s %s not valid, erreur while loading inner struct "%(attrname,attrtype) )
         return False
       log.debug("%s %s inner struct LOADED "%(attrname,attrtype) )
@@ -370,7 +375,7 @@ class LoadableMembers(ctypes.Structure):
         return True
       elType=type(attr[0])
       for i in range(0,attrLen):
-        if not self._loadMember(attr[i], "%s[%d]"%(attrname,i), elType, process, mappings):
+        if not self._loadMember(attr[i], "%s[%d]"%(attrname,i), elType, process, mappings, maxDepth):
           return False
       return True
     # we have PointerType here . Basic or complex
@@ -411,7 +416,7 @@ class LoadableMembers(ctypes.Structure):
         log.warning('Member %s is null after copy: %s'%(attrname,attr))
         return True
       # go and load the pointed struct members recursively
-      if not attr.contents.loadMembers(process,mappings):
+      if not attr.contents.loadMembers(process,mappings, maxDepth):
         log.debug('member %s was not loaded'%(attrname))
         return False
     #TATAFN

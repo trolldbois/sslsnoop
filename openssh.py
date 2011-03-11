@@ -239,7 +239,7 @@ def findActiveSession(pid):
       continue
     ## method generic
     log.info('looking for struct session_state')
-    outs=abouchet.find_struct(process, m, ctypes_openssh.session_state)
+    outs=abouchet.find_struct(process, m, ctypes_openssh.session_state, maxNum=1)
     # unstop() the process
     process.cont()
     if len(outs) == 0:

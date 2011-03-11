@@ -160,7 +160,7 @@ def write_dsa_key(dsa,prefix):
   
 
 
-def find_struct(process, memoryMap, struct, hintOffset=None):
+def find_struct(process, memoryMap, struct, hintOffset=None, maxNum=10, maxDepth=99 ):
   '''
     Looks for struct in memory, using :
       hints from struct (default values, and such)
@@ -169,7 +169,7 @@ def find_struct(process, memoryMap, struct, hintOffset=None):
     
     returns POINTERS to struct.
   '''
-  
+
   # update process mappings
   mappings= readProcessMappings(process)
   log.debug("scanning 0x%lx --> 0x%lx %s"%(memoryMap.start,memoryMap.end,memoryMap.pathname) )
@@ -190,19 +190,18 @@ def find_struct(process, memoryMap, struct, hintOffset=None):
   log.debug("checking 0x%lx-0x%lx by increment of %d"%(start, (end-structlen), plen))
   instance=None
   for offset in range(start, end-structlen, plen):
-    instance=try_to_map(process, mappings,struct, offset)
-    if instance is not None:
+    instance=struct.from_buffer_copy(process.readStruct(offset,struct))
+    # check if data matches
+    if ( instance.loadMembers(process, mappings, maxDepth) ):
+      log.info( "found instance @ 0x%lx"%(offset) )
       # do stuff with it.
       outputs.append( (instance,offset) )
+    if len(outputs) >= maxNum:
+      break
   return outputs
 
 def try_to_map(process,mappings,struct,offset):
   ''' '''
-  instance=struct.from_buffer_copy(process.readStruct(offset,struct))
-  # check if data matches
-  if ( instance.loadMembers(process,mappings) ):
-    log.info( "found instance @ 0x%lx"%(offset) )
-    return instance
   return None
 
 
@@ -282,7 +281,7 @@ def main(argv):
       dsaw.writeToFile(dsa)
     '''
     print 'look for session_state'
-    outs=find_struct(process, m, ctypes_openssh.session_state)
+    outs=find_struct(process, m, ctypes_openssh.session_state, maxNum=1)
     for ss, addr in outs:
       #print ss.toString()
       #print '---------'
@@ -294,7 +293,8 @@ def main(argv):
       #print 'send context    Cipher : ', ss.send_context.cipher.contents
       #print 'receive context Cipher app_data: ', ctypes_openssh.getEvpAppData(ss.receive_context).toString()
       #print 'send context    Cipher app_data: ', ctypes_openssh.getEvpAppData(ss.send_context).toString()
-      print ss.newkeys[0].contents.toString()
+      #print ss.newkeys[0].contents.toString()
+      pass
       
   log.info("done for pid %d"%pid)
 
