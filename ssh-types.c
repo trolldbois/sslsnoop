@@ -310,7 +310,7 @@ gcc -g -O2 -Wall -Wpointer-arith -Wuninitialized -Wsign-compare -Wno-pointer-sig
 
 int main(){
 
-
+#ifdef __SIZE_SSL
   printf("BIGNUM: %d\n",sizeof(BIGNUM));
   printf("STACK: %d\n",sizeof(STACK));
   printf("CRYPTO_EX_DATA: %d\n",sizeof(CRYPTO_EX_DATA));
@@ -330,7 +330,7 @@ int main(){
   printf("EVP_MAX_BLOCK_LENGTH: %d\n", EVP_MAX_BLOCK_LENGTH);
   printf("EVP_MAX_IV_LENGTH: %d\n",EVP_MAX_IV_LENGTH);
   printf("AES_MAXNR: %d\n",AES_MAXNR);
-
+#else
   printf("Cipher: %d\n",sizeof(Cipher));
   printf("CipherContext: %d\n",sizeof(CipherContext));
   printf("Enc: %d\n",sizeof(Enc));
@@ -358,7 +358,7 @@ int main(){
   printf("L1_KEY_SHIFT: %d\n",L1_KEY_SHIFT);
   printf("MODE_MAX: %d\n",MODE_MAX);
   printf("STREAMS: %d\n",STREAMS);
-
+#endif
 }
 
 
