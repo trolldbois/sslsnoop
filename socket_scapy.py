@@ -109,7 +109,7 @@ class socket_scapy():
   def addInboundPacket(self,payload):
     log.info("add inbound")
     self._inbound_cnt+=self.addPacket(payload,self._inbound_writeso)
-    log.debug("\n%s"%hexify(payload))
+    #log.debug("\n%s"%hexify(payload))
     #log.debug( (''.join(util.format_binary(payload, '\n '))).lower() )
     return 
     

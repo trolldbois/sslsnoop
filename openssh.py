@@ -88,7 +88,7 @@ def activate_cipher(packetizer, context):
   packetizer.set_log(log)
   packetizer.set_hexdump(True)
   
-  engine = MyStatefulAESEngine(context)
+  engine = StatefulAESEngine(context)
   print 'cipher:%s block_size: %d key_len: %d '%(context.name, context.block_size, context.key_len )
   print engine, type(engine)
 
@@ -113,16 +113,16 @@ def decryptSSHTraffic(scapySocket,ciphers):
   inbound = Packetizer(scapySocket.getInboundSocket())
   inEngine=activate_cipher(inbound, receiveCtx )
   
-  #while True:
-  #  try :
-  #testDecrypt(inbound)
-  #  except paramiko.SSHException,e:
-  #    print e
-  #    #print inEngine.aes_key.toString()
+  while True:
+    try :
+      testDecrypt(inbound)
+    except paramiko.SSHException,e:
+      print 'Exception -> ',e
+      #print inEngine.aes_key.toString()
   
-  testSimpleDecrypt(scapySocket.getInboundSocket(),inEngine)
+  #testSimpleDecrypt(scapySocket.getInboundSocket(),inEngine)
   
-  return
+  #return
   # out bound
   outbound = Packetizer(scapySocket.getOutboundSocket())
   activate_cipher(outbound, sendCtx )
@@ -231,8 +231,8 @@ def testEncDec(pid):
   soscapy=launchScapyThread()
   ciphers,addr=findActiveKeys(pid)
   logging.basicConfig(level=logging.DEBUG)
-  engine = MyStatefulAESEngine(ciphers.receiveCtx)
-  engine2 = MyStatefulAESEngine(ciphers.receiveCtx)
+  engine = StatefulAESEngine(ciphers.receiveCtx)
+  engine2 = StatefulAESEngine(ciphers.receiveCtx)
   app_data=ciphers.receiveCtx.app_data
   key,rounds=app_data.getCtx()
   print "key=",repr(key)
@@ -325,11 +325,11 @@ def main(argv):
   pid = int(argv[0])
   log.info("Target has pid %d"%pid)
 
-  logging.getLogger('model').setLevel(logging.INFO)
+  #logging.getLogger('model').setLevel(logging.INFO)
   ###engine,key=openssh.test(16634)
-  engine,key=testEncDec(pid)
-
-  return 0
+  #engine,key=testEncDec(pid)
+  #return 0
+  
   soscapy=launchScapyThread()
   ciphers,addr=findActiveKeys(pid)
   # process is running... sniffer is listening

@@ -74,8 +74,8 @@ class StatefulAESEngine(Engine):
               ctypes.byref(self.aes_key_ctx.aes_counter), ctypes.byref(buf), ctypes.byref(num) ) 
     #self._AES_ctr( block, dest, bLen, ctypes.byref(self.key), 
     #          ctypes.byref(self.aes_key_ctx.aes_counter), (buf), ctypes.byref(num) ) 
-    log.info(self.aes_key_ctx.toString())
-    log.debug("Num ret: %d"%num.value)
+    #log.info(self.aes_key_ctx.toString())
+    #log.debug("Num ret: %d"%num.value)
     return model.array2bytes(dest)
         
 
@@ -109,7 +109,7 @@ class MyStatefulAESEngine(Engine):
       return True
     if not bool(aes_key_ctx):
       return False
-    print 'src is a %s , dest is a %s and buf is a %s'%(type(src), dest, buf)
+    #print 'src is a %s , dest is a %s and buf is a %s'%(type(src), dest, buf)
     #print 'src[0] is a %s , dest[0] is a %s and buf[0] is a %s'%(type(src[0]), dest[0], buf[0])
     #print len(src),len(dest),len(buf)
     #print 'srcLen ',srcLen
