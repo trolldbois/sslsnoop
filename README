@@ -209,6 +209,17 @@ we have the old session_state pointer. damn.
 
 app_data is @0xb920a138
 
+scapy:
+7592 acce 64c6 8bb5 dbc0 8621 9d14 57e9
+c247 0d67 641c 1127 4649 0f03 a919 f6ed
+c173 a37f bc50 dfac 6bcc 6eee 612f 9b1a
+
+encypted:
+3df2 95ad e52f 6fa0 3367 7acc 8338 fd21
+5a51 e14b 9aad 3c54 31fd a3de 2fca e7e8
+ddee 1ba8 064a 62e2 6512 226a 6f4a 11f4
+
+
 
 
 

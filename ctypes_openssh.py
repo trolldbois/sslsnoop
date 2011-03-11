@@ -133,7 +133,7 @@ class CipherContext(OpenSSHStruct):
 
       log.debug('LOADED app_data evp.%s as %s from 0x%lx (%s) into 0x%lx'%(fieldname,struct, 
             attr_obj_address, is_valid_address_value(attr_obj_address,mappings,struct), getaddress(attr) ))
-      print '\t\t---------\n',st.toString(),'\t\t---------'
+      log.debug('\t\t---------\n%s\t\t---------'%st.toString())
     else:
       log.warning("Unknown cipher %s, can't load a data struct for the EVP_CIPHER_CTX->app_data"%(self.cipher.contents.name.string))
     return True

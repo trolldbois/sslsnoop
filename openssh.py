@@ -27,13 +27,29 @@ from paramiko.util import Counter
 from paramiko.common import *
 
 
-import socket_scapy
+import socket_scapy,struct
+from socket_scapy import hexify
 from threading import Thread
 
 log=logging.getLogger('sslsnoop.openssh')
 
 
 
+def testSimpleDecrypt(readso,engine_in):
+  block = readso.recv(16)
+  print hexify(block)
+  header = engine_in.decrypt(block)
+  print 'First 4 char  data=',repr(header[:4])
+  print 'p_size %d or %d'%(struct.unpack('>I', header[:4])[0], struct.unpack('<I', header[:4])[0])
+  #print 'p_size %d or %d'%(struct.unpack('>I', header[:4])[3], struct.unpack('<I', header[:4])[3])
+  packet_size = struct.unpack('>I', header[:4])[0]
+  # leftover contains decrypted bytes from the first block (after the length field)
+  leftover = header[4:]
+  print 'packet_size=%d \nleftoverlen=%d'%(packet_size,len(leftover))
+  if (packet_size - len(leftover)) % 16 != 0:
+    print "SSHException('Invalid packet blocking')"
+  print 'Test descrypt Finished\n\n\n'  
+  return
 
 
 def testDecrypt(packetizer):
@@ -72,7 +88,7 @@ def activate_cipher(packetizer, context):
   packetizer.set_log(log)
   packetizer.set_hexdump(True)
   
-  engine = StatefulAESEngine(context)
+  engine = MyStatefulAESEngine(context)
   print 'cipher:%s block_size: %d key_len: %d '%(context.name, context.block_size, context.key_len )
   print engine, type(engine)
 
@@ -80,6 +96,7 @@ def activate_cipher(packetizer, context):
   if mac is not None:
     mac_key    = mac.getKey()
     mac_engine = Transport._mac_info[mac.name.toString()]['class']
+  #print mac, mac_key, mac_engine
   # fix our engines in packetizer
   packetizer.set_inbound_cipher(engine, context.block_size, mac_engine, mac.mac_len , mac_key)
   '''  
@@ -96,11 +113,16 @@ def decryptSSHTraffic(scapySocket,ciphers):
   inbound = Packetizer(scapySocket.getInboundSocket())
   inEngine=activate_cipher(inbound, receiveCtx )
   
-  try :
-    testDecrypt(inbound)
-  except paramiko.SSHException,e:
-    print inEngine.aes_key.toString()
+  #while True:
+  #  try :
+  #testDecrypt(inbound)
+  #  except paramiko.SSHException,e:
+  #    print e
+  #    #print inEngine.aes_key.toString()
   
+  testSimpleDecrypt(scapySocket.getInboundSocket(),inEngine)
+  
+  return
   # out bound
   outbound = Packetizer(scapySocket.getOutboundSocket())
   activate_cipher(outbound, sendCtx )
@@ -200,7 +222,7 @@ def findActiveKeys(pid):
     return None # raise Exception ... 
   ciphers=SessionCiphers(session_state)
   log.info('Active state ciphers : %s at 0x%lx'%(ciphers,addr))
-  log.debug(ciphers.receiveCtx.app_data.toString())
+  #log.debug(ciphers.receiveCtx.app_data.toString())
   return ciphers,addr
 
 
@@ -209,7 +231,7 @@ def testEncDec(pid):
   soscapy=launchScapyThread()
   ciphers,addr=findActiveKeys(pid)
   logging.basicConfig(level=logging.DEBUG)
-  engine = StatefulAESEngine(ciphers.receiveCtx)
+  engine = MyStatefulAESEngine(ciphers.receiveCtx)
   engine2 = MyStatefulAESEngine(ciphers.receiveCtx)
   app_data=ciphers.receiveCtx.app_data
   key,rounds=app_data.getCtx()
@@ -221,13 +243,13 @@ def testEncDec(pid):
   print "waiting for packet:"
   buf=b'1234567890ABCDEF1234567890ABCDEF'
   
-  print '"aes_counter" : "%s"'%repr(engine.getCounter())
+  print '"aes_counter" : "%s"'%repr(engine.aes_key_ctx.getCounter())
   #encrypted=engine.decrypt(buf)
   encrypted=engine.decrypt(buf)
   print 'Encrypted len', len(encrypted)
   decrypted=engine2.decrypt(encrypted)
-  print 'engine 1 "aes_counter" : "%s"'%repr(engine.getCounter())
-  print 'engine 2 "aes_counter" : "%s"'%repr(engine2.getCounter())
+  print 'engine 1 "aes_counter" : "%s"'%repr(engine.aes_key_ctx.getCounter())
+  print 'engine 2 "aes_counter" : "%s"'%repr(engine2.aes_key_ctx.getCounter())
   print 'decrypted=',decrypted
   return engine,key
 
@@ -303,11 +325,11 @@ def main(argv):
   pid = int(argv[0])
   log.info("Target has pid %d"%pid)
 
-  #logging.getLogger('model').setLevel(logging.INFO)
+  logging.getLogger('model').setLevel(logging.INFO)
   ###engine,key=openssh.test(16634)
-  #engine,key=testEncDec(16634)
+  engine,key=testEncDec(pid)
 
-  #return 0
+  return 0
   soscapy=launchScapyThread()
   ciphers,addr=findActiveKeys(pid)
   # process is running... sniffer is listening
