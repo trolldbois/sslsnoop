@@ -188,3 +188,23 @@ def hexify(data):
   print s
 
 
+From TCPDUMP
+from soscapy:
+cf2e 0acf cbb8 3332 6165 3631 9059 4b4a
+3698 8d9c 72c0 455f 2e96 4100 2dd0 fe8f
+291a 8f65 e47b 30a9 0086 cd4f 0575 c0ea
+
+
+le counter aes ne change pas dans le client
+"aes_counter": "'\x00\x00\x00\x00\x00\x00\x00\x00\n\x00\x00\x00\x1e6\xf6\xbb'"
+le notre passe a 
+"aes_counter": "'\x00\x00\x00\x00\x00\x00\x00\x00\n\x00\x00\x00\x1e6\xf6\xbc'"
+
+
+INFO:abouchet:found instance @ 0xb7dcd268
+but
+context instance at 0xb7dcd274
+
+we have the old session_state pointer. damn.
+
+
