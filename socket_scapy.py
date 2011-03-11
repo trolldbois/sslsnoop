@@ -22,6 +22,17 @@ def isNotdestport22(packet):
   return  not isdestport22(packet)
 
 
+def hexify(data):
+  s=''
+  for i in range(0,len(data)):
+    s+="%02x"% ord(data[i])
+    if i%16==15:
+      s+="\r\n"
+    elif i%2==1:
+      s+=" "
+  s+="\r\n"
+  return s
+
 class socket_scapy():
   ''' what you write in writeso, gets read in readso '''
   def __init__(self,filterRules, protocolName='TCP', packetCount=0, timeout=None,
@@ -53,14 +64,12 @@ class socket_scapy():
         isWindows = socket.AF_UNIX
         self._inbound_readso,self._inbound_writeso=socket.socketpair()
         self._outbound_readso,self._outbound_writeso=socket.socketpair()
-        print 'USING ************* socketpair'
     except NameError:
         # yes || no socketpair support anyway
         self._initPipes()
     return
   
   def _initPipes(self):
-    print 'USING ************* PIPES'
     self._inbound_pipe=pipe_socketpair()
     self._inbound_readso,self._inbound_writeso=self._inbound_pipe.socketpair()
     self._outbound_pipe=pipe_socketpair()
@@ -100,7 +109,8 @@ class socket_scapy():
   def addInboundPacket(self,payload):
     log.info("add inbound")
     self._inbound_cnt+=self.addPacket(payload,self._inbound_writeso)
-    log.debug( ('\n'.join(util.format_binary(payload, 'IN: '))).lower() )
+    log.debug("\n%s"%hexify(payload))
+    #log.debug( (''.join(util.format_binary(payload, '\n '))).lower() )
     return 
     
   def addOutboundPacket(self,payload):
