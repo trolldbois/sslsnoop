@@ -22,6 +22,7 @@ from ptrace.debugger.memory_mapping import readProcessMappings
 from paramiko.packet import Packetizer, NeedRekeyException
 from paramiko.transport import Transport
 from paramiko import util
+import paramiko
 from paramiko.util import Counter
 from paramiko.common import *
 
@@ -87,15 +88,18 @@ def activate_cipher(packetizer, context):
       self._log(DEBUG, 'Switching on inbound compression ...')
       self.packetizer.set_inbound_compressor(compress_in())
   '''
-  return
+  return engine
   
 def decryptSSHTraffic(scapySocket,ciphers):
   receiveCtx,sendCtx = ciphers.getCiphers()
   # Inbound
   inbound = Packetizer(scapySocket.getInboundSocket())
-  activate_cipher(inbound, receiveCtx )
+  inEngine=activate_cipher(inbound, receiveCtx )
   
-  testDecrypt(inbound)
+  try :
+    testDecrypt(inbound)
+  except paramiko.SSHException,e:
+    print inEngine.aes_key.toString()
   
   # out bound
   outbound = Packetizer(scapySocket.getOutboundSocket())
@@ -175,14 +179,15 @@ def findActiveSession(pid):
       continue
     ## method generic
     log.info('looking for struct session_state')
-    outs=abouchet.find_struct(process, m, ctypes_openssh.session_state, maxNum=1)
+    outs=abouchet.find_struct(process, m, ctypes_openssh.session_state, maxNum=5)
     # unstop() the process
     process.cont()
     if len(outs) == 0:
       log.error("The session_state has not been found. maybe it's not OpenSSH ?")
       break
     elif len(outs) > 1:
-      log.warning("Mmmh, multiple session_state. That is odd. I'll try with the first one.")
+      log.warning("Mmmh, we found multiple session_state(%d). That is odd. I'll try with the first one."%(len(outs)))
+      
     #
     session_state,addr=outs[0]
   dbg.deleteProcess(process)
@@ -195,6 +200,7 @@ def findActiveKeys(pid):
     return None # raise Exception ... 
   ciphers=SessionCiphers(session_state)
   log.info('Active state ciphers : %s at 0x%lx'%(ciphers,addr))
+  log.debug(ciphers.receiveCtx.app_data.toString())
   return ciphers,addr
 
 
@@ -281,6 +287,9 @@ def usage(txt):
 def main(argv):
   logging.basicConfig(level=logging.INFO)
   logging.getLogger('model').setLevel(logging.INFO)
+  logging.getLogger('openssh.model').setLevel(logging.INFO)
+  logging.getLogger('scapy').setLevel(logging.ERROR)
+  logging.getLogger('root').setLevel(logging.WARNING)
   if ( len(argv) < 1 ):
     usage(argv[0])
     return
@@ -312,7 +321,6 @@ if __name__ == "__main__":
   main(sys.argv[1:])
 
 
-logging.basicConfig(level=logging.INFO)
 '''  
 
 import openssh,logging

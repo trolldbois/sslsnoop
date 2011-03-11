@@ -12,7 +12,8 @@ from ptrace import ctypes_stdint
 import logging
 log=logging.getLogger('openssh.model')
 
-from model import is_valid_address,pointer2bytes,array2bytes,getaddress,LoadableMembers,RangeValue,NotNull,CString,EVP_CIPHER_CTX_APP_DATA_PTR
+from model import is_valid_address,is_valid_address_value,pointer2bytes,array2bytes,getaddress
+from model import LoadableMembers,RangeValue,NotNull,CString,EVP_CIPHER_CTX_APP_DATA_PTR
 from ctypes_openssl import EVP_CIPHER_CTX, EVP_MD, HMAC_CTX, AES_KEY,rijndael_ctx,EVP_RC4_KEY
 
 MODE_MAX=2 #kex.h:62
@@ -79,20 +80,7 @@ class Cipher(OpenSSHStruct):
   expectedValues = {
   'name': NotNull,
   }
-
-def getEvpAppData(cipherContext):
-  if cipherContext.cipher.contents.name.string in cipherContext.cipherContexts:
-    struct,fieldname=cipherContext.cipherContexts[cipherContext.cipher.contents.name.string]
-    if(struct is None):
-      log.warning("Unsupported cipher %s"%(cipherContext.cipher.contents.name.string))
-      return True
-    log.debug('CAST evp.%s Into %s'%(fieldname,struct))
-    attr=getattr(cipherContext.evp,fieldname)
-    #print attr
-    st=struct.from_address(getaddress(attr))
-    return st
-  return None
-  
+ 
 
 class CipherContext(OpenSSHStruct):
   ''' cipher.h:65 '''
@@ -134,21 +122,24 @@ class CipherContext(OpenSSHStruct):
       if(struct is None):
         log.warning("Unsupported cipher %s"%(self.cipher.contents.name.string))
         return True
-      log.debug('CAST evp.%s Into %s'%(fieldname,struct))
       attr=getattr(self.evp,fieldname)
-      #print attr
       attr_obj_address=getaddress(attr)
+      #print attr
       
       #print "CAST %s into : %s "%(fieldname, struct)
       st=struct.from_buffer_copy(process.readStruct(attr_obj_address, struct ) )
+      # XXX CAST do not copy buffer when casting, sinon on perds des bytes
       attr.contents=(type(attr.contents)).from_buffer(st)
-      
-      #print getEvpAppData(self)
+
+      log.debug('LOADED app_data evp.%s as %s from 0x%lx (%s) into 0x%lx'%(fieldname,struct, 
+            attr_obj_address, is_valid_address_value(attr_obj_address,mappings,struct), getaddress(attr) ))
+      print '\t\t---------\n',st.toString(),'\t\t---------'
     else:
       log.warning("Unknown cipher %s, can't load a data struct for the EVP_CIPHER_CTX->app_data"%(self.cipher.contents.name.string))
     return True
   # MACRO
   def getEvpAppData(self):
+    
     if self.cipher.contents.name.string in self.cipherContexts:
       struct,fieldname=self.cipherContexts[self.cipher.contents.name.string]
       if(struct is None):
@@ -432,7 +423,8 @@ import inspect,sys
 OpenSSHStruct.classRef=dict([ (ctypes.POINTER( klass), klass) for (name,klass) in inspect.getmembers(sys.modules[__name__], inspect.isclass) if klass.__module__ == __name__ or klass.__module__ == 'ctypes_openssl'])
 
 
-
+if __name__ == '__main__':
+  printSizeof()
 
 
 

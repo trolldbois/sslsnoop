@@ -197,6 +197,7 @@ def find_struct(process, memoryMap, struct, hintOffset=None, maxNum=10, maxDepth
       # do stuff with it.
       outputs.append( (instance,offset) )
     if len(outputs) >= maxNum:
+      log.info('Found enough instance. returning results.')
       break
   return outputs
 
@@ -204,6 +205,37 @@ def try_to_map(process,mappings,struct,offset):
   ''' '''
   return None
 
+
+
+def loadAt(offset, struct, process, depth ):
+  log.info("Loading %s from 0x%lx "%(struct,offset))
+  instance=struct.from_buffer_copy(process.readStruct(offset,struct))
+  #logging.getLogger('model').setLevel(logging.DEBUG)
+  #logging.getLogger('model.openssl').setLevel(logging.DEBUG)
+  #logging.getLogger('model.openssh').setLevel(logging.DEBUG)
+  # check if data matches
+  mappings=readProcessMappings(process)
+  if ( instance.loadMembers(process, mappings, depth) ):
+    log.info( "found instance @ 0x%lx"%(offset) )
+    # do stuff with it.
+  else:
+    log.info("Address not validated")
+  return instance
+
+def forceAt(offset, struct, process ):
+  #instance = loadAt( offset, struct, process, 99 )
+  #remappedOffset=ctypes.addressof(instance)
+  #addrEvpCtx=ctypes.addressof(instance.receive_context.evp.cipher)
+  ## OK, address matches... with maxDepth = 1
+  #print "EVP_CIPHER_CTX: 0x%lx"%(offset + (addrEvpCtx-remappedOffset))# first member of EVP
+  #print "app_data: 0x%lx"%ctypes.addressof(instance.receive_context.evp.app_data.contents) #
+  # reload
+  instance = loadAt( offset, struct, process, 99 )
+  ## with more depth
+  app_data=instance.receive_context.getEvpAppData()
+  print "counter:", repr(app_data.getCounter())
+  #print instance
+  return
 
 
 def hasValidPermissions(memmap):
@@ -239,6 +271,12 @@ def main(argv):
     return
   # It's not possible to not block it ... maybe smarter ?
   #process.cont()
+  
+  #### force offset
+  if len(argv) == 2:
+    addr=int(argv[1],16)
+    forceAt(addr,ctypes_openssh.session_state, process)
+    return
   
   if (False):
     #When we have args ...
@@ -281,7 +319,7 @@ def main(argv):
       dsaw.writeToFile(dsa)
     '''
     print 'look for session_state'
-    outs=find_struct(process, m, ctypes_openssh.session_state, maxNum=1)
+    outs=find_struct(process, m, ctypes_openssh.session_state, maxNum=3)
     for ss, addr in outs:
       #print ss.toString()
       #print '---------'

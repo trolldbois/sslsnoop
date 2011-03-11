@@ -355,9 +355,13 @@ class LoadableMembers(ctypes.Structure):
   def _loadMember(self,attr,attrname,attrtype,process,mappings, maxDepth):
     ### debug
     if attrname in []:
+      #if True:
       print repr(self)
       printWhois(attr)
       print ' : _isLoadableMember() %s'%(self._isLoadableMember(attr) )
+      print ' ********** 0x%lx ' % ctypes.addressof(attr)
+      if bool(attr):
+        print ' ********** 0x%lx ' % ctypes.addressof(attr.contents)
     # skip static basic data members
     if not self._isLoadableMember(attr):
       log.debug("%s %s not loadable  bool(attr) = %s"%(attrname,attrtype, bool(attr)) )
@@ -365,7 +369,7 @@ class LoadableMembers(ctypes.Structure):
     # load it, fields are valid
     if isStructType(attr):
       log.debug('%s %s is STRUCT'%(attrname,attrtype) )
-      if not attr.loadMembers(process,mappings, maxDepth):
+      if not attr.loadMembers(process,mappings, maxDepth+1):
         log.debug("%s %s not valid, erreur while loading inner struct "%(attrname,attrtype) )
         return False
       log.debug("%s %s inner struct LOADED "%(attrname,attrtype) )
@@ -468,30 +472,31 @@ class LoadableMembers(ctypes.Structure):
     for field,typ in self._fields_:
       attr=getattr(self,field)
       if isStructType(attr):
-        s+='%s: {\t%s}\n'%(field, attr )  
+        s+='%s (@0x%lx) : {\t%s}\n'%(field,ctypes.addressof(attr), attr )  
       elif isBasicTypeArrayType(attr):
         try:
-          s+='%s: %s\n'%(field, repr(array2bytes(attr)) )  
+          s+='%s (@0x%lx) : %s\n'%(field,ctypes.addressof(attr), repr(array2bytes(attr)) )  
         except IndexError,e:
           print 'error while reading',repr(attr),type(attr)
           
       elif isArrayType(attr): ## array of something else than int
-        s+=prefix+'"%s" :['%(field)+','.join(["%s"%(val) for val in attr ])+'],\n'
+        s+='%s (@0x%lx)  :['%(field, ctypes.addressof(attr),)+','.join(["%s"%(val) for val in attr ])+'],\n'
         continue
       elif isPointerType(attr):
         if not bool(attr) :
-          s+='%s: 0x%lx\n'%(field, getaddress(attr) )   # only print address/null
+          s+='%s (@0x%lx) : 0x%lx\n'%(field,ctypes.addressof(attr), getaddress(attr) )   # only print address/null
         elif not is_address_local(attr) :
-          s+='%s: 0x%lx (FIELD NOT LOADED)\n'%(field, getaddress(attr) )   # only print address in target space
+          s+='%s (@0x%lx) : 0x%lx (FIELD NOT LOADED)\n'%(field,ctypes.addressof(attr), getaddress(attr) )   # only print address in target space
         else:
           # we can read the pointers contents
           # if isBasicType(attr.contents): ?
           # if isArrayType(attr.contents): ?
-          s+='%s (0x%lx) -> {%s}\n'%(field, getaddress(attr), attr.contents) # use struct printer
+          s+='%s (@0x%lx) : (0x%lx) -> {%s}\n'%(field, ctypes.addressof(attr), getaddress(attr), attr.contents) # use struct printer
       elif isCStringPointer(attr):
-        s+='%s: %s (CString) \n'%(field, attr.string)  
+        s+='%s (@0x%lx) : %s (CString) \n'%(field,ctypes.addressof(attr), attr.string)  
       else:
-        s+='%s: %s\n'%(field, repr(attr) )  
+        #print '*** attr cannot be __str__ ***',field, type(attr)
+        s+='%s : %s\n'%(field, repr(attr) )  
     return s
 
 def APP_DATA_value(obj,struct):
