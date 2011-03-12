@@ -45,102 +45,18 @@ AGENT_STRUCTS=[ctypes_openssl.RSA, ctypes_openssl.DSA]
 
 
 
+class SessionStateFileWriter(FileWriter):
+  def __init__(self,folder='outputs'):
+    FileWriter.__init__(self,'session_state',time.time(),folder)
+  def writeToFile(self,instance):
+    log.info()
+    prefix=self.prefix
+    filename=self.get_valid_filename()
+    file(filename).write(instance.toString())
+    log.info ("[X] SSH session_state saved to file %s"%filename)
+    return True
 
 
-def decrypt(packetizer):
-  _expected_packet = tuple()
-  while ( True ):
-    try:
-      ptype, m = packetizer.read_message()
-    except NeedRekeyException:
-      continue
-    if ptype == MSG_IGNORE:
-      continue
-    elif ptype == MSG_DISCONNECT:
-      log.info( "DISCONNECT MESSAGE")
-      log.info( m)
-      packetizer.close()
-      break
-    elif ptype == MSG_DEBUG:
-      always_display = m.get_boolean()
-      msg = m.get_string()
-      lang = m.get_string()
-      log.debug('Debug msg: ' + util.safe_string(msg))
-      continue
-    if len(_expected_packet) > 0:
-      if ptype not in _expected_packet:
-        raise SSHException('Expecting packet from %r, got %d' % (_expected_packet, ptype))
-      _expected_packet = tuple()
-      if (ptype >= 30) and (ptype <= 39):
-        log.info("KEX Message, we need to rekey")
-        continue
-    #
-    print m,
-  log.info('Test descrypt Finished' )
-
-
-
-def activate_cipher(packetizer, context):
-  "switch on newly negotiated encryption parameters for inbound traffic"
-  #packetizer.set_log(log)
-  #packetizer.set_hexdump(True)
-  
-  engine = StatefulAESEngine(context)
-  log.debug( 'cipher:%s block_size: %d key_len: %d '%(context.name, context.block_size, context.key_len ) )
-  #print engine, type(engine)
-
-
-  mac = context.mac
-  if mac is not None:
-    mac_key    = mac.getKey()
-    mac_engine = Transport._mac_info[mac.name.toString()]['class']
-    mac_len = mac.mac_len
-  # again , we need a stateful HMAC engine. 
-  # we disable HMAC checking to get around.
-
-  # fix our engines in packetizer
-  packetizer.set_inbound_cipher(engine, context.block_size, mac_engine, mac_len , mac_key)
-  
-  if context.comp.enabled != 0:
-    name = context.comp.name.toString()
-    compress_in = Transport._compression_info[name][1]
-    log.debug('Switching on inbound compression ...')
-    packetizer.set_inbound_compressor(compress_in())
-  #ok
-  return engine
-  
-def decryptSSHTraffic(scapySocket,ciphers):
-  receiveCtx,sendCtx = ciphers.getCiphers()
-  # Inbound
-  inbound = Packetizer(scapySocket.getInboundSocket())
-  inEngine=activate_cipher(inbound, receiveCtx )
-  # out bound
-  outbound = Packetizer(scapySocket.getOutboundSocket())
-  activate_cipher(outbound, sendCtx )
-
-  # thread inbound reads and writes  
-  while True:
-    try :
-      m=decrypt(inbound)
-    except paramiko.SSHException,e:
-      print 'Exception -> ',e
-      #print inEngine.aes_key.toString()
-  
-  #testSimpleDecrypt(scapySocket.getInboundSocket(),inEngine)
-  
-  #return
-  return
-
-def launchScapyThread():
-  # @ at param
-  port=22
-  sshfilter="tcp and port %d"%(port)
-  #
-  soscapy=socket_scapy.socket_scapy(sshfilter,packetCount=100)
-  sniffer = Thread(target=soscapy.run)
-  soscapy.setThread(sniffer)
-  sniffer.start()
-  return soscapy
 
 
 class CipherContext:
@@ -184,61 +100,151 @@ class SessionCiphers():
 
 
 
-
-def findActiveSession(pid):
-  
-  dbg=PtraceDebugger()
-  process=dbg.addProcess(pid,is_attached=False)
-  if process is None:
-    log.error("Error initializing Process debugging for %d"% pid)
-    return None
-  # process is SIGSTOP-ed
-  mappings=readProcessMappings(process)
-  session_state=None
-  addr=None
-  for m in mappings:
-    ##debug, rsa is on head
-    if m.pathname != '[heap]':
-      continue
-    if not abouchet.hasValidPermissions(m):
-      continue
-    ## method generic
-    log.info('looking for struct session_state')
-    outs=abouchet.find_struct(process, m, ctypes_openssh.session_state, maxNum=5)
-    # unstop() the process
-    process.cont()
+class OpenSSHKeysFinder(StructFinder):
+  ''' '''
+  def findActiveSession(self, maxNum=1):
+    ''' '''
+    outs=self.find_struct(ctypes_openssh.session_state, maxNum)
     if len(outs) == 0:
       log.error("The session_state has not been found. maybe it's not OpenSSH ?")
-      break
+      return 
     elif len(outs) > 1:
       log.warning("Mmmh, we found multiple session_state(%d). That is odd. I'll try with the first one."%(len(outs)))
-      
     #
     session_state,addr=outs[0]
-  dbg.deleteProcess(process)
-  dbg.quit()
-  return session_state,addr
-  
-def findActiveKeys(pid):
-  session_state,addr=findActiveSession(pid)
-  if session_state is None:
-    return None # raise Exception ... 
-  ciphers=SessionCiphers(session_state)
-  log.info('Active state ciphers : %s at 0x%lx'%(ciphers,addr))
-  #log.debug(ciphers.receiveCtx.app_data.toString())
-  return ciphers,addr
+    return session_state,addr
+    
+  def findActiveKeys(self, maxNum=1):
+    ''' '''
+    session_state,addr=self.findActiveSession(maxNum)
+    if session_state is None:
+      return None # raise Exception ... 
+    ciphers=SessionCiphers(session_state)
+    log.info('Active state ciphers : %s at 0x%lx'%(ciphers,addr))
+    #log.debug(ciphers.receiveCtx.app_data.toString())
+    return ciphers,addr
 
 
-class SessionStateFileWriter(FileWriter):
-  def __init__(self,folder='outputs'):
-    FileWriter.__init__(self,'session_state',time.time(),folder)
-  def writeToFile(self,instance):
-    log.info()
-    prefix=self.prefix
-    filename=self.get_valid_filename()
-    file(filename).write(instance.toString())
-    log.info ("[X] SSH session_state saved to file %s"%filename)
-    return True
+class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
+  ''' Decrypt SSH traffic in live '''
+  def __init__(self, pid, scapySocketThread = None, fullScan=False, maxNum=1):
+    OpenSSHKeysFinder. __init__(self, pid, fullScan=fullScan)
+    self.soscapy=scapySocketThread
+    self.maxNum = maxNum
+    return
+  def run(self):
+    ''' launch sniffer and decrypter threads '''
+    if self.soscapy is None:
+      self.soscapy=launchScapyThread()
+    elif not self.soscapy.isAlive():
+      self.soscapy.start()
+    # ptrace ssh
+    self.ciphers,self.session_state_addr=self.findActiveKeys(maxNum = self.maxNum)
+    # unstop() the process
+    self.process.cont()
+    # process is running... sniffer is listening
+    log.info('Please make some ssh  traffic')  
+    self.decryptSSHTraffic(self.soscapy,self.ciphers)
+    log.info("done for pid %d, struct at 0x%lx"%(self.process.pid, self.session_state_addr))
+    return
+    
+  def decryptSSHTraffic(self, scapySocket,ciphers):
+    receiveCtx,sendCtx = ciphers.getCiphers()
+    # Inbound
+    inbound = Packetizer(scapySocket.getInboundSocket())
+    inEngine=self.activate_cipher(inbound, receiveCtx )
+    # out bound
+    outbound = Packetizer(scapySocket.getOutboundSocket())
+    self.activate_cipher(outbound, sendCtx )
+
+    # thread inbound reads and writes  
+    while True:
+      try :
+        m=self.decrypt(inbound)
+      except paramiko.SSHException,e:
+        print 'Exception -> ',e
+        #print inEngine.aes_key.toString()
+    
+    #testSimpleDecrypt(scapySocket.getInboundSocket(),inEngine)
+    
+    #return
+    return
+
+  def decrypt(self, packetizer):
+    _expected_packet = tuple()
+    while ( True ):
+      try:
+        ptype, m = packetizer.read_message()
+      except NeedRekeyException:
+        continue
+      if ptype == MSG_IGNORE:
+        continue
+      elif ptype == MSG_DISCONNECT:
+        log.info( "DISCONNECT MESSAGE")
+        log.info( m)
+        packetizer.close()
+        break
+      elif ptype == MSG_DEBUG:
+        always_display = m.get_boolean()
+        msg = m.get_string()
+        lang = m.get_string()
+        log.debug('Debug msg: ' + util.safe_string(msg))
+        continue
+      if len(_expected_packet) > 0:
+        if ptype not in _expected_packet:
+          raise SSHException('Expecting packet from %r, got %d' % (_expected_packet, ptype))
+        _expected_packet = tuple()
+        if (ptype >= 30) and (ptype <= 39):
+          log.info("KEX Message, we need to rekey")
+          continue
+      #
+      print m,
+    log.info('Test descrypt Finished' )
+    return
+
+  def activate_cipher(self, packetizer, context):
+    "switch on newly negotiated encryption parameters for inbound traffic"
+    #packetizer.set_log(log)
+    #packetizer.set_hexdump(True)
+    
+    engine = StatefulAESEngine(context)
+    log.debug( 'cipher:%s block_size: %d key_len: %d '%(context.name, context.block_size, context.key_len ) )
+    #print engine, type(engine)
+
+
+    mac = context.mac
+    if mac is not None:
+      mac_key    = mac.getKey()
+      mac_engine = Transport._mac_info[mac.name.toString()]['class']
+      mac_len = mac.mac_len
+    # again , we need a stateful HMAC engine. 
+    # we disable HMAC checking to get around.
+
+    # fix our engines in packetizer
+    packetizer.set_inbound_cipher(engine, context.block_size, mac_engine, mac_len , mac_key)
+    
+    if context.comp.enabled != 0:
+      name = context.comp.name.toString()
+      compress_in = Transport._compression_info[name][1]
+      log.debug('Switching on inbound compression ...')
+      packetizer.set_inbound_compressor(compress_in())
+    #ok
+    return engine
+    
+
+
+
+def launchScapyThread():
+  # @ at param
+  port=22
+  sshfilter="tcp and port %d"%(port)
+  #
+  soscapy=socket_scapy.socket_scapy(sshfilter,packetCount=100)
+  sniffer = Thread(target=soscapy.run)
+  soscapy.setThread(sniffer)
+  sniffer.start()
+  return soscapy
+
 
 
 #print ss.toString()
@@ -284,16 +290,14 @@ def main(argv):
   pid = int(argv[0])
   log.info("Target has pid %d"%pid)
 
+  decryptatator=OpenSSHLiveDecryptatator(pid)
+
   #logging.getLogger('model').setLevel(logging.INFO)
   ###engine,key=openssh.test(16634)
   #engine,key=testEncDec(pid)
   #return 0
   
-  soscapy=launchScapyThread()
-  ciphers,addr=findActiveKeys(pid)
-  # process is running... sniffer is listening
-  log.info('Please make some ssh  traffic')  
-  decryptSSHTraffic(soscapy,ciphers)
+  decryptatator.run()
   log.info("done for pid %d, struct at 0x%lx"%(pid,addr))
   sys.exit(0)
   return -1
@@ -307,11 +311,13 @@ if __name__ == "__main__":
 
 def testEncDec(pid):
   logging.basicConfig(level=logging.INFO)
-  soscapy=launchScapyThread()
-  ciphers,addr=findActiveKeys(pid)
+  finder=OpenSSHLiveDecryptatator(pid)
+  
+  ciphers,addr=finder.findActiveKeys(pid)
   logging.basicConfig(level=logging.DEBUG)
   engine = StatefulAESEngine(ciphers.receiveCtx)
   engine2 = StatefulAESEngine(ciphers.receiveCtx)
+  
   app_data=ciphers.receiveCtx.app_data
   key,rounds=app_data.getCtx()
   print "key=",repr(key)
@@ -335,7 +341,9 @@ def testEncDec(pid):
 def test(pid):
   logging.basicConfig(level=logging.INFO)
   soscapy=launchScapyThread()
-  ciphers,addr=findActiveKeys(pid)
+  finder=OpenSSHLiveDecryptatator(pid)
+
+  ciphers,addr=finder.findActiveKeys(pid)
   logging.basicConfig(level=logging.DEBUG)
   
   readso=soscapy.getInboundSocket()

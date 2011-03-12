@@ -64,7 +64,7 @@ class StructFinder:
         break
     self.mappings.extend(tmp)
 
-  def find_struct(self, struct, hintOffset=None, maxNum=10, maxDepth=99 ):
+  def find_struct(self, struct, hintOffset=None, maxNum = 10, maxDepth=99 ):
     if self.fullScan:
       log.warning("Restricting search to heap.")
     outputs=[]
@@ -151,7 +151,7 @@ def main(argv):
   logging.basicConfig(level=logging.INFO)
   logging.debug(argv)
   if ( len(argv) < 1 ):
-    usage(argv[0])
+    usage(sys.argv[0])
     return
   #
   verbose = 0

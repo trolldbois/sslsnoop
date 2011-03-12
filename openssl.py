@@ -168,7 +168,7 @@ def main(argv):
   logging.basicConfig(level=logging.INFO)
 
   if ( len(argv) < 1 ):
-    usage(argv[0])
+    usage(sys.argv[0])
     return
 
   # use optarg on v, a and to
