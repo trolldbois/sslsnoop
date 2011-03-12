@@ -7,7 +7,6 @@
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
 import logging,os,socket
-logging.basicConfig(level=logging.DEBUG)
 
 from scapy.all import sniff
 from paramiko import util

@@ -318,7 +318,7 @@ def usage(txt):
 
 
 def main(argv):
-  logging.basicConfig(level=logging.ERROR)
+  logging.basicConfig(level=logging.INFO)
   logging.getLogger('model').setLevel(logging.INFO)
   logging.getLogger('openssh.model').setLevel(logging.INFO)
   logging.getLogger('scapy').setLevel(logging.ERROR)
