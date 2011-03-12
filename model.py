@@ -256,7 +256,7 @@ class LoadableMembers(ctypes.Structure):
       #log.info('%s is arraytype %s we decided it was valid',attrname,repr(attr))#
       return True
     if isArrayType(attr):
-      log.info('%s is arraytype %s recurse validate',attrname,repr(attr))#
+      log.debug('%s is arraytype %s recurse validate',attrname,repr(attr))#
       attrLen=len(attr)
       if attrLen == 0:
         return True
@@ -378,7 +378,7 @@ class LoadableMembers(ctypes.Structure):
     if isBasicTypeArrayType(attr):
       return True
     if isArrayType(attr):
-      log.info('%s is arraytype %s recurse load',attrname,repr(attr))#
+      log.debug('%s is arraytype %s recurse load',attrname,repr(attr))#
       attrLen=len(attr)
       if attrLen == 0:
         return True

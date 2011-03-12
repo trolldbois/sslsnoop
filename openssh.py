@@ -19,7 +19,10 @@ from engine import StatefulAESEngine,MyStatefulAESEngine
 from ptrace.debugger.debugger import PtraceDebugger
 from ptrace.debugger.memory_mapping import readProcessMappings
 
-from paramiko.packet import Packetizer, NeedRekeyException
+#our impl
+from paramiko_packet import Packetizer, NeedRekeyException
+
+
 from paramiko.transport import Transport
 from paramiko import util
 import paramiko
@@ -52,7 +55,7 @@ def testSimpleDecrypt(readso,engine_in):
   return
 
 
-def testDecrypt(packetizer):
+def decrypt(packetizer):
   _expected_packet = tuple()
   while ( True ):
     try:
@@ -62,8 +65,8 @@ def testDecrypt(packetizer):
     if ptype == MSG_IGNORE:
       continue
     elif ptype == MSG_DISCONNECT:
-      print "DISCONNECT MESSAGE"
-      print m
+      log.info( "DISCONNECT MESSAGE")
+      log.info( m)
       packetizer.close()
       break
     elif ptype == MSG_DEBUG:
@@ -77,34 +80,41 @@ def testDecrypt(packetizer):
         raise SSHException('Expecting packet from %r, got %d' % (_expected_packet, ptype))
       _expected_packet = tuple()
       if (ptype >= 30) and (ptype <= 39):
-        print "KEX Message, we need to rekey"
+        log.info("KEX Message, we need to rekey")
         continue
-  print 'Test descrypt Finished'  
+    #
+    print m,
+  log.info('Test descrypt Finished' )
 
 
 
 def activate_cipher(packetizer, context):
   "switch on newly negotiated encryption parameters for inbound traffic"
-  packetizer.set_log(log)
-  packetizer.set_hexdump(True)
+  #packetizer.set_log(log)
+  #packetizer.set_hexdump(True)
   
   engine = StatefulAESEngine(context)
-  print 'cipher:%s block_size: %d key_len: %d '%(context.name, context.block_size, context.key_len )
-  print engine, type(engine)
+  log.debug( 'cipher:%s block_size: %d key_len: %d '%(context.name, context.block_size, context.key_len ) )
+  #print engine, type(engine)
+
 
   mac = context.mac
   if mac is not None:
     mac_key    = mac.getKey()
     mac_engine = Transport._mac_info[mac.name.toString()]['class']
-  #print mac, mac_key, mac_engine
+    mac_len = mac.mac_len
+  # again , we need a stateful HMAC engine. 
+  # we disable HMAC checking to get around.
+
   # fix our engines in packetizer
-  packetizer.set_inbound_cipher(engine, context.block_size, mac_engine, mac.mac_len , mac_key)
-  '''  
-  compress_in = self._compression_info[self.remote_compression][1]
-  if (compress_in is not None) and ((self.remote_compression != 'zlib@openssh.com') or self.authenticated):
-      self._log(DEBUG, 'Switching on inbound compression ...')
-      self.packetizer.set_inbound_compressor(compress_in())
-  '''
+  packetizer.set_inbound_cipher(engine, context.block_size, mac_engine, mac_len , mac_key)
+  
+  if context.comp.enabled != 0:
+    name = context.comp.name.toString()
+    compress_in = Transport._compression_info[name][1]
+    log.debug('Switching on inbound compression ...')
+    packetizer.set_inbound_compressor(compress_in())
+  #ok
   return engine
   
 def decryptSSHTraffic(scapySocket,ciphers):
@@ -112,10 +122,14 @@ def decryptSSHTraffic(scapySocket,ciphers):
   # Inbound
   inbound = Packetizer(scapySocket.getInboundSocket())
   inEngine=activate_cipher(inbound, receiveCtx )
-  
+  # out bound
+  outbound = Packetizer(scapySocket.getOutboundSocket())
+  activate_cipher(outbound, sendCtx )
+
+  # thread inbound reads and writes  
   while True:
     try :
-      testDecrypt(inbound)
+      m=decrypt(inbound)
     except paramiko.SSHException,e:
       print 'Exception -> ',e
       #print inEngine.aes_key.toString()
@@ -123,9 +137,6 @@ def decryptSSHTraffic(scapySocket,ciphers):
   #testSimpleDecrypt(scapySocket.getInboundSocket(),inEngine)
   
   #return
-  # out bound
-  outbound = Packetizer(scapySocket.getOutboundSocket())
-  activate_cipher(outbound, sendCtx )
   return
 
 def launchScapyThread():
@@ -137,7 +148,6 @@ def launchScapyThread():
   sniffer = Thread(target=soscapy.run)
   soscapy.setThread(sniffer)
   sniffer.start()
-  log.info('Please make some ssh  traffic')
   return soscapy
 
 
@@ -177,7 +187,8 @@ class SessionCiphers():
     return self.receiveCtx, self.sendCtx
   
   def __str__(self):
-    return "<SessionCiphers RECEIVE: '%s' SEND: '%s' >"%(self.receiveCtx.name,self.sendCtx.name)
+    return "<SessionCiphers RECEIVE: '%s/%s' SEND: '%s/%s' >"%(self.receiveCtx.name,self.receiveCtx.mac.name.toString(),
+                                                  self.sendCtx.name,self.sendCtx.mac.name.toString() ) 
 
 
 
@@ -307,11 +318,13 @@ def usage(txt):
 
 
 def main(argv):
-  logging.basicConfig(level=logging.INFO)
+  logging.basicConfig(level=logging.ERROR)
   logging.getLogger('model').setLevel(logging.INFO)
   logging.getLogger('openssh.model').setLevel(logging.INFO)
   logging.getLogger('scapy').setLevel(logging.ERROR)
+  logging.getLogger('socket.scapy').setLevel(logging.INFO)
   logging.getLogger('root').setLevel(logging.WARNING)
+  logging.getLogger('sslnoop.openssh').setLevel(logging.INFO)
   if ( len(argv) < 1 ):
     usage(argv[0])
     return
@@ -333,6 +346,7 @@ def main(argv):
   soscapy=launchScapyThread()
   ciphers,addr=findActiveKeys(pid)
   # process is running... sniffer is listening
+  log.info('Please make some ssh  traffic')  
   decryptSSHTraffic(soscapy,ciphers)
   log.info("done for pid %d, struct at 0x%lx"%(pid,addr))
   sys.exit(0)

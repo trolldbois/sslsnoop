@@ -98,7 +98,7 @@ class socket_scapy():
       else:
         log.error('the packet is neither inbound nor outbound. You messed up your filter and callbacks.')
     else:
-      log.info("empty payload isInbound %s"%self.__is_inboundPacket(packet))
+      log.debug("empty payload isInbound %s"%self.__is_inboundPacket(packet))
     return None
     
   def setThread(self,thread):
@@ -107,7 +107,7 @@ class socket_scapy():
     return 
   
   def addInboundPacket(self,payload):
-    log.info("add inbound")
+    log.debug("add inbound")
     self._inbound_cnt+=self.addPacket(payload,self._inbound_writeso)
     #log.debug("\n%s"%hexify(payload))
     #log.debug( (''.join(util.format_binary(payload, '\n '))).lower() )
@@ -118,7 +118,6 @@ class socket_scapy():
     return 
     
   def addPacket(self,payload,so):
-    #XXX is ntohl ?
     return so.send(payload)
   
   def __str__(self):
@@ -127,7 +126,6 @@ class socket_scapy():
 # if Linux use socket.socketpair()
 class pipe_socketpair(object):
   def __init__(self):
-    print 'USING socketpair'
     self.readfd,self.writefd=os.pipe()
     self.readso=socket.fromfd(self.readfd,socket.AF_UNIX,socket.SOCK_STREAM)
     self.writeso=socket.fromfd(self.writefd,socket.AF_UNIX,socket.SOCK_STREAM)

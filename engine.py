@@ -14,8 +14,9 @@ import ctypes, model, ctypes_openssh
 from ctypes import cdll
 from ctypes_openssh import AES_BLOCK_SIZE
 
+#our impl
+from paramiko_packet import Packetizer, NeedRekeyException
 
-from paramiko.packet import Packetizer, NeedRekeyException
 from paramiko.transport import Transport
 from paramiko import util
 from paramiko.util import Counter
@@ -58,7 +59,7 @@ class StatefulAESEngine(Engine):
     # we need nothing else
     self.key = self.aes_key_ctx.aes_ctx
     self._AES_ctr=libopenssl.AES_ctr128_encrypt
-    print 'cipher:%s block_size: %d key_len: %d '%(context.name, context.block_size, context.key_len)
+    log.debug('cipher:%s block_size: %d key_len: %d '%(context.name, context.block_size, context.key_len))
   
   def _decrypt(self,block, bLen):
     buf=(ctypes.c_ubyte*AES_BLOCK_SIZE)()
@@ -91,7 +92,7 @@ class MyStatefulAESEngine(Engine):
     # we need nothing else
     self.key = self.aes_key_ctx.aes_ctx
     self._AES_encrypt=libopenssl.AES_encrypt
-    print 'cipher:%s block_size: %d key_len: %d '%(context.name, context.block_size, context.key_len)
+    log.debug( 'cipher:%s block_size: %d key_len: %d '%(context.name, context.block_size, context.key_len))
   
   def _decrypt(self,block, bLen):
     dest=(ctypes.c_ubyte*bLen)()
