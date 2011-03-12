@@ -6,10 +6,12 @@
 
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
-import os,logging,sys
+import os,logging,sys,time
 #use volatility?
 
 import abouchet
+from openssl import OpenSSLStructFinder
+
 import ctypes, model, ctypes_openssh, ctypes_openssl
 from ctypes import cdll
 from ctypes_openssh import AES_BLOCK_SIZE
@@ -46,13 +48,14 @@ AGENT_STRUCTS=[ctypes_openssl.RSA, ctypes_openssl.DSA]
 
 
 class SessionStateFileWriter(FileWriter):
-  def __init__(self,folder='outputs'):
-    FileWriter.__init__(self,'session_state',time.time(),folder)
+  def __init__(self,pid,folder='outputs'):
+    FileWriter.__init__(self,'session_state',pid,folder)
   def writeToFile(self,instance):
-    log.info()
     prefix=self.prefix
     filename=self.get_valid_filename()
-    file(filename).write(instance.toString())
+    f=open(filename,"w")
+    f.write(instance.toString())
+    f.close()
     log.info ("[X] SSH session_state saved to file %s"%filename)
     return True
 
@@ -64,7 +67,7 @@ class CipherContext:
 
 class SessionCiphers():
   def __init__(self,session_state):
-    self.sessions_state=session_state
+    self.session_state=session_state
     # two ciphers    
     self.receiveCtx=CipherContext()
     self.sendCtx=CipherContext()
@@ -72,9 +75,9 @@ class SessionCiphers():
     MODE=0
     #for ctx in [self.sendCtx, self.receiveCtx ]:
     for ctx in [self.receiveCtx, self.sendCtx ]:
-      ctx.enc =  self.sessions_state.newkeys[MODE].contents.enc
-      ctx.mac =  self.sessions_state.newkeys[MODE].contents.mac
-      ctx.comp = self.sessions_state.newkeys[MODE].contents.comp
+      ctx.enc =  self.session_state.newkeys[MODE].contents.enc
+      ctx.mac =  self.session_state.newkeys[MODE].contents.mac
+      ctx.comp = self.session_state.newkeys[MODE].contents.comp
       ctx.sshCtx = session_state.receive_context
       ctx.sshCipher = ctx.sshCtx.cipher.contents
       ctx.evpCtx    = ctx.sshCtx.evp
@@ -123,6 +126,15 @@ class OpenSSHKeysFinder(StructFinder):
     log.info('Active state ciphers : %s at 0x%lx'%(ciphers,addr))
     #log.debug(ciphers.receiveCtx.app_data.toString())
     return ciphers,addr
+
+  def save(self, instance):
+    ssfw=SessionStateFileWriter(self.process.pid)
+    ssfw.writeToFile(instance)
+    return
+
+
+
+
 
 
 class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
@@ -258,11 +270,20 @@ def launchScapyThread():
 
 
 def parseSSHClient(pid,name):
-  pass
+  keysFinder=OpenSSHKeysFinder(pid)
+  ciphers,addr=keysFinder.findActiveKeys()
+  keysFinder.save(ciphers.session_state)
+  return 
+  
 def parseSSHServer(pid,name):
-  pass
+  keysFinder=OpenSSHKeysFinder(pid)
+  ciphers,addr=keysFinder.findActiveKeys()
+  keysFinder.save(ciphers.session_state)
+  return 
+  
 def parseSSHAgent(pid,name):
-  pass
+  keysFinder=OpenSSLStructFinder(pid)
+  return keysFinder.findAndSave()
 
 def usage(txt):
   log.error("Usage : %s <pid of ssh>"% txt)

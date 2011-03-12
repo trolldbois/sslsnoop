@@ -150,6 +150,16 @@ class OpenSSLStructFinder(StructFinder):
       'RSA': (ctypes_openssl.RSA, self.rsaw.writeToFile ),
       'DSA': (ctypes_openssl.DSA, self.dsaw.writeToFile )
       }
+  def findAndSave(self):
+    log.debug('look for RSA keys')
+    outs=self.find_struct(ctypes_openssl.RSA)
+    for rsa,addr in outs:
+      self.save(rsa)    
+    log.debug('look for DSA keys')
+    outs=self.find_struct(ctypes_openssl.DSA)
+    for dsa,addr in outs:
+      self.save(dsa)    
+    return
   #'BIGNUM':   'RSA': (ctypes_openssl.BIGNUM, )
   def save(self,instance):
     if type(instance) == ctypes_openssl.RSA:
@@ -189,14 +199,7 @@ def main(argv):
       finder.save(instance)    
     return
 
-  log.debug('look for RSA keys')
-  outs=finder.find_struct(ctypes_openssl.RSA)
-  for rsa,addr in outs:
-    finder.save(rsa)    
-  log.debug('look for DSA keys')
-  outs=finder.find_struct(ctypes_openssl.DSA)
-  for dsa,addr in outs:
-    finder.save(dsa)    
+  outs=finder.findAndSave()
         
   log.info("done for pid %d"%pid)
 

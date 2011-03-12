@@ -6,7 +6,11 @@
 
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
-import os,logging,psutil
+import os,logging,psutil,sys
+import openssh
+import ptrace
+
+log=logging.getLogger('finder')
 
 _targets={
     'ssh': openssh.parseSSHClient,
@@ -33,7 +37,7 @@ def pgrep(name):
 
 
 def usage(txt):
-  log.error("Usage : %s <pid of ssh>"% txt)
+  log.error("Usage : %s "% txt)
   sys.exit(-1)
 
 
@@ -41,9 +45,6 @@ def main(argv):
   logging.basicConfig(level=logging.INFO)
   #logging.getLogger('model').setLevel(logging.INFO)
 
-  if ( len(argv) != 1 ):
-    usage(argv[0])
-    return
 
   # we must have big privileges...
   if os.getuid() + os.geteuid() != 0:
@@ -53,8 +54,13 @@ def main(argv):
   options=buildTuples(_targets)
 
   for pid,name,func in options:
-    status=func(pid,name) 
-    lof.info(status)
+    try:
+      log.info("Searching in %s/%d memory"%(name,pid))
+      status=func(pid,name) 
+      log.info(status)
+    except ptrace.error.PtraceError,e:
+      log.warning("%s/%d not ptraceable"%(name,pid))
+      continue      
 
   sys.exit(0)
   return 0
