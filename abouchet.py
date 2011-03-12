@@ -9,10 +9,9 @@ __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 import os,logging,sys
 #use volatility?
 
-import ctypes_openssl,ctypes_openssh
-#from  model import DSA,RSA
+import ctypes_openssh
 import ctypes
-from ctypes import *
+#from ctypes import *
 from ptrace.ctypes_libc import libc
 
 # linux only
@@ -27,216 +26,116 @@ MAX_KEYS=255
 verbose = 0
 
 
-
-'''
-int extract_rsa_key(RSA *rsa, proc_t *p) {
-
-
-   switch ( RSA_check_key( rsa )) {
-     case 1 :
-       return 0;
-     case 0 :
-       if (verbose > 1)
-         fprintf(stderr, "warn: invalid RSA key found.\n");
-       break;
-     case -1 :
-       if (verbose > 1)
-         fprintf(stderr, "warn: unable to check key.\n");
-       break;
-   }
-'''
-
-'''
-int extract_dsa_key( DSA * dsa, proc_t *p ) {
-
-  dsa->method_mont_p = NULL;
-  dsa->meth = NULL;
-  dsa->engine = NULL;
-
-  /* in DSA, we should have :
-   * pub_key = g^priv_key mod p
-   */
-  BIGNUM * res = BN_new();
-  if ( res == NULL )
-    err(p, "failed to allocate result BN");
-
-  BN_CTX * ctx = BN_CTX_new();
-  if ( ctx == NULL ) {
-    fprintf(stderr, "[-] error allocating BN_CTX ctx\n");
-    goto free_res;
-  }
-  /* a ^ p % m
-    int BN_mod_exp(BIGNUM *r, BIGNUM *a, const BIGNUM *p,
-    const BIGNUM *m, BN_CTX *ctx);
-    */
-  error = BN_mod_exp(res, dsa->g, dsa->priv_key, dsa->p, ctx);
-  if ( error == 0 ) {
-    if (verbose > 0)
-      fprintf(stderr, "warn: failed to check DSA key.\n");
-    goto free_ctx;
-  }
-  if ( BN_cmp(res, dsa->pub_key) != 0 ) {
-    if (verbose > 0)
-      fprintf(stderr, "warn: invalid DSA key.\n");
-    goto free_ctx;
-  }
-  BN_clear_free(res);
-  BN_CTX_free(ctx);
-
-  fprintf(stderr, "[X] Valid DSA key found.\n");
-
-  return 0;
-
-'''
-
-
-
-
-
-def get_valid_filename(prefix):
-  filename_FMT="%s-%d.key"
-  for i in range(1,MAX_KEYS):
-    filename=filename_FMT%(prefix,i)
-    if not os.access(filename,os.F_OK):
-      return filename
-  #
-  log.error("Too many file keys extracted in current directory")
-  return None
-
 class FileWriter:
-  def __init__(self,prefix):
+  def __init__(self,prefix,suffix,folder):
     self.prefix=prefix
+    self.suffix=suffix
+    self.folder=folder
+  def get_valid_filename(self):
+    filename_FMT="%s-%d.%s"
+    for i in range(1,MAX_KEYS):
+      filename=filename_FMT%(self.prefix,i,self.suffix)
+      afilename=os.path.normpath(os.path.sep.join([self.folder,filename]))
+      if not os.access(afilename,os.F_OK):
+        return afilename
+    #
+    log.error("Too many file keys extracted in %s directory"%(self.folder))
+    return None    
   def writeToFile(self,instance):
     raise NotImplementedError
 
-class RSAFileWriter(FileWriter):
-  def __init__(self):
-    self.prefix='id_rsa'
-  def writeToFile(self,instance):
-    write_rsa_key(instance,self.prefix)
-class DSAFileWriter(FileWriter):
-  def __init__(self):
-    self.prefix='id_dsa'
-  def writeToFile(self,instance):
-    write_dsa_key(instance,self.prefix)
-    
-
-def write_rsa_key(rsa,prefix):
-  '''
-  PEM_write_RSAPrivateKey(f, rsa_p, None, None, 0, None, None)
-  PEM_write_RSAPrivateKey(fp,x, [enc,kstr,klen,cb,u]) 
-   -> PEM_ASN1_write((int (*)())i2d_RSAPrivateKey,PEM_STRING_RSA,fp, (char *)x, [enc,kstr,klen,cb,u])
-  int PEM_ASN1_write(i2d_of_void *i2d, const char *name, FILE *fp, char *x, [const EVP_CIPHER *, unsigned char *kstr,int , pem_password_cb *, void *])
-   -> PEM_ASN1_write_bio(i2d, name, b, x  [,enc,kstr,klen,callback,u] );
-  int PEM_ASN1_write_bio(i2d_of_void *i2d, const char *name, BIO *bp, char *x ,  [..]
-   -> i2d_RSAPrivateKey( sur x )
-    -> ASN1_item_i2d_bio(ASN1_ITEM_rptr(RSAPrivateKey), bp, rsa);
-     -> i=BIO_write(out,&(b[j]),n);
-   -> i=PEM_write_bio(bp,name,buf,data,i);
-   
-  en gros, c'est ctypes_openssl.RSA().writeASN1(file)
-  '''
-  filename=get_valid_filename(prefix)
-  ssl=cdll.LoadLibrary("libssl.so")
-  f=libc.fopen(filename,"w")  
-  ret=ssl.PEM_write_RSAPrivateKey(f, ctypes.byref(rsa), None, None, 0, None, None)
-  libc.fclose(f)
-  if ret < 1:
-    log.error("Error saving key to file %s"% filename)
-    return False
-  log.info ("[X] Key saved to file %s"%filename)
-  return True
-
-def write_dsa_key(dsa,prefix):
-  filename=get_valid_filename(prefix)
-  ssl=cdll.LoadLibrary("libssl.so")
-  f=libc.fopen(filename,"w")
-  ret=ssl.PEM_write_DSAPrivateKey(f, ctypes.byref(dsa), None, None, 0, None, None)
-  if ret < 1:
-    log.error("Error saving key to file %s"% filename)
-    return False
-  log.info ("[X] Key saved to file %s"%filename)
-  return True
-  
 
 
-def find_struct(process, memoryMap, struct, hintOffset=None, maxNum=10, maxDepth=99 ):
-  '''
-    Looks for struct in memory, using :
-      hints from struct (default values, and such)
-      guessing validation with instance(struct)().isValid()
-      and confirming with instance(struct)().loadMembers()
-    
-    returns POINTERS to struct.
-  '''
+class StructFinder:
+  ''' Generic tructure mapping '''
+  def __init__(self, pid, fullScan=False):
+    self.fullScan=fullScan
+    self.dbg = PtraceDebugger()
+    self.process = self.dbg.addProcess(pid,is_attached=False)
+    if self.process is None:
+      log.error("Error initializing Process debugging for %d"% pid)
+      raise IOError
+      # ptrace exception is raised before that
+    tmp = readProcessMappings(self.process)
+    self.mappings=[]
+    for i in range(0,len(tmp)):
+      if tmp[i].pathname == '[heap]':
+        self.mappings.append(tmp.pop(i))
+        break
+    self.mappings.extend(tmp)
 
-  # update process mappings
-  mappings= readProcessMappings(process)
-  log.debug("scanning 0x%lx --> 0x%lx %s"%(memoryMap.start,memoryMap.end,memoryMap.pathname) )
+  def find_struct(self, struct, hintOffset=None, maxNum=10, maxDepth=99 ):
+    if self.fullScan:
+      log.warning("Restricting search to heap.")
+    outputs=[]
+    for m in self.mappings:
+      ##debug, most structures are on head
+      if not self.fullScan and m.pathname != '[heap]':
+        continue
+      if not hasValidPermissions(m):
+        log.warning("Invalid permission for memory %s"%m)
+        continue
+      log.debug("%s,%s"%(m,m.permissions))
+      log.debug('look for %s'%(struct))
+      outputs.extend(self.find_struct_in( m, struct, maxNum))
+      # check out
+      if len(outputs) >= maxNum:
+        log.info('Found enough instance. returning results.')
+        break
+    # if we mmap, we could yield
+    return outputs
 
-  # where do we look  
-  start=memoryMap.start  
-  end=memoryMap.end
-  plen=ctypes.sizeof(ctypes.c_char_p) # use aligned words only
-  structlen=ctypes.sizeof(struct)
-  #ret vals
-  outputs=[]
-  # alignement
-  if hintOffset in memoryMap:
-    align=hintOffset%plen
-    start=hintOffset-plen
-   
-  # parse for struct on each aligned word
-  log.debug("checking 0x%lx-0x%lx by increment of %d"%(start, (end-structlen), plen))
-  instance=None
-  for offset in range(start, end-structlen, plen):
-    instance=struct.from_buffer_copy(process.readStruct(offset,struct))
+  def find_struct_in(self, memoryMap, struct, hintOffset=None, maxNum=10, maxDepth=99 ):
+    '''
+      Looks for struct in memory, using :
+        hints from struct (default values, and such)
+        guessing validation with instance(struct)().isValid()
+        and confirming with instance(struct)().loadMembers()
+      
+      returns POINTERS to struct.
+    '''
+
+    # update process mappings
+    log.debug("scanning 0x%lx --> 0x%lx %s"%(memoryMap.start,memoryMap.end,memoryMap.pathname) )
+
+    # where do we look  
+    start=memoryMap.start  
+    end=memoryMap.end
+    plen=ctypes.sizeof(ctypes.c_char_p) # use aligned words only
+    structlen=ctypes.sizeof(struct)
+    #ret vals
+    outputs=[]
+    # alignement
+    if hintOffset in memoryMap:
+      align=hintOffset%plen
+      start=hintOffset-plen
+     
+    # parse for struct on each aligned word
+    log.debug("checking 0x%lx-0x%lx by increment of %d"%(start, (end-structlen), plen))
+    instance=None
+    for offset in range(start, end-structlen, plen):
+      instance,validated=self.loadAt( offset, struct, maxDepth)
+      if validated:
+        log.debug( "found instance @ 0x%lx"%(offset) )
+        # do stuff with it.
+        outputs.append( (instance,offset) )
+      if len(outputs) >= maxNum:
+        log.info('Found enough instance. returning results.')
+        break
+    return outputs
+
+  def loadAt(self, offset, struct, depth=99 ):
+    log.debug("Loading %s from 0x%lx "%(struct,offset))
+    instance=struct.from_buffer_copy(self.process.readStruct(offset,struct))
     # check if data matches
-    if ( instance.loadMembers(process, mappings, maxDepth) ):
-      log.info( "found instance @ 0x%lx"%(offset) )
+    if ( instance.loadMembers(self.process, self.mappings, depth) ):
+      log.info( "found instance %s @ 0x%lx"%(struct,offset) )
       # do stuff with it.
-      outputs.append( (instance,offset) )
-    if len(outputs) >= maxNum:
-      log.info('Found enough instance. returning results.')
-      break
-  return outputs
-
-def try_to_map(process,mappings,struct,offset):
-  ''' '''
-  return None
-
-
-
-def loadAt(offset, struct, process, depth ):
-  log.info("Loading %s from 0x%lx "%(struct,offset))
-  instance=struct.from_buffer_copy(process.readStruct(offset,struct))
-  #logging.getLogger('model').setLevel(logging.DEBUG)
-  #logging.getLogger('model.openssl').setLevel(logging.DEBUG)
-  #logging.getLogger('model.openssh').setLevel(logging.DEBUG)
-  # check if data matches
-  mappings=readProcessMappings(process)
-  if ( instance.loadMembers(process, mappings, depth) ):
-    log.info( "found instance @ 0x%lx"%(offset) )
-    # do stuff with it.
-  else:
-    log.info("Address not validated")
-  return instance
-
-def forceAt(offset, struct, process ):
-  #instance = loadAt( offset, struct, process, 99 )
-  #remappedOffset=ctypes.addressof(instance)
-  #addrEvpCtx=ctypes.addressof(instance.receive_context.evp.cipher)
-  ## OK, address matches... with maxDepth = 1
-  #print "EVP_CIPHER_CTX: 0x%lx"%(offset + (addrEvpCtx-remappedOffset))# first member of EVP
-  #print "app_data: 0x%lx"%ctypes.addressof(instance.receive_context.evp.app_data.contents) #
-  # reload
-  instance = loadAt( offset, struct, process, 99 )
-  ## with more depth
-  app_data=instance.receive_context.getEvpAppData()
-  print "counter:", repr(app_data.getCounter())
-  #print instance
-  return
-
+      validated=True
+    else:
+      log.debug("Address not validated")
+      validated=False
+    return instance,validated
 
 def hasValidPermissions(memmap):
   ''' memmap must be 'rw..' or shared '...s' '''
@@ -264,23 +163,18 @@ def main(argv):
   pid = int(argv[0])
   log.error("Target has pid %d"%pid)
 
-  dbg=PtraceDebugger()
-  process=dbg.addProcess(pid,is_attached=False)
-  if process is None:
-    log.error("Error initializing Process debugging for %d"% pid)
-    return
-  # It's not possible to not block it ... maybe smarter ?
-  #process.cont()
-  
+  finder = StructFinder(pid)
+
   #### force offset
   if len(argv) == 2:
     addr=int(argv[1],16)
-    forceAt(addr,ctypes_openssh.session_state, process)
+    instance,validated = finder.loadAt(addr, ctypes_openssh.session_state)
+    print instance
     return
   
   if (False):
     #When we have args ...
-    stack=process.findStack()
+    stack=finder.process.findStack()
     # if ( dbg_get_memory(&p) )
     # check memory access ?
     ## check args -a and -to
@@ -296,51 +190,28 @@ def main(argv):
   #cache it .. yeah... sometime
   #if (dbg_map_cache(map) < 0)
   ### t-t-t-t, search in all MemoryMap
-  mappings= readProcessMappings(process)
-  rsaw=RSAFileWriter()
-  dsaw=DSAFileWriter()
-  for m in mappings:
-    ##debug, rsa is on head
-    if m.pathname != '[heap]':
-      continue
-    if not hasValidPermissions(m):
-      continue
-    
-    print m,m.permissions
-    ## method generic
-    '''    
-    print 'look for RSA'
-    outs=find_struct(process, m, ctypes_openssl.RSA)
-    for rsa in outs:
-      rsaw.writeToFile(rsa)
-    print 'look for DSA'
-    outs=find_struct(process, m, ctypes_openssl.DSA)
-    for dsa in outs:
-      dsaw.writeToFile(dsa)
-    '''
-    print 'look for session_state'
-    outs=find_struct(process, m, ctypes_openssh.session_state, maxNum=3)
-    for ss, addr in outs:
-      #print ss.toString()
-      #print '---------'
-      #print 'Cipher name : ', ss.receive_context.cipher.contents.name
-      #print ss.receive_context.evp
-      #print 'Cipher name : ', ss.send_context.cipher.contents.name
-      #print ss.send_context.evp
-      #print 'receive context Cipher : ', ss.receive_context.cipher.contents
-      #print 'send context    Cipher : ', ss.send_context.cipher.contents
-      app_data=ss.receive_context.getEvpAppData()
-      print '"aes_counter" : "'+','.join(["0x%lx"%(val) for val in app_data.aes_counter ])+'"\n'
-      #print 'receive context Cipher app_data: ', app_data.toString()
-      (rd_key,rounds)=ss.receive_context.getEvpAppData().getCtx()
-      #print 'rounds', rounds
-      #print 'send context    Cipher app_data: ', ctypes_openssh.getEvpAppData(ss.send_context).toString()
-      #print ss.newkeys[0].contents.toString()
-      pass
+  outs=finder.find_struct( ctypes_openssh.session_state, maxNum=1)
+  for ss, addr in outs:
+    #print ss.toString()
+    #print '---------'
+    #print 'Cipher name : ', ss.receive_context.cipher.contents.name
+    #print ss.receive_context.evp
+    #print 'Cipher name : ', ss.send_context.cipher.contents.name
+    #print ss.send_context.evp
+    #print 'receive context Cipher : ', ss.receive_context.cipher.contents
+    #print 'send context    Cipher : ', ss.send_context.cipher.contents
+    app_data=ss.receive_context.getEvpAppData()
+    print '"aes_counter" : "'+','.join(["0x%lx"%(val) for val in app_data.aes_counter ])+'"\n'
+    #print 'receive context Cipher app_data: ', app_data.toString()
+    (rd_key,rounds)=ss.receive_context.getEvpAppData().getCtx()
+    #print 'rounds', rounds
+    #print 'send context    Cipher app_data: ', ctypes_openssh.getEvpAppData(ss.send_context).toString()
+    #print ss.newkeys[0].contents.toString()
+    pass
       
   log.info("done for pid %d"%pid)
 
-  return -1
+  return 0
 
 
 if __name__ == "__main__":

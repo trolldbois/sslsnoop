@@ -84,7 +84,7 @@ class BIGNUM(OpenSSLStruct):
     #ulong_array= (ctypes.c_ulong * self.top)    
     '''
     if not self.isValid(mappings):
-      log.error('BigNUm tries to load members when its not validated')
+      log.debug('BigNUm tries to load members when its not validated')
       return False
     if True:
       # Load and memcopy d / BN_ULONG *

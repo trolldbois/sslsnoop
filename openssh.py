@@ -10,7 +10,7 @@ import os,logging,sys
 #use volatility?
 
 import abouchet
-import ctypes, model, ctypes_openssh
+import ctypes, model, ctypes_openssh, ctypes_openssl
 from ctypes import cdll
 from ctypes_openssh import AES_BLOCK_SIZE
 from engine import StatefulAESEngine,MyStatefulAESEngine
@@ -36,23 +36,15 @@ from threading import Thread
 
 log=logging.getLogger('sslsnoop.openssh')
 
+from abouchet import FileWriter,StructFinder
 
 
-def testSimpleDecrypt(readso,engine_in):
-  block = readso.recv(16)
-  print hexify(block)
-  header = engine_in.decrypt(block)
-  print 'First 4 char  data=',repr(header[:4])
-  print 'p_size %d or %d'%(struct.unpack('>I', header[:4])[0], struct.unpack('<I', header[:4])[0])
-  #print 'p_size %d or %d'%(struct.unpack('>I', header[:4])[3], struct.unpack('<I', header[:4])[3])
-  packet_size = struct.unpack('>I', header[:4])[0]
-  # leftover contains decrypted bytes from the first block (after the length field)
-  leftover = header[4:]
-  print 'packet_size=%d \nleftoverlen=%d'%(packet_size,len(leftover))
-  if (packet_size - len(leftover)) % 16 != 0:
-    print "SSHException('Invalid packet blocking')"
-  print 'Test descrypt Finished\n\n\n'  
-  return
+CLIENT_STRUCTS=[ctypes_openssh.session_state]
+SERVER_STRUCTS=[ctypes_openssh.session_state]
+AGENT_STRUCTS=[ctypes_openssl.RSA, ctypes_openssl.DSA]
+
+
+
 
 
 def decrypt(packetizer):
@@ -237,6 +229,82 @@ def findActiveKeys(pid):
   return ciphers,addr
 
 
+class SessionStateFileWriter(FileWriter):
+  def __init__(self,folder='outputs'):
+    FileWriter.__init__(self,'session_state',time.time(),folder)
+  def writeToFile(self,instance):
+    log.info()
+    prefix=self.prefix
+    filename=self.get_valid_filename()
+    file(filename).write(instance.toString())
+    log.info ("[X] SSH session_state saved to file %s"%filename)
+    return True
+
+
+#print ss.toString()
+#print '---------'
+#print 'Cipher name : ', ss.receive_context.cipher.contents.name
+#print ss.receive_context.evp
+#print 'Cipher name : ', ss.send_context.cipher.contents.name
+#print ss.send_context.evp
+#print 'receive context Cipher : ', ss.receive_context.cipher.contents
+#print 'send context    Cipher : ', ss.send_context.cipher.contents
+
+
+def parseSSHClient(pid,name):
+  pass
+def parseSSHServer(pid,name):
+  pass
+def parseSSHAgent(pid,name):
+  pass
+
+def usage(txt):
+  log.error("Usage : %s <pid of ssh>"% txt)
+  sys.exit(-1)
+
+
+def main(argv):
+  logging.basicConfig(level=logging.INFO)
+  logging.getLogger('model').setLevel(logging.INFO)
+  logging.getLogger('openssh.model').setLevel(logging.INFO)
+  logging.getLogger('scapy').setLevel(logging.ERROR)
+  logging.getLogger('socket.scapy').setLevel(logging.INFO)
+  logging.getLogger('root').setLevel(logging.WARNING)
+  logging.getLogger('sslnoop.openssh').setLevel(logging.INFO)
+  if ( len(argv) < 1 ):
+    usage(argv[0])
+    return
+
+  # we must have big privileges...
+  if os.getuid() + os.geteuid() != 0:
+    log.error("You must be root/using sudo to read memory and sniff traffic.")
+    return
+    
+  # use optarg on v, a and to
+  pid = int(argv[0])
+  log.info("Target has pid %d"%pid)
+
+  #logging.getLogger('model').setLevel(logging.INFO)
+  ###engine,key=openssh.test(16634)
+  #engine,key=testEncDec(pid)
+  #return 0
+  
+  soscapy=launchScapyThread()
+  ciphers,addr=findActiveKeys(pid)
+  # process is running... sniffer is listening
+  log.info('Please make some ssh  traffic')  
+  decryptSSHTraffic(soscapy,ciphers)
+  log.info("done for pid %d, struct at 0x%lx"%(pid,addr))
+  sys.exit(0)
+  return -1
+
+
+if __name__ == "__main__":
+  main(sys.argv[1:])
+
+
+
+
 def testEncDec(pid):
   logging.basicConfig(level=logging.INFO)
   soscapy=launchScapyThread()
@@ -311,63 +379,21 @@ def test(pid):
   
   return engine,key
 
-
-def usage(txt):
-  log.error("Usage : %s <pid of ssh>"% txt)
-  sys.exit(-1)
-
-
-def main(argv):
-  logging.basicConfig(level=logging.INFO)
-  logging.getLogger('model').setLevel(logging.INFO)
-  logging.getLogger('openssh.model').setLevel(logging.INFO)
-  logging.getLogger('scapy').setLevel(logging.ERROR)
-  logging.getLogger('socket.scapy').setLevel(logging.INFO)
-  logging.getLogger('root').setLevel(logging.WARNING)
-  logging.getLogger('sslnoop.openssh').setLevel(logging.INFO)
-  if ( len(argv) < 1 ):
-    usage(argv[0])
-    return
-
-  # we must have big privileges...
-  if os.getuid() + os.geteuid() != 0:
-    log.error("You must be root/using sudo to read memory and sniff traffic.")
-    return
-    
-  # use optarg on v, a and to
-  pid = int(argv[0])
-  log.info("Target has pid %d"%pid)
-
-  #logging.getLogger('model').setLevel(logging.INFO)
-  ###engine,key=openssh.test(16634)
-  #engine,key=testEncDec(pid)
-  #return 0
   
-  soscapy=launchScapyThread()
-  ciphers,addr=findActiveKeys(pid)
-  # process is running... sniffer is listening
-  log.info('Please make some ssh  traffic')  
-  decryptSSHTraffic(soscapy,ciphers)
-  log.info("done for pid %d, struct at 0x%lx"%(pid,addr))
-  sys.exit(0)
-  return -1
 
-
-if __name__ == "__main__":
-  main(sys.argv[1:])
-
-
-'''  
-
-import openssh,logging
-logging.getLogger('model').setLevel(logging.INFO)
-##engine,key=openssh.test(16634)
-engine,key=openssh.testEncDec(16634)
-
-
-'''
-
-  
-  
-  
+def testSimpleDecrypt(readso,engine_in):
+  block = readso.recv(16)
+  print hexify(block)
+  header = engine_in.decrypt(block)
+  print 'First 4 char  data=',repr(header[:4])
+  print 'p_size %d or %d'%(struct.unpack('>I', header[:4])[0], struct.unpack('<I', header[:4])[0])
+  #print 'p_size %d or %d'%(struct.unpack('>I', header[:4])[3], struct.unpack('<I', header[:4])[3])
+  packet_size = struct.unpack('>I', header[:4])[0]
+  # leftover contains decrypted bytes from the first block (after the length field)
+  leftover = header[4:]
+  print 'packet_size=%d \nleftoverlen=%d'%(packet_size,len(leftover))
+  if (packet_size - len(leftover)) % 16 != 0:
+    print "SSHException('Invalid packet blocking')"
+  print 'Test descrypt Finished\n\n\n'  
+  return  
   
