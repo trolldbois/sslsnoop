@@ -9,8 +9,33 @@ use scapy, because it's fun ?
 
 use python.
 
-http://www.hsc.fr/ressources/outils/passe-partout/index.html.fr
 
+State:
+------
+somewhat works .
+
+  $ sudo python openssh.py `pgrep ssh`
+
+Outputs :
+
+WARNING: No route found for IPv6 destination :: (no default route?)
+INFO:sslsnoop.openssh:Target has pid 16697
+INFO:root:Attach process 16697
+INFO:root:Attach <PtraceProcess #16697> to debugger
+INFO:root:Set <PtraceProcess #16697> options to 1
+INFO:sslsnoop.openssh:looking for struct session_state
+INFO:abouchet:found instance @ 0xb8d32268
+INFO:root:Quit debugger
+INFO:sslsnoop.openssh:Active state ciphers : <SessionCiphers RECEIVE: 'aes128-ctr/hmac-md5' SEND: 'aes128-ctr/hmac-md5' > at 0xb8d32268
+INFO:sslsnoop.openssh:Please make some ssh  traffic
+u n a m e   - a v
+Linux ssh1.90.ha.ovh.net 2.6.32.7-mutu-grs-ipv4-32 #2 SMP Sat Feb 6 13:33:23 UTC 2010 i686 GNU/Linux
+
+poc done.
+It often doesn't work out and it surely doesn't work on output streams af of release c6e0011
+
+Biblio
+-------
 
 Bringing volatility to Linux
 http://dfsforensics.blogspot.com/2011/03/bringing-linux-support-to-volatility.html
