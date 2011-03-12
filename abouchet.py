@@ -65,7 +65,7 @@ class StructFinder:
     self.mappings.extend(tmp)
 
   def find_struct(self, struct, hintOffset=None, maxNum = 10, maxDepth=99 ):
-    if self.fullScan:
+    if not self.fullScan:
       log.warning("Restricting search to heap.")
     outputs=[]
     for m in self.mappings:
@@ -75,7 +75,10 @@ class StructFinder:
       if not hasValidPermissions(m):
         log.warning("Invalid permission for memory %s"%m)
         continue
-      log.debug("%s,%s"%(m,m.permissions))
+      if self.fullScan:
+        log.info("Looking at %s"%(m))
+      else:
+        log.debug("%s,%s"%(m,m.permissions))
       log.debug('look for %s'%(struct))
       outputs.extend(self.find_struct_in( m, struct, maxNum))
       # check out

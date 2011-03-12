@@ -280,7 +280,6 @@ class LoadableMembers(ctypes.Structure):
           return True
       if ( not is_valid_address_value( myaddress, mappings) ) :
         log.debug('%s %s %s 0x%lx INVALID'%(attrname,attrtype, repr(attr) ,myaddress))
-        print 'CString %s is INVALID 0x%lx'%(attrname,myaddress)
         return False
       log.debug('%s %s %s is at 0x%lx OK'%(attrname,attrtype,repr(attr),myaddress ))
       return True

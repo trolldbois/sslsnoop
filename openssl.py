@@ -145,7 +145,7 @@ class OpenSSLStructFinder(StructFinder):
   rsaw=RSAFileWriter()
   dsaw=DSAFileWriter()  
   def __init__(self,pid, fullScan=False):
-    StructFinder.__init__(self,pid, fullScan=False)
+    StructFinder.__init__(self,pid, fullScan=fullScan)
     self.OPENSSL_STRUCTS={     # name, ( struct, callback)
       'RSA': (ctypes_openssl.RSA, self.rsaw.writeToFile ),
       'DSA': (ctypes_openssl.DSA, self.dsaw.writeToFile )
@@ -175,7 +175,7 @@ def main(argv):
   pid = int(argv[0])
   log.info("Target has pid %d"%pid)
 
-  finder = OpenSSLStructFinder(pid, fullScan=False )
+  finder = OpenSSLStructFinder(pid, fullScan=True )
   
   addr=None  
   #### force offset
