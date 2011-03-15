@@ -189,13 +189,15 @@ class Enc(OpenSSHStruct):
     for field,typ in self._fields_:
       attr=getattr(self,field)
       if field == 'key':
-        s+=prefix+'"%s": %s\n'%(field, self.getKey() )  
+        #s+=prefix+'"%s": %s\n'%(field, self.getKey() )  
+        s+=self._attrToString(self.getKey(),field,typ,prefix)
       elif field == 'iv':
-        s+=prefix+'"%s": %s\n'%(field, self.getIV() )  
+        #s+=prefix+'"%s": %s\n'%(field, self.getIV() )  
+        s+=self._attrToString(self.getIV(),field,typ,prefix)
       else:
-        s+=self._attrToString(s,attr,field,typ,prefix)
+        s+=self._attrToString(attr,field,typ,prefix)
     return s
-
+  
 class nh_ctx(OpenSSHStruct):
   ''' umac.c:323 '''
   _fields_ = [
@@ -266,9 +268,10 @@ class Mac(OpenSSHStruct):
     for field,typ in self._fields_:
       attr=getattr(self,field)
       if field == 'key':
-        s+=prefix+'"%s": %s\n'%(field, self.getKey() )  
+        #s+=prefix+'"%s": %s\n'%(field, self.getKey() )  
+        s+=self._attrToString(self.getKey(),field,typ,prefix)
       else:
-        s+=self._attrToString(s,attr,field,typ,prefix)
+        s+=self._attrToString(attr,field,typ,prefix)
     return s
 
 class Comp(OpenSSHStruct):

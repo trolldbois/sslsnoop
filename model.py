@@ -434,20 +434,27 @@ class LoadableMembers(ctypes.Structure):
     s="%s # %s\n"%(prefix,repr(self) )
     for field,typ in self._fields_:
       attr=getattr(self,field)
-      s+=self._attrToString(s,attr,field,typ,prefix)
+      s+=self._attrToString(attr,field,typ,prefix)
     return s
     
-  def _attrToString(self,s,attr,field,typ,prefix):
+  def _attrToString(self,attr,field,typ,prefix):
+    s=''
     if isStructType(attr):
       s=prefix+'"%s": {\t%s%s},\n'%(field, attr.toString(prefix+'\t'),prefix )  
     #elif isBasicTypeArrayType(attr):
     #  #s=prefix+'"%s": %s,\n'%(field, array2bytes(attr) )  
     #  s='['+','.join(["%lx"%(val) for val in attr ])
     elif isBasicTypeArrayType(attr): ## array of something else than int
-      s=prefix+'"%s": "%s"\n'%(field, repr(array2bytes(attr)) )  
+      s=prefix+'"%s": b%s,\n'%(field, repr(array2bytes(attr)) )  
       #s=prefix+'"%s" :['%(field)+','.join(["0x%lx"%(val) for val in attr ])+'],\n'
     elif isArrayType(attr): ## array of something else than int/byte
-      s=prefix+'"%s" :['%(field)+','.join(["%s"%(val) for val in attr ])+'],\n'
+      # go through each elements, we hardly can make a array out of that...
+      s=prefix+'"%s" :{'%(field)
+      typ=type(attr[0])
+      for i in range(0,len(attr)):
+        s+=self._attrToString( attr[i], i, typ, '')
+      s+='},\n'
+      #s=prefix+'"%s" :['%(field)+','.join(["%s"%(val) for val in attr ])+'],\n'
     elif isPointerType(attr):
       if not bool(attr) :
         s=prefix+'"%s": 0x%lx,\n'%(field, getaddress(attr) )   # only print address/null
@@ -463,7 +470,7 @@ class LoadableMembers(ctypes.Structure):
     elif isCStringPointer(attr):
       s=prefix+'"%s": "%s" , #(CString) \n'%(field, attr.string)  
     else:
-      s=prefix+'"%s": %s,\n'%(field, repr(attr) )  
+      s=prefix+'"%s": %s, # DEFAULT toString\n'%(field, repr(attr) )  
     return s
 
   def __str__(self):
