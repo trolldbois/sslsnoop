@@ -193,8 +193,18 @@ def refresh(args):
 
   finder = StructFinder(pid)  
   instance,validated = finder.loadAt(addr, structType)
-  print instance.toString()
+  print '{ ', instance.toString(),'}'
   return
+
+def test():
+  import subprocess
+  cmd_line=['python', 'abouchet.py', 'refresh', '2442', 'ctypes_openssh.session_state', '0xb822a268']
+  p = subprocess.Popen(cmd_line, stdin=None, stdout=subprocess.PIPE, close_fds=True )
+  p.wait()
+  instance=p.stdout.read()
+  instance=eval(instance)
+  return instance
+
 
 def main(argv):
   logging.basicConfig(level=logging.INFO)
