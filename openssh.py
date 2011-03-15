@@ -11,6 +11,7 @@ import os,logging,sys,time
 
 import abouchet
 from openssl import OpenSSLStructFinder
+import output
 
 import ctypes, model, ctypes_openssh, ctypes_openssl
 from ctypes import cdll
@@ -116,10 +117,21 @@ class OpenSSHKeysFinder(StructFinder):
     #
     session_state,addr=outs[0]
     return session_state,addr
-    
-  def findActiveKeys(self, maxNum=1):
+
+  def refreshActiveSession(self, offset):
     ''' '''
-    session_state,addr=self.findActiveSession(maxNum)
+    instance,validated=self.loadAt(offset, ctypes_openssh.session_state)
+    if not validated:
+      log.error("The session_state has not been re-validated. You should look for it again.")
+      return None,None
+    return instance,offset
+    
+  def findActiveKeys(self, maxNum=1, offset=None):
+    ''' '''
+    if offset is None:
+      session_state,addr=self.findActiveSession(maxNum)
+    else:
+      session_state,addr=self.refreshActiveSession(offset)
     if session_state is None:
       return None # raise Exception ... 
     ciphers=SessionCiphers(session_state)
@@ -139,11 +151,15 @@ class OpenSSHKeysFinder(StructFinder):
 
 class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
   ''' Decrypt SSH traffic in live '''
-  def __init__(self, pid, scapySocketThread = None, fullScan=False, maxNum=1):
+  def __init__(self, pid, sessionStateAddr=None, scapySocketThread = None, fullScan=False, maxNum=1):
     OpenSSHKeysFinder. __init__(self, pid, fullScan=fullScan)
     self.soscapy=scapySocketThread
     self.maxNum = maxNum
+    self.session_state_addr=sessionStateAddr
+    self.inbound=dict()
+    self.outbound=dict()
     return
+  
   def run(self):
     ''' launch sniffer and decrypter threads '''
     if self.soscapy is None:
@@ -151,79 +167,52 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     elif not self.soscapy.isAlive():
       self.soscapy.start()
     # ptrace ssh
-    self.ciphers,self.session_state_addr=self.findActiveKeys(maxNum = self.maxNum)
+    if self.session_state_addr is None:
+      self.ciphers,self.session_state_addr=self.findActiveKeys(maxNum = self.maxNum)
+    else:
+      self.ciphers,self.session_state_addr=self.findActiveKeys(offset=self.session_state_addr)
     # unstop() the process
     self.process.cont()
     # process is running... sniffer is listening
     log.info('Please make some ssh  traffic')  
-    self.decryptSSHTraffic(self.soscapy,self.ciphers)
+    self.init()
+    self.loop()
     log.info("done for pid %d, struct at 0x%lx"%(self.process.pid, self.session_state_addr))
     return
     
-  def decryptSSHTraffic(self, scapySocket,ciphers):
-    receiveCtx,sendCtx = ciphers.getCiphers()
+  def init(self):
+    ''' plug sockets, packetizer and outputs together '''
+    receiveCtx,sendCtx = self.ciphers.getCiphers()
     # Inbound
-    inbound = Packetizer(scapySocket.getInboundSocket())
-    inEngine=self.activate_cipher(inbound, receiveCtx )
+    self.inbound['context'] = receiveCtx
+    self.inbound['socket'] = self.soscapy.getInboundSocket()
+    self.inbound['packetizer'] = Packetizer(self.inbound['socket'])
+    self.inbound['engine'] = self.activate_cipher(self.inbound['packetizer'], receiveCtx )
+    self.inbound['filewriter'] =  output.SSHStreamToFile(self.inbound['packetizer'], 'ssh')
+    
     # out bound
-    outbound = Packetizer(scapySocket.getOutboundSocket())
-    self.activate_cipher(outbound, sendCtx )
+    self.outbound['context'] = sendCtx
+    self.outbound['socket'] = self.soscapy.getOutboundSocket()
+    self.outbound['packetizer'] = Packetizer(self.outbound['socket'])
+    self.outbound['engine'] = self.activate_cipher(self.outbound['packetizer'], self.outbound['context'] )
+    self.outbound['filewriter'] =  output.SSHStreamToFile(self.outbound['packetizer'], 'ssh')
 
-    # thread inbound reads and writes  
-    while True:
-      try :
-        m=self.decrypt(inbound)
-      except paramiko.SSHException,e:
-        print 'Exception -> ',e
-        #print inEngine.aes_key.toString()
-    
-    #testSimpleDecrypt(scapySocket.getInboundSocket(),inEngine)
-    
-    #return
+    self.worker = output.Supervisor()
+    self.worker.add( self.inbound['socket'], self.inbound['filewriter'].process )
+    #self.worker.add(self.outbound['socket'], self.outbound['filewriter'].process )
     return
-
-  def decrypt(self, packetizer):
-    _expected_packet = tuple()
-    while ( True ):
-      try:
-        ptype, m = packetizer.read_message()
-      except NeedRekeyException:
-        continue
-      if ptype == MSG_IGNORE:
-        continue
-      elif ptype == MSG_DISCONNECT:
-        log.info( "DISCONNECT MESSAGE")
-        log.info( m)
-        packetizer.close()
-        break
-      elif ptype == MSG_DEBUG:
-        always_display = m.get_boolean()
-        msg = m.get_string()
-        lang = m.get_string()
-        log.debug('Debug msg: ' + util.safe_string(msg))
-        continue
-      if len(_expected_packet) > 0:
-        if ptype not in _expected_packet:
-          raise SSHException('Expecting packet from %r, got %d' % (_expected_packet, ptype))
-        _expected_packet = tuple()
-        if (ptype >= 30) and (ptype <= 39):
-          log.info("KEX Message, we need to rekey")
-          continue
-      #
-      print m,
-    log.info('Test descrypt Finished' )
+    
+  def loop(self):
+    self.worker.run()
     return
 
   def activate_cipher(self, packetizer, context):
     "switch on newly negotiated encryption parameters for inbound traffic"
     #packetizer.set_log(log)
-    #packetizer.set_hexdump(True)
-    
+    #packetizer.set_hexdump(True)    
     engine = StatefulAESEngine(context)
     log.debug( 'cipher:%s block_size: %d key_len: %d '%(context.name, context.block_size, context.key_len ) )
     #print engine, type(engine)
-
-
     mac = context.mac
     if mac is not None:
       mac_key    = mac.getKey()
@@ -231,10 +220,8 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
       mac_len = mac.mac_len
     # again , we need a stateful HMAC engine. 
     # we disable HMAC checking to get around.
-
     # fix our engines in packetizer
     packetizer.set_inbound_cipher(engine, context.block_size, mac_engine, mac_len , mac_key)
-    
     if context.comp.enabled != 0:
       name = context.comp.name.toString()
       compress_in = Transport._compression_info[name][1]
@@ -296,8 +283,8 @@ def main(argv):
   logging.getLogger('openssh.model').setLevel(logging.INFO)
   logging.getLogger('scapy').setLevel(logging.ERROR)
   logging.getLogger('socket.scapy').setLevel(logging.INFO)
-  logging.getLogger('root').setLevel(logging.WARNING)
-  logging.getLogger('sslnoop.openssh').setLevel(logging.INFO)
+  logging.getLogger('root').setLevel(logging.DEBUG)
+  logging.getLogger('sslnoop.openssh').setLevel(logging.DEBUG)
   if ( len(argv) < 1 ):
     usage(argv[0])
     return
@@ -311,7 +298,12 @@ def main(argv):
   pid = int(argv[0])
   log.info("Target has pid %d"%pid)
 
-  decryptatator=OpenSSHLiveDecryptatator(pid)
+  sessionStateAddr=None
+  if ( len(argv) == 2 ):
+    sessionStateAddr = int(argv[1],16)
+  
+
+  decryptatator=OpenSSHLiveDecryptatator(pid, sessionStateAddr)
 
   #logging.getLogger('model').setLevel(logging.INFO)
   ###engine,key=openssh.test(16634)
@@ -319,13 +311,19 @@ def main(argv):
   #return 0
   
   decryptatator.run()
-  log.info("done for pid %d, struct at 0x%lx"%(pid,addr))
+  log.info("done for pid %d, struct at 0x%lx"%(pid,decryptatator.session_state_addr))
   sys.exit(0)
   return -1
 
 
 if __name__ == "__main__":
   main(sys.argv[1:])
+
+#logging.basicConfig(level=logging.INFO)
+
+#pid=31833
+#addr=0xb904b268
+#dec=OpenSSHLiveDecryptatator(pid,sessionStateAddr=addr)
 
 
 
