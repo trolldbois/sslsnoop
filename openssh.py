@@ -40,6 +40,7 @@ from threading import Thread
 log=logging.getLogger('sslsnoop.openssh')
 
 from abouchet import FileWriter,StructFinder
+import argparse
 
 
 CLIENT_STRUCTS=[ctypes_openssh.session_state]
@@ -63,23 +64,25 @@ class SessionStateFileWriter(FileWriter):
 
 
 
-class CipherContext:
+class DumbCipherContext:
   pass
 
 class SessionCiphers():
   def __init__(self,session_state):
     self.session_state=session_state
     # two ciphers    
-    self.receiveCtx=CipherContext()
-    self.sendCtx=CipherContext()
+    self.receiveCtx=DumbCipherContext()
+    self.sendCtx=DumbCipherContext()
     # read cipher MODE_IN == 0
     MODE=0
-    #for ctx in [self.sendCtx, self.receiveCtx ]:
     for ctx in [self.receiveCtx, self.sendCtx ]:
       ctx.enc =  self.session_state.newkeys[MODE].contents.enc
       ctx.mac =  self.session_state.newkeys[MODE].contents.mac
       ctx.comp = self.session_state.newkeys[MODE].contents.comp
-      ctx.sshCtx = session_state.receive_context
+      if MODE == 0:
+        ctx.sshCtx = session_state.receive_context
+      else:
+        ctx.sshCtx = session_state.send_context
       ctx.sshCipher = ctx.sshCtx.cipher.contents
       ctx.evpCtx    = ctx.sshCtx.evp
       ctx.evpCipher = ctx.sshCtx.evp.cipher.contents
@@ -189,7 +192,7 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     self.inbound['packetizer'] = Packetizer(self.inbound['socket'])
     self.inbound['engine'] = self.activate_cipher(self.inbound['packetizer'], receiveCtx )
     self.inbound['filewriter'] =  output.SSHStreamToFile(self.inbound['packetizer'], 'ssh')
-    
+
     # out bound
     self.outbound['context'] = sendCtx
     self.outbound['socket'] = self.soscapy.getOutboundSocket()
@@ -199,7 +202,7 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
 
     self.worker = output.Supervisor()
     self.worker.add( self.inbound['socket'], self.inbound['filewriter'].process )
-    #self.worker.add(self.outbound['socket'], self.outbound['filewriter'].process )
+    self.worker.add(self.outbound['socket'], self.outbound['filewriter'].process )
     return
     
   def loop(self):
@@ -272,48 +275,68 @@ def parseSSHAgent(pid,name):
   keysFinder=OpenSSLStructFinder(pid)
   return keysFinder.findAndSave()
 
-def usage(txt):
-  log.error("Usage : %s <pid of ssh>"% txt)
+def usage(parser):
+  parser.print_help()
   sys.exit(-1)
 
 
-def main(argv):
-  logging.basicConfig(level=logging.INFO)
-  logging.getLogger('model').setLevel(logging.INFO)
-  logging.getLogger('openssh.model').setLevel(logging.INFO)
-  logging.getLogger('scapy').setLevel(logging.ERROR)
-  logging.getLogger('socket.scapy').setLevel(logging.INFO)
-  logging.getLogger('root').setLevel(logging.DEBUG)
-  logging.getLogger('sslnoop.openssh').setLevel(logging.DEBUG)
-  if ( len(argv) < 1 ):
-    usage(argv[0])
-    return
+def argparser():
+  parser = argparse.ArgumentParser(prog='sshsnoop', description='Live decription of Openssh traffic.')
+  parser.add_argument('pid', type=int, help='Target PID')
+  parser.add_argument('--addr', type=str, help='active_context memory address')
+  parser.set_defaults(func=search)
+  return parser
 
-  # we must have big privileges...
-  if os.getuid() + os.geteuid() != 0:
-    log.error("You must be root/using sudo to read memory and sniff traffic.")
-    return
-    
-  # use optarg on v, a and to
-  pid = int(argv[0])
-  log.info("Target has pid %d"%pid)
-
+def search(args):
+  pid=int(args.pid)
   sessionStateAddr=None
-  if ( len(argv) == 2 ):
-    sessionStateAddr = int(argv[1],16)
-  
-
-  decryptatator=OpenSSHLiveDecryptatator(pid, sessionStateAddr)
+  log.info("Target has pid %d"%pid)
+  if args.addr != None:
+    sessionStateAddr=int(args.addr,16)
 
   #logging.getLogger('model').setLevel(logging.INFO)
   ###engine,key=openssh.test(16634)
   #engine,key=testEncDec(pid)
   #return 0
   
+  decryptatator=OpenSSHLiveDecryptatator(pid, sessionStateAddr)
   decryptatator.run()
   log.info("done for pid %d, struct at 0x%lx"%(pid,decryptatator.session_state_addr))
   sys.exit(0)
   return -1
+
+
+def main(argv):
+  logging.basicConfig(level=logging.DEBUG)
+  logging.getLogger('abouchet').setLevel(logging.INFO)
+  logging.getLogger('model').setLevel(logging.INFO)
+  #logging.getLogger('openssh.model').setLevel(logging.INFO)
+  #logging.getLogger('scapy').setLevel(logging.ERROR)
+  logging.getLogger('socket.scapy').setLevel(logging.INFO)
+  logging.getLogger('engine').setLevel(logging.INFO)
+  #logging.getLogger('root').setLevel(logging.DEBUG)
+  #logging.getLogger('sslnoop.openssh').setLevel(logging.DEBUG)
+
+  logging.debug(argv)
+
+  # we must have big privileges...
+  if os.getuid() + os.geteuid() != 0:
+    log.error("You must be root/using sudo to read memory and sniff traffic.")
+    return
+  
+  parser = argparser()
+  opts = parser.parse_args(argv)
+  try:
+    opts.func(opts)
+  except ImportError,e:
+    log.error('Struct type does not exists.')
+    print e
+
+  #0xb9116268
+
+  return 0
+  
+
 
 
 if __name__ == "__main__":
@@ -332,7 +355,7 @@ def testEncDec(pid):
   logging.basicConfig(level=logging.INFO)
   finder=OpenSSHLiveDecryptatator(pid)
   
-  ciphers,addr=finder.findActiveKeys(pid)
+  ciphers,addr=finder.findActiveKeys(offset=finder.session_state_addr)
   logging.basicConfig(level=logging.DEBUG)
   engine = StatefulAESEngine(ciphers.receiveCtx)
   engine2 = StatefulAESEngine(ciphers.receiveCtx)
@@ -357,17 +380,21 @@ def testEncDec(pid):
   print 'decrypted=',decrypted
   return engine,key
 
-def test(pid):
+def test(pid,addr):
   logging.basicConfig(level=logging.INFO)
   soscapy=launchScapyThread()
-  finder=OpenSSHLiveDecryptatator(pid)
+  finder=OpenSSHLiveDecryptatator(pid,sessionStateAddr=addr)
 
-  ciphers,addr=finder.findActiveKeys(pid)
+  ciphers,addr=finder.findActiveKeys(offset=finder.session_state_addr)
   logging.basicConfig(level=logging.DEBUG)
-  
-  readso=soscapy.getInboundSocket()
-  engine = StatefulAESEngine(ciphers.receiveCtx)
-  app_data=ciphers.receiveCtx.app_data
+  finder.process.cont()
+
+  #readso=soscapy.getInboundSocket()
+  #engine = StatefulAESEngine(ciphers.receiveCtx)
+  #app_data=ciphers.receiveCtx.app_data
+  readso=soscapy.getOutboundSocket()
+  engine = StatefulAESEngine(ciphers.sendCtx)
+  app_data=ciphers.sendCtx.app_data
   key,rounds=app_data.getCtx()
   print "key=",repr(key)
   print len(key)
@@ -383,11 +410,12 @@ def test(pid):
         break
     else: 
       encrypted=readso.recv(1024)
-      #print '"aes_counter" : "%s"'%repr(engine.aes_key.getCounter())
+      print engine.aes_key_ctx.toString()
+      #print '"aes_counter" : "%s"'%repr(engine.aes_key_ctx.getCounter())
       #print 'Encrypted len', len(encrypted)
-      print '"aes_counter" : "%s"'%repr(engine.aes_key.getCounter())
+      print '"aes_counter" : "%s"'%repr(engine.aes_key_ctx.getCounter())
       decrypted=engine.decrypt(encrypted)
-      print '"aes_counter" : "%s"'%repr(engine.aes_key.getCounter())
+      print '"aes_counter" : "%s"'%repr(engine.aes_key_ctx.getCounter())
       print 'decrypted=',decrypted
       packet_size = struct.unpack('>I', decrypted[:4])[0]
       print 'packet_size BE',packet_size
@@ -395,7 +423,7 @@ def test(pid):
       print 'packet_size LE',packet_size
   
   # find it again
-  ciphers,addr=findActiveKeys(pid)
+  ciphers,addr=finder.findActiveKeys(offset=finder.session_state_addr)
   app_data=ciphers.receiveCtx.app_data
   print 'our aes_counter : "%s"'%repr(engine.aes_key.getCounter())
   print 'its aes_counter : "%s"'%repr(app_data.aes_key.getCounter())
@@ -423,4 +451,8 @@ def testSimpleDecrypt(readso,engine_in):
     print "SSHException('Invalid packet blocking')"
   print 'Test descrypt Finished\n\n\n'  
   return  
-  
+
+
+
+#test(2517,0xb9002268)
+
