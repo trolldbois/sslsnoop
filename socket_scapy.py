@@ -114,6 +114,8 @@ class socket_scapy():
     
   def addOutboundPacket(self,payload):
     self._outbound_cnt+=self.addPacket(payload,self._outbound_writeso)
+    log.debug("\n%s"%hexify(payload))
+    log.debug( (''.join(util.format_binary(payload, '\n '))).lower() )
     return 
     
   def addPacket(self,payload,so):
