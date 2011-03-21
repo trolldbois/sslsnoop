@@ -193,7 +193,11 @@ def refresh(args):
 
   finder = StructFinder(pid)  
   instance,validated = finder.loadAt(addr, structType)
-  print '{ ', instance.toString(),'}'
+  d=instance.toDict()
+  #print d["receive_context"]["evp"]["app_data"]
+  print d["send_context"]["evp"]["app_data"].aes_ctx.getKey()
+  print repr(d["send_context"]["evp"]["app_data"].getCounter())
+  #print d
   return
 
 def test():
