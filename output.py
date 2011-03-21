@@ -11,50 +11,26 @@ import threading
 from threading import Thread
 
 from paramiko_packet import NeedRekeyException
+from paramiko.ssh_exception import SSHException
 from paramiko.common import *
 
 log=logging.getLogger('output')
 
-class FileWriter:
-  MAX_KEYS=255
-  def __init__(self,prefix,suffix,folder):
-    self.prefix=prefix
-    self.suffix=suffix
-    self.folder=folder
-  def get_valid_filename(self):
-    filename_FMT="%s-%d.%s"
-    for i in range(1,self.MAX_KEYS):
-      filename=filename_FMT%(self.prefix,i,self.suffix)
-      afilename=os.path.normpath(os.path.sep.join([self.folder,filename]))
-      if not os.access(afilename,os.F_OK):
-        return afilename
-    #
-    log.error("Too many file keys extracted in %s directory"%(self.folder))
-    return None    
-  def writeToFile(self,instance):
-    raise NotImplementedError
-
-
-class SessionStateFileWriter(FileWriter):
-  def __init__(self,pid,folder='outputs'):
-    FileWriter.__init__(self,'session_state',pid,folder)
-  def writeToFile(self,instance):
-    prefix=self.prefix
-    filename=self.get_valid_filename()
-    f=open(filename,"w")
-    f.write(instance.toString())
-    f.close()
-    log.info ("[X] SSH session_state saved to file %s"%filename)
-    return True
 
 
 class SSHStreamToFile():
+  ''' Pipes the data from a (ssh) socket into a different file for each packet type. 
+    supposedly, this would demux channels into files.
+    We still need to differenciate at higher level, with two SSHStreamFile
+     between upload and download.
+  '''
   BUFSIZE=4096
   def __init__(self, packetizer, basename, folder='outputs', fmt="%Y%m%d-%H%M%S"):
     self.packetizer = packetizer
     self.datename = "%s"%time.strftime(fmt,time.gmtime())
     self.fname=os.path.sep.join([folder,basename])
     self.outs=dict()
+    return
 
   def process(self):
     data=self._in.read(self.BUFSIZE)
@@ -66,14 +42,25 @@ class SSHStreamToFile():
       return self.outs[name]
     else:
       self.outs[name] = io.FileIO(name , 'w' )
+    log.debug("Output Filename is %s"%(name))
     return self.outs[name]
 
   def process(self):
+    ''' m can be rewind()-ed , __str__ ()-ed or others...
+  '''
     _expected_packet = tuple()
     try:
       ptype, m = self.packetizer.read_message()
     except NeedRekeyException:
       log.warning('Please refresh keys for rekey')
+      return
+    except SSHException,e:
+      t,v,bt=sys.exc_info()
+      log.warning('SSH exception catched on %s'%(self.fname))
+      #print bt
+      return
+    except OverflowError,e:
+      log.warning('SSH exception catched/bad packet size on %s'%(self.fname))
       return
     if ptype == MSG_IGNORE:
       return
