@@ -65,14 +65,14 @@ class StatefulAESEngine(Engine):
     buf=(ctypes.c_ubyte*AES_BLOCK_SIZE)()
     dest=(ctypes.c_ubyte*bLen)()
     num=ctypes.c_uint()
-    log.debug('BEFORE %s'%self.aes_key_ctx.getCounter())
+    log.debug('BEFORE %s'%( repr(self.aes_key_ctx.getCounter())) )
     #void AES_ctr128_encrypt(
     #      const unsigned char *in, unsigned char *out, const unsigned long length, 
     #           const AES_KEY *key, unsigned char ivec[AES_BLOCK_SIZE],     
     #        	  unsigned char ecount_buf[AES_BLOCK_SIZE],  unsigned int *num)
     self._AES_ctr( ctypes.byref(block), ctypes.byref(dest), bLen, ctypes.byref(self.key), 
               ctypes.byref(self.aes_key_ctx.aes_counter), ctypes.byref(buf), ctypes.byref(num) ) 
-    log.debug('AFTER  %s'%self.aes_key_ctx.getCounter())
+    log.debug('AFTER  %s'%( repr(self.aes_key_ctx.getCounter())) )
     return model.array2bytes(dest)
         
 

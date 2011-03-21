@@ -16,7 +16,7 @@ import output
 import ctypes, model, ctypes_openssh, ctypes_openssl
 from ctypes import cdll
 from ctypes_openssh import AES_BLOCK_SIZE
-from engine import StatefulAESEngine,MyStatefulAESEngine
+from engine import StatefulAESEngine
 
 # linux only
 from ptrace.debugger.debugger import PtraceDebugger
@@ -191,14 +191,14 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     self.inbound['socket'] = self.soscapy.getInboundSocket()
     self.inbound['packetizer'] = Packetizer(self.inbound['socket'])
     self.inbound['engine'] = self.activate_cipher(self.inbound['packetizer'], receiveCtx )
-    self.inbound['filewriter'] =  output.SSHStreamToFile(self.inbound['packetizer'], 'ssh')
+    self.inbound['filewriter'] =  output.SSHStreamToFile(self.inbound['packetizer'], 'ssh-in')
 
     # out bound
     self.outbound['context'] = sendCtx
     self.outbound['socket'] = self.soscapy.getOutboundSocket()
     self.outbound['packetizer'] = Packetizer(self.outbound['socket'])
     self.outbound['engine'] = self.activate_cipher(self.outbound['packetizer'], self.outbound['context'] )
-    self.outbound['filewriter'] =  output.SSHStreamToFile(self.outbound['packetizer'], 'ssh')
+    self.outbound['filewriter'] =  output.SSHStreamToFile(self.outbound['packetizer'], 'ssh-out')
 
     self.worker = output.Supervisor()
     self.worker.add( self.inbound['socket'], self.inbound['filewriter'].process )

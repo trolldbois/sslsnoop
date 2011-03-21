@@ -147,8 +147,8 @@ class CipherContext(OpenSSHStruct):
         return True
       log.debug('CAST evp.%s Into %s'%(fieldname,struct))
       attr=getattr(self.evp,fieldname)
-      #print attr
       st=struct.from_address(getaddress(attr))
+      #print st.toString()
       return st
     return None
 
@@ -389,7 +389,12 @@ class session_state(OpenSSHStruct):
     "max_blocks_in": NotNull, #mmh
     "max_blocks_out": NotNull
   }
-
+  def toDict(self):
+    d=OpenSSHStruct.toDict(self)
+    # populate AppData.
+    d["receive_context"]["evp"]["app_data"] = self.receive_context.getEvpAppData()
+    d["send_context"]["evp"]["app_data"] = self.send_context.getEvpAppData()
+    return d
 
 def printSizeof():
   print 'Cipher:',ctypes.sizeof(Cipher)
