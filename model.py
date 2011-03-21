@@ -432,9 +432,6 @@ class LoadableMembers(ctypes.Structure):
     #TATAFN
     return True
   
-  def toDict(self):
-    return eval("{ %s }"%self.toString())
-    
   def toString(self,prefix=''):
     s="%s # %s\n"%(prefix,repr(self) )
     for field,typ in self._fields_:
@@ -509,6 +506,47 @@ class LoadableMembers(ctypes.Structure):
         #print '*** attr cannot be __str__ ***',field, type(attr)
         s+='%s : %s\n'%(field, repr(attr) )  
     return s
+    
+  def toPyObject(self):
+    # make self obj.
+    my_class=type(self.__class__.__name__,(object,),{})
+    my_self=my_class()
+    for field,typ in self._fields_:
+      attr=getattr(self,field)
+      member=self._attrToPyObject(attr,field,typ)
+      setattr(my_self, field, member)
+    return my_self
+    
+  def _attrToPyObject(self,attr,field,typ):
+    if isStructType(attr):
+      obj=attr.toPyObject()
+    elif isBasicTypeArrayType(attr): ## array of basic types
+      obj=array2bytes(attr)
+    elif isArrayType(attr): ## array of something else than int/byte
+      obj=[]
+      typ=type(attr[0])
+      for i in range(0,len(attr)):
+        obj.append(self._attrToPyObject( attr[i], i, typ) )
+    elif isPointerType(attr):
+      if not bool(attr) :
+        obj=(None,None)
+      elif not is_address_local(attr) :
+        obj=(None,getaddress(attr) )
+      else:
+        contents=attr.contents
+        if isStructType(contents):
+          obj=contents.toPyObject()
+        else: # pointer vers autre chose, le repr() est le seul choix.
+          #obj=repr(contents)
+          print 'MODEL pointer contents else'
+          obj=contents
+    elif isCStringPointer(attr):
+      obj=attr.string
+    else:
+      print 'MODEL else'
+      obj=attr
+    return obj
+
 
 def APP_DATA_value(obj,struct):
     return struct.from_buffer(obj.contents)

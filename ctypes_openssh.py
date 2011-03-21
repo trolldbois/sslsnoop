@@ -389,12 +389,13 @@ class session_state(OpenSSHStruct):
     "max_blocks_in": NotNull, #mmh
     "max_blocks_out": NotNull
   }
-  def toDict(self):
-    d=OpenSSHStruct.toDict(self)
+  def toPyObject(self):
+    d=OpenSSHStruct.toPyObject(self)
     # populate AppData.
-    d["receive_context"]["evp"]["app_data"] = self.receive_context.getEvpAppData()
-    d["send_context"]["evp"]["app_data"] = self.send_context.getEvpAppData()
+    d.receive_context.evp.app_data = self.receive_context.getEvpAppData().toPyObject()
+    d.send_context.evp.app_data = self.send_context.getEvpAppData().toPyObject()
     return d
+
 
 def printSizeof():
   print 'Cipher:',ctypes.sizeof(Cipher)

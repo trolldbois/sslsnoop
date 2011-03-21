@@ -180,9 +180,13 @@ def search(args):
 
   finder = StructFinder(pid)  
   outs=finder.find_struct( structType, maxNum=1)
+  print '[',
   for ss, addr in outs:
+    print "(%s,%s),"%( ss.toPyObject(),addr )
     pass
+  print ']'
   #s=['0x%lx,'.join()
+  #print outs
   return
 
 
@@ -193,12 +197,16 @@ def refresh(args):
 
   finder = StructFinder(pid)  
   instance,validated = finder.loadAt(addr, structType)
-  d=instance.toDict()
+  d=instance.toPyObject()
+  print d.__dict__
+  print "(%s,%s)"%( d,validated )
+  ## debug
   #print d["receive_context"]["evp"]["app_data"]
-  print d["send_context"]["evp"]["app_data"].aes_ctx.getKey()
-  print repr(d["send_context"]["evp"]["app_data"].getCounter())
-  #print d
-  return
+  #print d["send_context"]["evp"]["app_data"].aes_ctx.getKey()
+  #print repr(d["send_context"]["evp"]["app_data"].getCounter())
+  #import pickle
+  #pickle.dump(d,open('outputs/pickled','w'))
+  return d
 
 def test():
   import subprocess
@@ -228,4 +236,11 @@ def main(argv):
 
 if __name__ == "__main__":
   main(sys.argv[1:])
+
+def a():
+  argv=[ 'refresh', '28573', 'ctypes_openssh.session_state', '0xb9116268']
+  parser = argparser()
+  opts = parser.parse_args(argv)
+  ret=opts.func(opts)
+  return ret
 
