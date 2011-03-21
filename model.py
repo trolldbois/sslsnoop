@@ -391,6 +391,7 @@ class LoadableMembers(ctypes.Structure):
     if isCStringPointer(attr):
       # can't use basic c_char_p because we can't load in foreign memory
       attr_obj_address=getaddress(attr.ptr)
+      setattr(self,'__'+attrname,attr_obj_address)
       MAX_SIZE=255
       log.debug("%s %s is defined as a CString, loading from 0x%lx is_valid_address %s"%(
                       attrname,attr,attr_obj_address, is_valid_address(attr,mappings) ))
@@ -403,6 +404,7 @@ class LoadableMembers(ctypes.Structure):
       _attrname='_'+attrname
       _attrType=self.classRef[attrtype]
       attr_obj_address=getaddress(attr)
+      setattr(self,'__'+attrname,attr_obj_address)
       ####
       previous=getattr(self,attrname+'ContentAddress')
       if attr_obj_address !=previous:
@@ -429,6 +431,9 @@ class LoadableMembers(ctypes.Structure):
         return False
     #TATAFN
     return True
+  
+  def toDict(self):
+    return eval("{ %s }"%self.toString())
     
   def toString(self,prefix=''):
     s="%s # %s\n"%(prefix,repr(self) )
