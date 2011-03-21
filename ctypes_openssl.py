@@ -60,7 +60,7 @@ class AES_KEY(OpenSSLStruct):
   ] 
   def getKey(self):
     #return array2bytes(self.rd_key)
-    return ' '.join(["0x%lx"%key for key in self.rd_key])
+    return ','.join(["0x%lx"%key for key in self.rd_key])
   def getRounds(self):
     return self.rounds
 
