@@ -18,7 +18,7 @@ from ptrace.ctypes_libc import libc
 from ptrace.debugger.debugger import PtraceDebugger
 from ptrace.debugger.memory_mapping import readProcessMappings
 
-import argparse
+import argparse,pickle
 
 
 log=logging.getLogger('abouchet')
@@ -152,7 +152,9 @@ def usage(parser):
 
 
 def argparser():
-  rootparser = argparse.ArgumentParser(prog='StructFinder', description='Parse memory structs.')
+  rootparser = argparse.ArgumentParser(prog='StructFinder', description='Parse memory structs and pickle them.')
+  rootparser.add_argument('--string', dest='human', action='store_const', const=True, help='Print results as human readable string')
+  
   subparsers = rootparser.add_subparsers(help='sub-command help')
   search_parser = subparsers.add_parser('search', help='search help')
   search_parser.add_argument('pid', type=int, help='Target PID')
@@ -180,14 +182,16 @@ def search(args):
 
   finder = StructFinder(pid)  
   outs=finder.find_struct( structType, maxNum=1)
-  print '[',
-  for ss, addr in outs:
-    print "(%s,%s),"%( ss.toPyObject(),addr )
-    pass
-  print ']'
-  #s=['0x%lx,'.join()
-  #print outs
-  return
+  if args.human:
+    print '[',
+    for ss, addr in outs:
+      print "# --------------- 0x%lx \n"% addr, ss.toString()
+      pass
+    print ']'
+  else:
+    ret=[ (ss.toPyObject(),addr) for ss, addr in outs]
+    print pickle.dumps(ret)
+  return outs
 
 
 def refresh(args):
@@ -197,16 +201,12 @@ def refresh(args):
 
   finder = StructFinder(pid)  
   instance,validated = finder.loadAt(addr, structType)
-  d=instance.toPyObject()
-  print d.__dict__
-  print "(%s,%s)"%( d,validated )
-  ## debug
-  #print d["receive_context"]["evp"]["app_data"]
-  #print d["send_context"]["evp"]["app_data"].aes_ctx.getKey()
-  #print repr(d["send_context"]["evp"]["app_data"].getCounter())
-  #import pickle
-  #pickle.dump(d,open('outputs/pickled','w'))
-  return d
+  if args.human:
+     print '( %s, %s )'%(instance.toString(),validated)
+  else:
+    d=(instance.toPyObject(),validated)
+    print pickle.dumps(d)
+  return instance,validated
 
 def test():
   import subprocess
