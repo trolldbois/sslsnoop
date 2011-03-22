@@ -11,7 +11,7 @@ from ptrace.debugger.memory_mapping import readProcessMappings
 import logging
 log=logging.getLogger('openssl.model')
 
-from model import is_valid_address,getaddress,array2bytes,LoadableMembers,RangeValue,NotNull,CString,EVP_CIPHER_CTX_APP_DATA_PTR
+from model import is_valid_address,getaddress,array2bytes,bytes2array,LoadableMembers,RangeValue,NotNull,CString,EVP_CIPHER_CTX_APP_DATA_PTR
 
 
 ''' hmac.h:69 '''
@@ -63,7 +63,12 @@ class AES_KEY(OpenSSLStruct):
     return ','.join(["0x%lx"%key for key in self.rd_key])
   def getRounds(self):
     return self.rounds
-
+  def fromPyObj(self,pyobj):
+    #copy rd_key
+    self.rd_key=bytes2array(pyobj.rd_key,ctypes.c_ulong)
+    #copy rounds
+    self.rounds=pyobj.rounds
+    return self
 
 #ok
 class BIGNUM(OpenSSLStruct):

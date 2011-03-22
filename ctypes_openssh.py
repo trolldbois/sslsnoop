@@ -12,7 +12,7 @@ from ptrace import ctypes_stdint
 import logging
 log=logging.getLogger('openssh.model')
 
-from model import is_valid_address,is_valid_address_value,pointer2bytes,array2bytes,getaddress
+from model import is_valid_address,is_valid_address_value,pointer2bytes,array2bytes,bytes2array,getaddress
 from model import LoadableMembers,RangeValue,NotNull,CString,EVP_CIPHER_CTX_APP_DATA_PTR
 from ctypes_openssl import EVP_CIPHER_CTX, EVP_MD, HMAC_CTX, AES_KEY,rijndael_ctx,EVP_RC4_KEY
 
@@ -54,6 +54,12 @@ class ssh_aes_ctr_ctx(OpenSSHStruct):
     return (rd_key,rounds) 
   def getCounter(self):
     return array2bytes(self.aes_counter)
+  def fromPyObj(self,pyobj):
+    #recurse copy aes_ctx
+    self.aes_ctx = AES_KEY().fromPyObj(pyobj.aes_ctx)
+    #copy counter
+    self.aes_counter=bytes2array(pyobj.aes_counter, ctypes.c_ubyte)
+    return self
   
 class ssh_rijndael_ctx(OpenSSHStruct):
   ''' cipher-aes.c:43 '''
@@ -183,6 +189,12 @@ class Enc(OpenSSHStruct):
     return pointer2bytes(self.key, self.key_len)
   def getIV(self):
     return pointer2bytes(self.iv, self.block_size) 
+
+  def toPyObject(self):
+    d=OpenSSHStruct.toPyObject(self)
+    d.key = self.getKey()
+    d.iv = self.getIV()
+    return d
   
   def toString(self,prefix=''):
     s="%s # %s\n"%(prefix,repr(self) )
@@ -262,7 +274,12 @@ class Mac(OpenSSHStruct):
     return True
   def getKey(self):
     return pointer2bytes(self.key,self.key_len)
-  
+
+  def toPyObject(self):
+    d=OpenSSHStruct.toPyObject(self)
+    d.key = self.getKey()
+    return d
+
   def toString(self,prefix=''):
     s="%s # %s\n"%(prefix,repr(self) )
     for field,typ in self._fields_:

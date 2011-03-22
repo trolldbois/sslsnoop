@@ -7,7 +7,7 @@
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
 import ctypes,os
-from struct import pack
+from struct import pack,unpack
 from ptrace.debugger.memory_mapping import readProcessMappings
 import logging
 log=logging.getLogger('model')
@@ -103,6 +103,24 @@ def array2bytes(array):
   # BEURK
   typ='_'.join(type(array).__name__.split('_')[:2])
   return array2bytes_(array,typ)
+
+def bytes2array(bytes, typ):
+  typLen=ctypes.sizeof(typ)
+  if len(bytes)%typLen != 0:
+    raise ValueError('thoses bytes are not an array of %s'%(typ))
+  arrayLen=len(bytes)/typLen
+  array=(typ*arrayLen)()
+  if arrayLen == 0:
+    return array
+  if typ.__name__ not in bytestr_fmt:
+    log.warning('Unknown ctypes to pack: %s'%(typ))
+    return None
+  fmt=bytestr_fmt[typ.__name__]
+  sb=b''
+  for i in range(0,arrayLen):
+    array[i]=unpack(fmt, bytes[typLen*i:typLen*(i+1)])[0]
+  return array
+
 
 def pointer2bytes(attr,nbElement):
   # attr is a pointer and we want to read elementSize of type(attr.contents))

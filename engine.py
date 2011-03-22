@@ -6,13 +6,14 @@
 
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
-import os,logging,sys
+import os,logging,sys, copy
 #use volatility?
 
 import abouchet
 import ctypes, model, ctypes_openssh
 from ctypes import cdll
-from ctypes_openssh import AES_BLOCK_SIZE
+from ctypes_openssh import AES_BLOCK_SIZE, ssh_aes_ctr_ctx
+from ctypes_openssl import AES_KEY
 
 #our impl
 from paramiko_packet import Packetizer, NeedRekeyException
@@ -49,15 +50,19 @@ class Engine:
   def _decrypt(self,data,bLen):
     raise NotImplementedError
 
+
 class StatefulAESEngine(Engine):
   #ctx->cipher->do_cipher(ctx,out,in,inl);
   # -> openssl.AES_ctr128_encrypt(&in,&out,length,&aes_key, ivecArray, ecount_bufArray, &num )
   #AES_encrypt(ivec, ecount_buf, key); # aes_key is struct with cnt, key is really AES_KEY->aes_ctx
   #AES_ctr128_inc(ivec); #ssh_Ctr128_inc semble etre different, mais paramiko le fait non ?
   def __init__(self, context ):
-    self.aes_key_ctx = type(context.app_data).from_buffer_copy(context.app_data)
+    self.aes_key_ctx = ssh_aes_ctr_ctx().fromPyObj(context.app_data)
     # we need nothing else
     self.key = self.aes_key_ctx.aes_ctx
+    # copy counter content
+    self.counter = self.aes_key_ctx.aes_counter
+
     self._AES_ctr=libopenssl.AES_ctr128_encrypt
     log.debug('cipher:%s block_size: %d key_len: %d '%(context.name, context.block_size, context.key_len))
   
@@ -71,7 +76,7 @@ class StatefulAESEngine(Engine):
     #           const AES_KEY *key, unsigned char ivec[AES_BLOCK_SIZE],     
     #        	  unsigned char ecount_buf[AES_BLOCK_SIZE],  unsigned int *num)
     self._AES_ctr( ctypes.byref(block), ctypes.byref(dest), bLen, ctypes.byref(self.key), 
-              ctypes.byref(self.aes_key_ctx.aes_counter), ctypes.byref(buf), ctypes.byref(num) ) 
+              ctypes.byref(self.counter), ctypes.byref(buf), ctypes.byref(num) ) 
     log.debug('AFTER  %s'%( repr(self.aes_key_ctx.getCounter())) )
     return model.array2bytes(dest)
         

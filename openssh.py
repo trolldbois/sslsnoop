@@ -6,8 +6,8 @@
 
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
-import os,logging,sys,time
-#use volatility?
+import os,logging,sys,time, pickle
+import subprocess
 
 import abouchet
 from openssl import OpenSSLStructFinder
@@ -56,7 +56,7 @@ class SessionStateFileWriter(FileWriter):
     prefix=self.prefix
     filename=self.get_valid_filename()
     f=open(filename,"w")
-    f.write(instance.toString())
+    pickle.dump(instance,f)
     f.close()
     log.info ("[X] SSH session_state saved to file %s"%filename)
     return True
@@ -76,19 +76,19 @@ class SessionCiphers():
     # read cipher MODE_IN == 0
     MODE=0
     for ctx in [self.receiveCtx, self.sendCtx ]:
-      ctx.enc =  self.session_state.newkeys[MODE].contents.enc
-      ctx.mac =  self.session_state.newkeys[MODE].contents.mac
-      ctx.comp = self.session_state.newkeys[MODE].contents.comp
+      ctx.enc =  self.session_state.newkeys[MODE].enc
+      ctx.mac =  self.session_state.newkeys[MODE].mac
+      ctx.comp = self.session_state.newkeys[MODE].comp
       if MODE == 0:
         ctx.sshCtx = session_state.receive_context
       else:
         ctx.sshCtx = session_state.send_context
-      ctx.sshCipher = ctx.sshCtx.cipher.contents
+      ctx.sshCipher = ctx.sshCtx.cipher
       ctx.evpCtx    = ctx.sshCtx.evp
-      ctx.evpCipher = ctx.sshCtx.evp.cipher.contents
+      ctx.evpCipher = ctx.sshCtx.evp.cipher
       # useful stuff
-      ctx.name = ctx.sshCipher.name.toString()
-      ctx.app_data  = ctx.sshCtx.getEvpAppData()
+      ctx.name = ctx.sshCipher.name
+      ctx.app_data  = ctx.evpCtx.app_data
       # original key and IV are ctx.getKey() and ctx.getIV()
       # stateful AES_key key is at ctx.app_data.aes_ctx #&c->aes_ctx
       # stateful ctr counter is at ctx.app_data.aes_ctr
@@ -102,16 +102,41 @@ class SessionCiphers():
     return self.receiveCtx, self.sendCtx
   
   def __str__(self):
-    return "<SessionCiphers RECEIVE: '%s/%s' SEND: '%s/%s' >"%(self.receiveCtx.name,self.receiveCtx.mac.name.toString(),
-                                                  self.sendCtx.name,self.sendCtx.mac.name.toString() ) 
+    return "<SessionCiphers RECEIVE: '%s/%s' SEND: '%s/%s' >"%(self.receiveCtx.name,self.receiveCtx.mac.name,
+                                                  self.sendCtx.name,self.sendCtx.mac.name ) 
 
 
 
-class OpenSSHKeysFinder(StructFinder):
-  ''' '''
+class OpenSSHKeysFinder():
+  ''' wrapper around a fork/exec to abouchet StructFinder '''
+  cmd_line=['python', 'abouchet.py', 'refresh', '2442', 'ctypes_openssh.session_state', '0xb822a268']
+
+  def __init__(self, pid, fullScan=False):
+    self.pid = pid
+    self.fullScan = fullScan
+    return
+
+  def _callFinder(self,cmd_line):
+    p = subprocess.Popen(cmd_line, stdin=None, stdout=subprocess.PIPE, close_fds=True )
+    p.wait()
+    instance=p.stdout.read()
+    instance=pickle.loads(instance)
+    return instance
+
+  
+  def find_struct(self, typ, maxNum):
+    raise NotImplementedError()
+    return
+
+  def loadAt(self,offset, typ):
+    raise NotImplementedError()
+    return
+  
   def findActiveSession(self, maxNum=1):
     ''' '''
-    outs=self.find_struct(ctypes_openssh.session_state, maxNum)
+    cmd_line=['python', 'abouchet.py', 'search', "%d"%self.pid, 'ctypes_openssh.session_state']
+    #outs=self.find_struct(ctypes_openssh.session_state, maxNum)
+    outs=self._callFinder(cmd_line)
     if len(outs) == 0:
       log.error("The session_state has not been found. maybe it's not OpenSSH ?")
       return 
@@ -123,7 +148,10 @@ class OpenSSHKeysFinder(StructFinder):
 
   def refreshActiveSession(self, offset):
     ''' '''
-    instance,validated=self.loadAt(offset, ctypes_openssh.session_state)
+    cmd_line=['python', 'abouchet.py', 'refresh', "%d"%self.pid , 'ctypes_openssh.session_state', "0x%lx"%offset ]
+    #instance,validated=self.loadAt(offset, ctypes_openssh.session_state)
+    # XXX DEBUG 
+    instance,validated=self._callFinder(cmd_line)
     if not validated:
       log.error("The session_state has not been re-validated. You should look for it again.")
       return None,None
@@ -139,7 +167,7 @@ class OpenSSHKeysFinder(StructFinder):
       return None # raise Exception ... 
     ciphers=SessionCiphers(session_state)
     log.info('Active state ciphers : %s at 0x%lx'%(ciphers,addr))
-    #log.debug(ciphers.receiveCtx.app_data.toString())
+    #log.debug(ciphers.receiveCtx.app_data.__dict__)
     return ciphers,addr
 
   def save(self, instance):
@@ -175,7 +203,7 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     else:
       self.ciphers,self.session_state_addr=self.findActiveKeys(offset=self.session_state_addr)
     # unstop() the process
-    self.process.cont()
+    ### Forked no useful self.process.cont()
     # process is running... sniffer is listening
     log.info('Please make some ssh  traffic')  
     self.init()
@@ -218,15 +246,15 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     #print engine, type(engine)
     mac = context.mac
     if mac is not None:
-      mac_key    = mac.getKey()
-      mac_engine = Transport._mac_info[mac.name.toString()]['class']
+      mac_key    = mac.key #XXX TODO
+      mac_engine = Transport._mac_info[mac.name]['class']
       mac_len = mac.mac_len
     # again , we need a stateful HMAC engine. 
     # we disable HMAC checking to get around.
     # fix our engines in packetizer
     packetizer.set_inbound_cipher(engine, context.block_size, mac_engine, mac_len , mac_key)
     if context.comp.enabled != 0:
-      name = context.comp.name.toString()
+      name = context.comp.name
       compress_in = Transport._compression_info[name][1]
       log.debug('Switching on inbound compression ...')
       packetizer.set_inbound_compressor(compress_in())
@@ -249,14 +277,6 @@ def launchScapyThread():
 
 
 
-#print ss.toString()
-#print '---------'
-#print 'Cipher name : ', ss.receive_context.cipher.contents.name
-#print ss.receive_context.evp
-#print 'Cipher name : ', ss.send_context.cipher.contents.name
-#print ss.send_context.evp
-#print 'receive context Cipher : ', ss.receive_context.cipher.contents
-#print 'send context    Cipher : ', ss.send_context.cipher.contents
 
 
 def parseSSHClient(pid,name):
@@ -314,6 +334,7 @@ def main(argv):
   #logging.getLogger('scapy').setLevel(logging.ERROR)
   logging.getLogger('socket.scapy').setLevel(logging.INFO)
   logging.getLogger('engine').setLevel(logging.INFO)
+  logging.getLogger('output').setLevel(logging.INFO)
   #logging.getLogger('root').setLevel(logging.DEBUG)
   #logging.getLogger('sslnoop.openssh').setLevel(logging.DEBUG)
 
@@ -410,7 +431,7 @@ def test(pid,addr):
         break
     else: 
       encrypted=readso.recv(1024)
-      print engine.aes_key_ctx.toString()
+      print engine.aes_key_ctx.__dict__
       #print '"aes_counter" : "%s"'%repr(engine.aes_key_ctx.getCounter())
       #print 'Encrypted len', len(encrypted)
       print '"aes_counter" : "%s"'%repr(engine.aes_key_ctx.getCounter())

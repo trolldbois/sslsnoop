@@ -42,6 +42,7 @@ class SSHStreamToFile():
       return self.outs[name]
     else:
       self.outs[name] = io.FileIO(name , 'w' )
+      log.info("New Output Filename is %s"%(name))
     log.debug("Output Filename is %s"%(name))
     return self.outs[name]
 
