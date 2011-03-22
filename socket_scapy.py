@@ -11,6 +11,8 @@ import logging,os,socket
 from scapy.all import sniff
 from paramiko import util
 
+from lrucache import LRUCache
+
 log=logging.getLogger('socket.scapy')
 
 
@@ -29,9 +31,10 @@ def hexify(data):
       s+="\r\n"
     elif i%2==1:
       s+=" "
-  s+="\r\n"
+  #s+="\r\n"
   return s
 
+  
 class socket_scapy():
   ''' what you write in writeso, gets read in readso '''
   def __init__(self,filterRules, protocolName='TCP', packetCount=0, timeout=None,
@@ -42,22 +45,23 @@ class socket_scapy():
     @param packetCount: 0/Unlimited or packet capture limit
     @param timeout: None/Unlimited or stop after
     '''
+    self._cache_seqn = LRUCache(128)
     self.filterRules=filterRules
     self.protocolName=protocolName
     self.packetCount=packetCount
     self.timeout=timeout
     #
     self._inbound_cnt=0
-
-
     self._outbound_cnt=0
 
     self._running_thread=None
     # distinguish between incoming and outgoing packets // classic ssh client
     if ( isInboundPacketCallback is None):
-      self.__is_inboundPacket=isNotdestport22
+      ##self.__is_inboundPacket=isNotdestport22 ## SSH CLIENT
+      self.__is_inboundPacket=isdestport22  ## SSH SERVER
     if ( isOutboundPacketCallback is None):
-      self.__is_outboundPacket=isdestport22
+      ##self.__is_outboundPacket=isdestport22  ## SSH CLIENT
+      self.__is_outboundPacket=isNotdestport22 ## SSH SERVER
     # make socket
     try:
         isWindows = socket.AF_UNIX
@@ -90,6 +94,17 @@ class socket_scapy():
     packet=obj[self.protocolName]
     pLen=len(packet.payload)
     if pLen > 0:
+      # DEDUPs..
+      # yeah ok, we need an id... seqnum could be ok, but that's tcp
+      # but we can hash the payload too... surely no SSL proto would send twice the same payload
+      pkid=hash(packet.payload.load)
+      if pkid in self._cache_seqn:
+        # dups. ignore. Happens when testing on ssh localhost & sshd localhost
+        log.debug('Duplicate packet ignored.')
+        return None
+      # Lru cache, should disappear.
+      self._cache_seqn[pkid]=True
+      # else, triage
       if self.__is_inboundPacket(packet):
         self.addInboundPacket( packet.payload.load )
       elif self.__is_outboundPacket(packet):
@@ -108,14 +123,14 @@ class socket_scapy():
   def addInboundPacket(self,payload):
     log.debug("add inbound")
     self._inbound_cnt+=self.addPacket(payload,self._inbound_writeso)
-    #log.debug("\n%s"%hexify(payload))
+    log.debug("addInboundPacket %d\n%s"%(self._inbound_cnt, hexify(payload) ))
     #log.debug( (''.join(util.format_binary(payload, '\n '))).lower() )
     return 
     
   def addOutboundPacket(self,payload):
     self._outbound_cnt+=self.addPacket(payload,self._outbound_writeso)
-    log.debug("\n%s"%hexify(payload))
-    log.debug( (''.join(util.format_binary(payload, '\n '))).lower() )
+    log.debug("addOutboundPacket %d\n%s"%(self._inbound_cnt, hexify(payload)) )
+    #log.debug( (''.join(util.format_binary(payload, '\n '))).lower() )
     return 
     
   def addPacket(self,payload,so):
