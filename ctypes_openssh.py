@@ -13,7 +13,7 @@ import logging
 log=logging.getLogger('openssh.model')
 
 from model import is_valid_address,is_valid_address_value,pointer2bytes,array2bytes,bytes2array,getaddress
-from model import LoadableMembers,RangeValue,NotNull,CString,EVP_CIPHER_CTX_APP_DATA_PTR
+from model import LoadableMembers,RangeValue,NotNull,CString,EVP_CIPHER_CTX_APP_DATA_PTR, IgnoreMember
 from ctypes_openssl import EVP_CIPHER_CTX, EVP_MD, HMAC_CTX, AES_KEY,rijndael_ctx,EVP_RC4_KEY
 
 MODE_MAX=2 #kex.h:62
@@ -150,7 +150,8 @@ class CipherContext(OpenSSHStruct):
       struct,fieldname=self.cipherContexts[self.cipher.contents.name.string]
       if(struct is None):
         log.warning("Unsupported cipher %s"%(self.cipher.contents.name.string))
-        return True
+        log.warning("%s"%(self.cipher.contents.toString()))
+        return None
       log.debug('CAST evp.%s Into %s'%(fieldname,struct))
       attr=getattr(self.evp,fieldname)
       st=struct.from_address(getaddress(attr))
@@ -261,6 +262,18 @@ class Mac(OpenSSHStruct):
   ("evp_ctx",  HMAC_CTX),
   ("umac_ctx",  ctypes.POINTER(umac_ctx)) 
   ]
+  expectedValues={
+    "type": [0,1,2], # unknown, SSH_EVP or SSH_UMAC
+    "enabled": [0,1], # 
+    "umac_ctx": IgnoreMember, # packet.c:1781
+  }
+  ''' if mac.type == SSH_EVP: (1) # mac.c:47
+        evp_ctx is loaded/used when 
+      else if mac.type == SSH_UMAC (2)
+        umac_ctx is loaded/used
+
+     We should conditionnally loadMembers on evp_ctx or umac_ctx, but, hey.. poc here...
+  '''
   def loadMembers(self,process, mappings, maxDepth):
     if not LoadableMembers.loadMembers(self,process, mappings, maxDepth):
       return False
@@ -269,7 +282,7 @@ class Mac(OpenSSHStruct):
     attr_obj_address=getaddress(self.key)
     array=(ctypes.c_ubyte*self.key_len).from_buffer_copy(process.readArray(attr_obj_address, ctypes.c_ubyte, self.key_len))
     self.key.contents=ctypes.c_ubyte.from_buffer(array)
-    
+    log.debug('unmac_ctx has been nulled and ignored. its not often used by any ssh impl. Not useful for us anyway.')
     log.debug('MAC KEY(%d bytes) acquired'%(self.key_len))
     return True
   def getKey(self):
@@ -403,8 +416,8 @@ class session_state(OpenSSHStruct):
     #"packet_timeout_ms", [], 
     #"max_blocks_in", UINT64 , #packet.c:794 1<<enc.block_size*2   ou si block_size < 16 (1<<30)/enc.block_size
     #"max_blocks_out", UINT64 , # ou si rekey_limit , max_blocks = MIN(max_block, rekey_limit/block_size )
-    "max_blocks_in": NotNull, #mmh
-    "max_blocks_out": NotNull
+    #"max_blocks_in": NotNull, #mmh # 0L values in sshd server
+    #"max_blocks_out": NotNull # ) value in sshd server
   }
   def toPyObject(self):
     d=OpenSSHStruct.toPyObject(self)

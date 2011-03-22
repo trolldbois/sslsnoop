@@ -7,7 +7,7 @@
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
 import os,logging,sys
-#use volatility?
+import subprocess
 
 import ctypes_openssh
 import ctypes
@@ -146,6 +146,34 @@ def hasValidPermissions(memmap):
   perms=memmap.permissions
   return (perms[0] == 'r' and perms[1] == 'w') or (perms[3] == 's')
 
+
+def _callFinder(cmd_line):
+  p = subprocess.Popen(cmd_line, stdin=None, stdout=subprocess.PIPE, close_fds=True )
+  p.wait()
+  instance=p.stdout.read()
+  instance=pickle.loads(instance)
+  return instance
+
+def findStruct(pid, struct, maxNum=1):
+  ''' '''
+  cmd_line=['python', 'abouchet.py', 'search', "%d"%pid, "%s"%struct]
+  outs=_callFinder(cmd_line)
+  if len(outs) == 0:
+    log.error("The %s has not been found."%(struct))
+    return None
+  #
+  return outs
+
+def refreshStruct(pid, struct, offset):
+  ''' '''
+  cmd_line=['python', 'abouchet.py', 'refresh', "%d"%pid , '%s'%struct, "0x%lx"%offset ]
+  instance,validated=_callFinder(cmd_line)
+  if not validated:
+    log.error("The session_state has not been re-validated. You should look for it again.")
+    return None,None
+  return instance,offset
+
+
 def usage(parser):
   parser.print_help()
   sys.exit(-1)
@@ -201,11 +229,19 @@ def refresh(args):
 
   finder = StructFinder(pid)  
   instance,validated = finder.loadAt(addr, structType)
-  if args.human:
-     print '( %s, %s )'%(instance.toString(),validated)
+  if validated:
+    if args.human:
+       print '( %s, %s )'%(instance.toString(),validated)
+    else:
+      d=(instance.toPyObject(),validated)
+      print pickle.dumps(d)
   else:
-    d=(instance.toPyObject(),validated)
-    print pickle.dumps(d)
+    if args.human:
+      #Unloaded datastruct, printing safe __str__
+      print '( %s, %s )'%(instance,validated)
+    else:
+      d=None
+      print pickle.dumps(d)
   return instance,validated
 
 def test():

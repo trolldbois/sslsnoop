@@ -51,6 +51,12 @@ class Engine:
     raise NotImplementedError
 
 
+def myhex(bstr):
+  s=''
+  for el in bstr:
+    s+='\\'+hex(ord(el))[1:]
+  return s
+
 class StatefulAESEngine(Engine):
   #ctx->cipher->do_cipher(ctx,out,in,inl);
   # -> openssl.AES_ctr128_encrypt(&in,&out,length,&aes_key, ivecArray, ecount_bufArray, &num )
@@ -62,7 +68,7 @@ class StatefulAESEngine(Engine):
     self.key = self.aes_key_ctx.aes_ctx
     # copy counter content
     self.counter = self.aes_key_ctx.aes_counter
-
+    log.info('Counter value is %s'%(myhex(self.aes_key_ctx.getCounter())) )
     self._AES_ctr=libopenssl.AES_ctr128_encrypt
     log.debug('cipher:%s block_size: %d key_len: %d '%(context.name, context.block_size, context.key_len))
   
@@ -70,14 +76,14 @@ class StatefulAESEngine(Engine):
     buf=(ctypes.c_ubyte*AES_BLOCK_SIZE)()
     dest=(ctypes.c_ubyte*bLen)()
     num=ctypes.c_uint()
-    log.debug('BEFORE %s'%( repr(self.aes_key_ctx.getCounter())) )
+    log.debug('BEFORE %s'%( myhex(self.aes_key_ctx.getCounter())) )
     #void AES_ctr128_encrypt(
     #      const unsigned char *in, unsigned char *out, const unsigned long length, 
     #           const AES_KEY *key, unsigned char ivec[AES_BLOCK_SIZE],     
     #        	  unsigned char ecount_buf[AES_BLOCK_SIZE],  unsigned int *num)
     self._AES_ctr( ctypes.byref(block), ctypes.byref(dest), bLen, ctypes.byref(self.key), 
               ctypes.byref(self.counter), ctypes.byref(buf), ctypes.byref(num) ) 
-    log.debug('AFTER  %s'%( repr(self.aes_key_ctx.getCounter())) )
+    log.debug('AFTER  %s'%( myhex(self.aes_key_ctx.getCounter())) )
     return model.array2bytes(dest)
         
 

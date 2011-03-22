@@ -7,7 +7,6 @@
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
 import os,logging,sys,time, pickle
-import subprocess
 
 import abouchet
 from openssl import OpenSSLStructFinder
@@ -115,14 +114,6 @@ class OpenSSHKeysFinder():
     self.pid = pid
     self.fullScan = fullScan
     return
-
-  def _callFinder(self,cmd_line):
-    p = subprocess.Popen(cmd_line, stdin=None, stdout=subprocess.PIPE, close_fds=True )
-    p.wait()
-    instance=p.stdout.read()
-    instance=pickle.loads(instance)
-    return instance
-
   
   def find_struct(self, typ, maxNum):
     raise NotImplementedError()
@@ -134,12 +125,10 @@ class OpenSSHKeysFinder():
   
   def findActiveSession(self, maxNum=1):
     ''' '''
-    cmd_line=['python', 'abouchet.py', 'search', "%d"%self.pid, 'ctypes_openssh.session_state']
-    #outs=self.find_struct(ctypes_openssh.session_state, maxNum)
-    outs=self._callFinder(cmd_line)
-    if len(outs) == 0:
+    outs=abouchet.findStruct(self.pid, 'ctypes_openssh.session_state')
+    if outs is None:
       log.error("The session_state has not been found. maybe it's not OpenSSH ?")
-      return 
+      return None,None
     elif len(outs) > 1:
       log.warning("Mmmh, we found multiple session_state(%d). That is odd. I'll try with the first one."%(len(outs)))
     #
@@ -148,10 +137,7 @@ class OpenSSHKeysFinder():
 
   def refreshActiveSession(self, offset):
     ''' '''
-    cmd_line=['python', 'abouchet.py', 'refresh', "%d"%self.pid , 'ctypes_openssh.session_state', "0x%lx"%offset ]
-    #instance,validated=self.loadAt(offset, ctypes_openssh.session_state)
-    # XXX DEBUG 
-    instance,validated=self._callFinder(cmd_line)
+    instance,validated=abouchet.refreshStruct(self.pid, 'ctypes_openssh.session_state', offset)
     if not validated:
       log.error("The session_state has not been re-validated. You should look for it again.")
       return None,None
@@ -164,7 +150,7 @@ class OpenSSHKeysFinder():
     else:
       session_state,addr=self.refreshActiveSession(offset)
     if session_state is None:
-      return None # raise Exception ... 
+      return None,None # raise Exception ... 
     ciphers=SessionCiphers(session_state)
     log.info('Active state ciphers : %s at 0x%lx'%(ciphers,addr))
     #log.debug(ciphers.receiveCtx.app_data.__dict__)
@@ -202,6 +188,8 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
       self.ciphers,self.session_state_addr=self.findActiveKeys(maxNum = self.maxNum)
     else:
       self.ciphers,self.session_state_addr=self.findActiveKeys(offset=self.session_state_addr)
+    if self.ciphers is None:
+      raise ValueError('Struct not found')
     # unstop() the process
     ### Forked no useful self.process.cont()
     # process is running... sniffer is listening
@@ -215,6 +203,7 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     ''' plug sockets, packetizer and outputs together '''
     receiveCtx,sendCtx = self.ciphers.getCiphers()
     # Inbound
+    log.info('activate INBOUND receive')
     self.inbound['context'] = receiveCtx
     self.inbound['socket'] = self.soscapy.getInboundSocket()
     self.inbound['packetizer'] = Packetizer(self.inbound['socket'])
@@ -222,6 +211,7 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     self.inbound['filewriter'] =  output.SSHStreamToFile(self.inbound['packetizer'], 'ssh-in')
 
     # out bound
+    log.info('activate OUTBOUND send')
     self.outbound['context'] = sendCtx
     self.outbound['socket'] = self.soscapy.getOutboundSocket()
     self.outbound['packetizer'] = Packetizer(self.outbound['socket'])
@@ -330,13 +320,13 @@ def main(argv):
   logging.basicConfig(level=logging.DEBUG)
   logging.getLogger('abouchet').setLevel(logging.INFO)
   logging.getLogger('model').setLevel(logging.INFO)
-  #logging.getLogger('openssh.model').setLevel(logging.INFO)
-  #logging.getLogger('scapy').setLevel(logging.ERROR)
+  ##logging.getLogger('openssh.model').setLevel(logging.INFO)
+  ##logging.getLogger('scapy').setLevel(logging.ERROR)
   logging.getLogger('socket.scapy').setLevel(logging.INFO)
   logging.getLogger('engine').setLevel(logging.INFO)
   logging.getLogger('output').setLevel(logging.INFO)
-  #logging.getLogger('root').setLevel(logging.DEBUG)
-  #logging.getLogger('sslnoop.openssh').setLevel(logging.DEBUG)
+  ##logging.getLogger('root').setLevel(logging.DEBUG)
+  ##logging.getLogger('sslnoop.openssh').setLevel(logging.DEBUG)
 
   logging.debug(argv)
 

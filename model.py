@@ -157,6 +157,10 @@ def isUnionType(obj):
   return isinstance(obj,ctypes.Union) and not isCStringPointer(obj)
 
 
+class IgnoreMember:
+  def __contains__(self,obj):
+    return True
+
 class RangeValue:
   def __init__(self,low,high):
     self.low=low
@@ -242,6 +246,12 @@ class LoadableMembers(ctypes.Structure):
     '''
     for attrname,attrtype in self._fields_:
       attr=getattr(self,attrname)
+      # get expected values
+      if attrname in self.expectedValues:
+        # shortcut
+        if self.expectedValues[attrname] is IgnoreMember:
+          return True
+      # validate
       if not self._isValidAttr(attr,attrname,attrtype,mappings):
         return False
       #continue
@@ -284,7 +294,6 @@ class LoadableMembers(ctypes.Structure):
           return False
       return True
     # d)
-    
     if isCStringPointer(attr):
       myaddress=getaddress(attr.ptr)
       if attrname in self.expectedValues:
@@ -364,6 +373,13 @@ class LoadableMembers(ctypes.Structure):
     ## go through all members. if they are pointers AND not null AND in valid memorymapping AND a struct type, load them as struct pointers
     for attrname,attrtype in self._fields_:
       attr=getattr(self,attrname)
+      # shorcut ignores
+      if attrname in self.expectedValues:
+        # shortcut
+        if self.expectedValues[attrname] is IgnoreMember:
+          # make an new empty ctypes
+          setattr(self, attrname, attrtype())
+          return True      
       if not self._loadMember(attr,attrname,attrtype,process,mappings, maxDepth):
         return False
     log.debug('%s END loadMembers ----------------'%(self.__class__.__name__))
