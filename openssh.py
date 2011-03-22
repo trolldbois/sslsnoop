@@ -168,9 +168,10 @@ class OpenSSHKeysFinder():
 
 class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
   ''' Decrypt SSH traffic in live '''
-  def __init__(self, pid, sessionStateAddr=None, scapySocketThread = None, fullScan=False, maxNum=1):
+  def __init__(self, pid, sessionStateAddr=None, scapySocketThread = None, serverMode=None, fullScan=False, maxNum=1):
     OpenSSHKeysFinder. __init__(self, pid, fullScan=fullScan)
     self.soscapy=scapySocketThread
+    self.serverMode=serverMode
     self.maxNum = maxNum
     self.session_state_addr=sessionStateAddr
     self.inbound=dict()
@@ -180,7 +181,7 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
   def run(self):
     ''' launch sniffer and decrypter threads '''
     if self.soscapy is None:
-      self.soscapy=launchScapyThread()
+      self.soscapy=launchScapyThread(self.serverMode)
     elif not self.soscapy.isAlive():
       self.soscapy.start()
     # ptrace ssh
@@ -254,12 +255,18 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
 
 
 
-def launchScapyThread():
+def launchScapyThread(serverMode):
   # @ at param
   port=22
   sshfilter="tcp and port %d"%(port)
   #
-  soscapy=socket_scapy.socket_scapy(sshfilter,packetCount=100)
+  if serverMode:
+    soscapy=socket_scapy.socket_scapy(sshfilter, isInboundPacketCallback=socket_scapy.isdestport22,
+                                      isOutboundPacketCallback=socket_scapy.isNotdestport22)
+    log.info(' --- SSHD SERVER MODE ---- ')
+  else:
+    soscapy=socket_scapy.socket_scapy(sshfilter)
+    log.info(' --- SSH  CLIENT MODE ---- ')
   sniffer = Thread(target=soscapy.run)
   soscapy.setThread(sniffer)
   sniffer.start()
@@ -294,6 +301,7 @@ def argparser():
   parser = argparse.ArgumentParser(prog='sshsnoop', description='Live decription of Openssh traffic.')
   parser.add_argument('pid', type=int, help='Target PID')
   parser.add_argument('--addr', type=str, help='active_context memory address')
+  parser.add_argument('--server', dest='isServer', action='store_const', const=True, help='Use sshd server mode')
   parser.set_defaults(func=search)
   return parser
 
@@ -303,13 +311,14 @@ def search(args):
   log.info("Target has pid %d"%pid)
   if args.addr != None:
     sessionStateAddr=int(args.addr,16)
+  serverMode=args.isServer # True or None
 
   #logging.getLogger('model').setLevel(logging.INFO)
   ###engine,key=openssh.test(16634)
   #engine,key=testEncDec(pid)
   #return 0
   
-  decryptatator=OpenSSHLiveDecryptatator(pid, sessionStateAddr)
+  decryptatator=OpenSSHLiveDecryptatator(pid, sessionStateAddr=sessionStateAddr, serverMode=serverMode)
   decryptatator.run()
   log.info("done for pid %d, struct at 0x%lx"%(pid,decryptatator.session_state_addr))
   sys.exit(0)

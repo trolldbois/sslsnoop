@@ -56,12 +56,14 @@ class socket_scapy():
 
     self._running_thread=None
     # distinguish between incoming and outgoing packets // classic ssh client
-    if ( isInboundPacketCallback is None):
-      ##self.__is_inboundPacket=isNotdestport22 ## SSH CLIENT
-      self.__is_inboundPacket=isdestport22  ## SSH SERVER
-    if ( isOutboundPacketCallback is None):
-      ##self.__is_outboundPacket=isdestport22  ## SSH CLIENT
-      self.__is_outboundPacket=isNotdestport22 ## SSH SERVER
+    self.__is_inboundPacket=isInboundPacketCallback
+    self.__is_outboundPacket=isOutboundPacketCallback
+    if ( self.__is_inboundPacket is None):
+      self.__is_inboundPacket=isNotdestport22 ## SSH CLIENT
+      ##self.__is_inboundPacket=isdestport22  ## SSH SERVER
+    if ( self.__is_outboundPacket is None):
+      self.__is_outboundPacket=isdestport22  ## SSH CLIENT
+      ##self.__is_outboundPacket=isNotdestport22 ## SSH SERVER
     # make socket
     try:
         isWindows = socket.AF_UNIX
@@ -87,6 +89,7 @@ class socket_scapy():
   def run(self):
     # scapy
     sniff(count=self.packetCount,timeout=self.timeout,store=0,filter=self.filterRules,prn=self.cbSSHPacket)
+    log.warning('============ SNIFF Terminated ====================')
     return
   
   def cbSSHPacket(self, obj):
