@@ -431,6 +431,13 @@ import inspect,sys
 ''' Load all openSSH classes and used OpenSSL classes to local classRef '''
 OpenSSHStruct.classRef=dict([ (ctypes.POINTER( klass), klass) for (name,klass) in inspect.getmembers(sys.modules[__name__], inspect.isclass) if klass.__module__ == __name__ or klass.__module__ == 'ctypes_openssl'])
 
+''' Load all model classes and create a similar non-ctypes Python class  
+  thoses will be used to translate non pickable ctypes into POPOs.
+'''
+for klass,typ in inspect.getmembers(sys.modules[__name__], inspect.isclass):
+  if typ.__module__ == __name__:
+    setattr(sys.modules[__name__], '%s_py'%(klass), type('%s_py'%(klass),(object,),{}) )
+
 
 if __name__ == '__main__':
   printSizeof()

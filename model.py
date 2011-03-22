@@ -508,8 +508,8 @@ class LoadableMembers(ctypes.Structure):
     return s
     
   def toPyObject(self):
-    # make self obj.
-    my_class=type(self.__class__.__name__,(object,),{})
+    # get self class.
+    my_class=getattr(sys.modules[self.__class__.__module__],"%s_py"%(self.__class__.__name__) )
     my_self=my_class()
     for field,typ in self._fields_:
       attr=getattr(self,field)
@@ -538,26 +538,19 @@ class LoadableMembers(ctypes.Structure):
           obj=contents.toPyObject()
         else: # pointer vers autre chose, le repr() est le seul choix.
           #obj=repr(contents)
-          print 'MODEL pointer contents else'
           obj=contents
     elif isCStringPointer(attr):
       obj=attr.string
     else:
-      print 'MODEL else'
       obj=attr
     return obj
 
-
-def APP_DATA_value(obj,struct):
-    return struct.from_buffer(obj.contents)
-
-def APP_DATA_toString(obj,struct,prefix='\t'):
-    print 'ok',
-    s=prefix+repr(obj)+'\n'
-    print 'building ',
-    contents=APP_DATA_value(obj,struct)
-    print '__str__ '
-    s+=prefix+'%s: {\t%s%s}\n'%(struct.__name__, contents.toString(prefix+'\t'),prefix )  
-    return s
+import inspect,sys
+''' Load all model classes and create a similar non-ctypes Python class  
+  thoses will be used to translate non pickable ctypes into POPOs.
+'''
+for klass,typ in inspect.getmembers(sys.modules[__name__], inspect.isclass):
+  if typ.__module__ == __name__:
+    setattr(sys.modules[__name__], '%s_py'%(klass), type('%s_py'%(klass),(object,),{}) )
 
 
