@@ -335,4 +335,34 @@ INFO:abouchet:found instance <class 'ctypes_openssh.ssh_aes_ctr_ctx'> @ 0xb85959
 
 # set args abouchet.py --string refresh 7655 ctypes_openssh.session_state 0xb85963a8
 
+### current problem on TCP retransmission
+case 1:
+
+DEBUG:socket.scapy:seqnum 672 -     4018781477 len: 48 outbound: 672 bytes/14 packets max_seq:4018781477 expected_seq:4018781477
+DEBUG:socket.scapy:seqnum 720 -     4018781525 len: 48 outbound: 720 bytes/15 packets max_seq:4018781525 expected_seq:4018781525
+DEBUG:socket.scapy:seqnum 672 -     4018781477 len: 96 outbound: 768 bytes/16 packets max_seq:4018781573 expected_seq:4018781573
+WARNING:socket.scapy:We just received 4018781477 when we already processed 4018781573
+packet 3 = packet 1 + packet 2   => ignore it
+
+
+case2:
+DEBUG:socket.scapy:Queuing packet seq: 1494689839 len: 160 inbound: 398912 bytes/559 packets max_seq:1494689471 expected_seq:1494689727
+DEBUG:socket.scapy:Queuing packet seq: 1494689999 len: 80 inbound: 398912 bytes/559 packets max_seq:1494689471 expected_seq:1494689727
+
+explaination : missing packet in pcap capture. bad scapy.
+
+2 solutions:
+a) ask for transmission. hard. get a better packet capture ?
+b) drop packet, and ignore the len/AES_BLOCK_SIZE block in decrypt. hard2. means we probably have to 'refresh key' as it would be easier. 
+
+
+
+
+
+
+
+
+
+
+
 
