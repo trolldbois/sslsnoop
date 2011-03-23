@@ -32,6 +32,7 @@ from paramiko import util
 from paramiko.ssh_exception import SSHException
 from paramiko.message import Message
 
+PACKET_MAX_SIZE = (256 * 1024) #packet.c
 
 got_r_hmac = False
 try:
@@ -340,6 +341,8 @@ class Packetizer (object):
         if self.__dump_packets:
             self._log(DEBUG, util.format_binary(header, 'IN: '));
         packet_size = struct.unpack('>I', header[:4])[0]
+        if (packet_size > PACKET_MAX_SIZE):
+            raise SSHException('Invalid packet size')
         # leftover contains decrypted bytes from the first block (after the length field)
         leftover = header[4:]
         if (packet_size - len(leftover)) % self.__block_size_in != 0:
