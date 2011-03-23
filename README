@@ -12,9 +12,10 @@ use python.
 
 State:
 ------
-somewhat works .
+somewhat works . Doesn't work on loopback. because scapy/python truncate loopback traffic to 1600 bytes.
 
   $ sudo python openssh.py `pgrep ssh`
+  $ sudo python openssh.py `pgrep ssh` --server # for sshd
 
 Outputs :
 
@@ -78,7 +79,7 @@ INFO:finder:None
 
 
 poc done.
-It often doesn't work out and it surely doesn't work on output streams af of release c6e0011
+
 
 Biblio
 -------
@@ -290,9 +291,45 @@ encypted:
 5a51 e14b 9aad 3c54 31fd a3de 2fca e7e8
 ddee 1ba8 064a 62e2 6512 226a 6f4a 11f4
 
+on sshd :
+-------------------------
+So there is the main root process, the root child and the unprivileged child.
+root      7569  0.0  0.0   5644  2200 pts/2    S+   09:21   0:00 /home/jal/Compil/sslsnoop/biblio/openssh-5.5p1/sshd -D
+root      7572  0.0  0.0   8932  3104 ?        Ss   09:21   0:00 sshd: jal [priv]                                         
+jal       7655  0.0  0.0   8932  1416 ?        S    09:21   0:00 sshd: jal@pts/7   
 
+Funny, forking give identical mappings. ??
 
+UNPRIVILEGED CHILD - APP_DATA IS HERE - no active_session found
+$ sudo python abouchet.py --string refresh 7655 ctypes_openssh.ssh_aes_ctr_ctx 0xb8595970
+INFO:root:Attach process 7655
+INFO:root:Attach <PtraceProcess #7655> to debugger
+INFO:root:Set <PtraceProcess #7655> options to 1
+INFO:abouchet:found instance <class 'ctypes_openssh.ssh_aes_ctr_ctx'> @ 0xb8595970
+(  # <ctypes_openssh.ssh_aes_ctr_ctx object at 0xb743c104>
+"aes_ctx": {             # <ctypes_openssl.AES_KEY object at 0xb743c1dc>
+        "rd_key": b'A3&`"\x1d8\xe4*t\xc7\x91F\xcc\tNnim`LtU\x84f\x00\x92\x15 \xcc\x9b[W\xde&v\x1b\xaas\xf2}\xaa\xe1\xe7]fz\xbc2\x92\x15\xa8)8fZT\x92\x87\xbd\t\xf4\xfd\x01N\x93\xaa\xf4g\xab\xcc\xae39K\x13:\xcd\xb6\x12\x87\x13\x17\xaa\xe0\xb8\xdb\x04\xd3\x81\x90\x17\xe9L&\x05\xec\r>}\x0c\xb5\xe5y\xdf4un6xSk\x93\x08\x82\xd0\x9f\xbdg\xa9@\x89\x12\xc7v\xf1A\xac\x020#\xd3\x9d\x8dDz\xdd\x04V\xbd\xab\xf5\x17\x11\x80R\xc58\x1d\xdf\x81B\xc0\xdb\xd7\xffk.\xc0\xee\xa8-\xf4\xb4\xb5\xf2u\xf6u)\xa2\t\x1e\x07b\xe7i\xa1w0\xc1\xe4\x91I@,N.\xc2.\xcb\x0c\x9f\x13\xc9\xb6\x9c\xf3\xa37\x9e\x14\xad\xd4\xca\xf7\xe8Q\xbcY\xa3\x9f\xd4\x9d\x8ar\xcf\x8b\xe5\xa4\x01po\xf7\x18\xaaN0\xbf^\xbe\x15 ^~\xc3\x8c\x86\xdbe',
+        "rounds": 10, # DEFAULT toString
+},
+"aes_counter": b'o\xb5\x14\xa0\x04Z\xfcp\x93,\xba\x94\xc9s\xf6\x97',
+, True )
+INFO:abouchet:done for pid 7655
 
+ROOT CHILD - APP_DATA IS NOT HERE ANYMORE - but we found remains ( of key aes_ctx ~30bits)
+still same mappings used...
+$ sudo python abouchet.py --string refresh 7572 ctypes_openssh.ssh_aes_ctr_ctx 0xb8595970
+INFO:root:Attach process 7572
+INFO:root:Attach <PtraceProcess #7572> to debugger
+INFO:root:Set <PtraceProcess #7572> options to 1
+INFO:abouchet:found instance <class 'ctypes_openssh.ssh_aes_ctr_ctx'> @ 0xb8595970
+(  # <ctypes_openssh.ssh_aes_ctr_ctx object at 0xb7414104>
+"aes_ctx": {             # <ctypes_openssl.AES_KEY object at 0xb74141dc>
+        "rd_key": b"\xa0[Y\xb8 \x00\x00\x00!\x00\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00G]t\x8c \x00\x00\x00\t\x01\x00\x00v\xfe\xb9\x8aF.\x91\x90c\xfc\x0f\x8b\xc9\xaf\x97\x14j\t\xab(\x9f\x93<\x1d\xc8\xbc\xae\x06\xa3\n,\x01o\t\x034\x01\xee\x04:d\x8aH\xa1\xd4\x12\xbc\xb9\xef\xd1\x90\x85\x16\xd6\xbbN\xaf\x14\xf5\xda_\x15o\x9a\xe4i\rZ'\xcf\x07\xd8\xdaWQ\xe3\xb3\xe3\xa0\x13+\x19\xd5m\xe0}\xa7\xc1\x96\xfaa\xd4\xc1!.F*\x9d\xf5\xec\x9f\xa9\xa8\x82\xfdO@\xd5\xbc\x07>\xe2\xfbl\x99\x1f\xbc\xad\xa5\xb9C\x1dF\x9dW\xb9\xb4kp\x88\xa3D\xee\x18N\xe4K\xb8\xba\xd0\x0b\xa3a\x99i\xa1w0\xc1\xe4\x91I@,N.\xc2.\xcb\x0c\x9f\x13\xc9\xb6\x9c\xf3\xa37\x9e\x14\xad\xd4\xca\xf7\xe8Q\xbcY\xa3\x9f\xd4\x9d\x8ar\xcf\x8b\xe5\xa4\x01po\xf7\x18\xaaN0\xbf^\xbe\x15 ^~\xc3\x8c\x86\xdbe",
+        "rounds": 2059157974, # DEFAULT toString
+},
+"aes_counter": b'\xa0a\xdeO\xf5\xf8\x8deS\xdb\xe0\xaah\xf8\xfe4',
+, True )
 
+# set args abouchet.py --string refresh 7655 ctypes_openssh.session_state 0xb85963a8
 
 
