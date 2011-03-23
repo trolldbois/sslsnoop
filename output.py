@@ -27,6 +27,7 @@ class SSHStreamToFile():
   BUFSIZE=4096
   def __init__(self, packetizer, basename, folder='outputs', fmt="%Y%m%d-%H%M%S"):
     self.packetizer = packetizer
+    #self.refresher = refresher
     self.datename = "%s"%time.strftime(fmt,time.gmtime())
     self.fname=os.path.sep.join([folder,basename])
     self.outs=dict()
@@ -52,16 +53,19 @@ class SSHStreamToFile():
     _expected_packet = tuple()
     try:
       ptype, m = self.packetizer.read_message()
+      #print ptype, len(str(m))
     except NeedRekeyException:
       log.warning('Please refresh keys for rekey')
       return
     except SSHException,e:
       t,v,bt=sys.exc_info()
-      log.warning('SSH exception catched on %s'%(self.fname))
+      log.warning('SSH exception catched on %s - %s'%(self.fname,e))
       #print bt
+      #self.refresher.refresh()
       return
     except OverflowError,e:
       log.warning('SSH exception catched/bad packet size on %s'%(self.fname))
+      #self.refresher.refresh()
       return
     if ptype == MSG_IGNORE:
       return
@@ -86,6 +90,7 @@ class SSHStreamToFile():
     #
     out=self._outputStream(ptype)
     ret=out.write( str(m) )
+    out.flush() # beuahhh
     log.debug("%d bytes written for channel %d"%(ret, ptype))
     return
 
@@ -127,7 +132,7 @@ class Supervisor(threading.Thread):
       # check
       if self.todo:
         self._syncme
-      r,w,o=select.select(self.selectables,[],[],1000)
+      r,w,o=select.select(self.selectables,[],[],2)
       if len(r) == 0:
         log.warning("select waked up without anything to read... going back to select()")
         continue

@@ -206,6 +206,7 @@ class Packetizer (object):
         while n > 0:
             got_timeout = False
             try:
+                self._log(DEBUG,'self.__socket.recv(%d)'%n)
                 x = self.__socket.recv(n)
                 if len(x) == 0:
                     raise EOFError()

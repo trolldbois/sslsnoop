@@ -208,6 +208,7 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     self.inbound['context'] = receiveCtx
     self.inbound['socket'] = self.soscapy.getInboundSocket()
     self.inbound['packetizer'] = Packetizer(self.inbound['socket'])
+    self.inbound['packetizer'].set_log(logging.getLogger('inbound.packetizer'))
     self.inbound['engine'] = self.activate_cipher(self.inbound['packetizer'], receiveCtx )
     self.inbound['filewriter'] =  output.SSHStreamToFile(self.inbound['packetizer'], 'ssh-in')
 
@@ -216,6 +217,7 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     self.outbound['context'] = sendCtx
     self.outbound['socket'] = self.soscapy.getOutboundSocket()
     self.outbound['packetizer'] = Packetizer(self.outbound['socket'])
+    self.outbound['packetizer'].set_log(logging.getLogger('outbound.packetizer'))
     self.outbound['engine'] = self.activate_cipher(self.outbound['packetizer'], self.outbound['context'] )
     self.outbound['filewriter'] =  output.SSHStreamToFile(self.outbound['packetizer'], 'ssh-out')
 
@@ -251,7 +253,25 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
       packetizer.set_inbound_compressor(compress_in())
     #ok
     return engine
-    
+  
+  def refresh(self):
+    log.warning('Refreshing Engine states')
+    # ptrace ssh
+    if self.session_state_addr is None:
+      self.ciphers,self.session_state_addr=self.findActiveKeys(maxNum = self.maxNum)
+    else:
+      self.ciphers,self.session_state_addr=self.findActiveKeys(offset=self.session_state_addr)
+    if self.ciphers is None:
+      raise ValueError('Struct not found')
+    # refresh both engine
+    receiveCtx,sendCtx = self.ciphers.getCiphers()
+    # Inbound
+    log.info('activate INBOUND receive')
+    self.inbound['context'] = receiveCtx
+    self.outbound['context'] = sendCtx
+    self.inbound['engine'].sync(self.inbound['context'])
+    self.outbound['engine'].sync(self.outbound['context'])
+    pass
 
 
 
@@ -327,13 +347,13 @@ def search(args):
 
 def main(argv):
   logging.basicConfig(level=logging.DEBUG)
-  logging.getLogger('abouchet').setLevel(logging.INFO)
-  logging.getLogger('model').setLevel(logging.INFO)
+  #logging.getLogger('abouchet').setLevel(logging.INFO)
+  #logging.getLogger('model').setLevel(logging.INFO)
   ##logging.getLogger('openssh.model').setLevel(logging.INFO)
   ##logging.getLogger('scapy').setLevel(logging.ERROR)
   logging.getLogger('socket.scapy').setLevel(logging.INFO)
   logging.getLogger('engine').setLevel(logging.INFO)
-  logging.getLogger('output').setLevel(logging.INFO)
+  #logging.getLogger('output').setLevel(logging.INFO)
   ##logging.getLogger('root').setLevel(logging.DEBUG)
   ##logging.getLogger('sslnoop.openssh').setLevel(logging.DEBUG)
 

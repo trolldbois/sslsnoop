@@ -8,6 +8,7 @@ __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
 import logging,os,socket
 
+import scapy
 from scapy.all import sniff
 from paramiko import util
 
@@ -72,6 +73,10 @@ class socket_scapy():
     except NameError:
         # yes || no socketpair support anyway
         self._initPipes()
+    # scapy config
+    # loopback
+    #log.info('MTU is %d'%(scapy.data.MTU ))
+    #scapy.data.MTU=0x7fff
     return
   
   def _initPipes(self):
@@ -126,18 +131,21 @@ class socket_scapy():
   def addInboundPacket(self,payload):
     log.debug("add inbound")
     self._inbound_cnt+=self.addPacket(payload,self._inbound_writeso)
-    log.debug("addInboundPacket %d\n%s"%(self._inbound_cnt, hexify(payload) ))
+    log.debug("addInboundPacket %d len: %d\n%s"%(self._inbound_cnt, len(payload), hexify(payload) ))
     #log.debug( (''.join(util.format_binary(payload, '\n '))).lower() )
     return 
     
   def addOutboundPacket(self,payload):
     self._outbound_cnt+=self.addPacket(payload,self._outbound_writeso)
-    log.debug("addOutboundPacket %d\n%s"%(self._inbound_cnt, hexify(payload)) )
+    #log.info("addOutboundPacket %d len: %d"%(self._outbound_cnt, len(payload) ) )
+    log.debug("addOutboundPacket %d len: %d\n%s"%(self._outbound_cnt, len(payload), hexify(payload)) )
     #log.debug( (''.join(util.format_binary(payload, '\n '))).lower() )
     return 
     
   def addPacket(self,payload,so):
-    return so.send(payload)
+    cnt=so.send(payload)
+    #log.debug("buffered %d/%d bytes"%(cnt, len(payload) ) )
+    return cnt
   
   def __str__(self):
     return "inbound: %d bytes, outbound: %d bytes"%(self._inbound_cnt,self._outbound_cnt)
