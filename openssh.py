@@ -347,15 +347,17 @@ def search(args):
 
 def main(argv):
   logging.basicConfig(level=logging.DEBUG)
-  #logging.getLogger('abouchet').setLevel(logging.INFO)
-  #logging.getLogger('model').setLevel(logging.INFO)
+  logging.getLogger('abouchet').setLevel(logging.INFO)
+  logging.getLogger('model').setLevel(logging.INFO)
   ##logging.getLogger('openssh.model').setLevel(logging.INFO)
   ##logging.getLogger('scapy').setLevel(logging.ERROR)
-  logging.getLogger('socket.scapy').setLevel(logging.INFO)
+  #logging.getLogger('socket.scapy').setLevel(logging.INFO)
   logging.getLogger('engine').setLevel(logging.INFO)
-  #logging.getLogger('output').setLevel(logging.INFO)
+  logging.getLogger('output').setLevel(logging.INFO)
   ##logging.getLogger('root').setLevel(logging.DEBUG)
   ##logging.getLogger('sslnoop.openssh').setLevel(logging.DEBUG)
+  logging.getLogger("inbound.packetizer").setLevel(logging.INFO)
+  logging.getLogger("outbound.packetizer").setLevel(logging.INFO)
 
   logging.debug(argv)
 

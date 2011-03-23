@@ -58,9 +58,12 @@ class SSHStreamToFile():
       log.warning('Please refresh keys for rekey')
       return
     except SSHException,e:
-      t,v,bt=sys.exc_info()
       log.warning('SSH exception catched on %s - %s'%(self.fname,e))
+      #t,v,bt=sys.exc_info()
       #print bt
+      print self.packetizer
+      sys.exit()
+      raise e
       #self.refresher.refresh()
       return
     except OverflowError,e:
@@ -134,7 +137,7 @@ class Supervisor(threading.Thread):
         self._syncme
       r,w,o=select.select(self.selectables,[],[],2)
       if len(r) == 0:
-        log.warning("select waked up without anything to read... going back to select()")
+        log.debug("select waked up without anything to read... going back to select()")
         continue
       # read them and write them
       for soket in r:

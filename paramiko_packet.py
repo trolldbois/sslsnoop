@@ -491,3 +491,6 @@ class Packetizer (object):
     def _trigger_rekey(self):
         # outside code should check for this flag
         self.__need_rekey = True
+        
+    def __str__(self):
+      return "<Packetizer receveid bytes: %d received_packets: %d "%(self.__received_bytes, self.__received_packets)

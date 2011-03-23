@@ -5,7 +5,10 @@ idea :
 use http://www.hsc.fr/ressources/breves/passe-partout.html.fr  to get keys
 use http://pauldotcom.com/2010/10/tsharkwireshark-ssl-decryption.html  
  or http://www.rtfm.com/ssldump/ to read streams
-use scapy, because it's fun ?
+use scapy, because it's fun ? but we need IP reassembly . 
+pynids could be more useful...
+dsniff is now in python ?
+flowgrep
 
 use python.
 

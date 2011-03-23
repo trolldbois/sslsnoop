@@ -6,7 +6,7 @@
 
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
-import logging,os,socket
+import logging,os,socket,sys
 
 import scapy
 from scapy.all import sniff
@@ -35,6 +35,34 @@ def hexify(data):
   #s+="\r\n"
   return s
 
+class state:
+  name=None
+  packet_count=0
+  byte_count=0
+  start_seq=None
+  max_seq=0
+  expected_seq=None
+  queue=None
+  write_socket=None
+  read_socket=None
+  def __init__(self,name):
+    self.name=name
+    self.queue=LRUCache(128)
+  def init(self, pair):
+    read, write = pair
+    self.read_socket=read
+    self.write_socket=write
+    return  
+  def __str__(self):
+    return "%s: %d bytes/%d packets max_seq:%d expected_seq:%d"%(self.name, self.byte_count,self.packet_count,
+                self.max_seq,self.expected_seq)
+  
+class stack:
+  def __init__(self):
+    self.inbound=state('inbound')
+    self.outbound=state('outbound')
+  def __str__(self):
+    return "%s %s"%(self.inbound,self.outbound)
   
 class socket_scapy():
   ''' what you write in writeso, gets read in readso '''
@@ -52,8 +80,7 @@ class socket_scapy():
     self.packetCount=packetCount
     self.timeout=timeout
     #
-    self._inbound_cnt=0
-    self._outbound_cnt=0
+    self.stack=stack()
 
     self._running_thread=None
     # distinguish between incoming and outgoing packets // classic ssh client
@@ -68,8 +95,8 @@ class socket_scapy():
     # make socket
     try:
         isWindows = socket.AF_UNIX
-        self._inbound_readso,self._inbound_writeso=socket.socketpair()
-        self._outbound_readso,self._outbound_writeso=socket.socketpair()
+        self.stack.inbound.init(  socket.socketpair() )
+        self.stack.outbound.init( socket.socketpair() )
     except NameError:
         # yes || no socketpair support anyway
         self._initPipes()
@@ -80,16 +107,16 @@ class socket_scapy():
     return
   
   def _initPipes(self):
-    self._inbound_pipe=pipe_socketpair()
-    self._inbound_readso,self._inbound_writeso=self._inbound_pipe.socketpair()
-    self._outbound_pipe=pipe_socketpair()
-    self._outbound_readso,self._outbound_writeso=self._outbound_pipe.socketpair()
+    self.stack.inbound.pipe  = pipe_socketpair()
+    self.stack.inbound.init(  self.stack.inbound.pipe.socketpair())
+    self.stack.outbound.pipe = pipe_socketpair()
+    self.stack.outbound.init( self.stack.outbound.pipe.socketpair() )
     return
 
   def getInboundSocket(self):
-    return self._inbound_readso
+    return self.stack.inbound.read_socket
   def getOutboundSocket(self):
-    return self._outbound_readso
+    return self.stack.outbound.read_socket
 
   def run(self):
     # scapy
@@ -97,30 +124,71 @@ class socket_scapy():
     log.warning('============ SNIFF Terminated ====================')
     return
   
+  def checkState(self,state, packet):
+    seq=packet.seq
+    ## debug head initialisation
+    if state.start_seq is None:
+      state.start_seq=seq
+      state.expected_seq=seq
+    ## debug
+    payloadLen=len(packet.payload)
+    # DEDUPs..
+    # yeah ok, we need an id... seqnum could be ok, but that's tcp
+    # but we can hash the payload too... surely no SSL proto would send twice the same payload
+    pkid=hash((packet.sport,packet.dport,  packet.seq, packet.ack, packet.flags))
+    
+    if pkid in self._cache_seqn:
+      # dups. ignore. Happens when testing on ssh localhost & sshd localhost
+      log.debug('Duplicate packet detected seq: %d'%(seq))
+      '''
+      log.debug('Duplicate packet ignored. seq: %d'%(seq))
+      log.debug('orig packet : %s'%(repr(self._cache_seqn[pkid].underlayer ) ))
+      log.debug('Duplicate packet : %s'%(repr(packet.underlayer) ))
+      sys.exit()
+      return False
+    self._cache_seqn[pkid]=packet
+    '''
+    # always for wireshark, don't log ACKs
+    if state.name == 'inbound' and  payloadLen > 0:
+      log.debug('seqnum %d - %d len: %d %s'%(seq-state.start_seq, seq, payloadLen, state ))
+
+    # now on tcp reassembly
+    if seq == state.expected_seq: # JIT
+      if payloadLen > 0: 
+        state.max_seq = seq
+        state.expected_seq = seq + payloadLen
+        return True
+      # ignore acks
+      return False
+    if seq > state.expected_seq: # future anterieur
+      if payloadLen > 0: 
+        # seq is in advance
+        state.queue[seq]= packet
+        if state.name == 'inbound':
+          log.debug('Queuing packet seq: %d %s'%(seq, state))
+      # ignore Acks
+      return False
+    if seq < state.max_seq:
+      log.warning('We just received %d when we already processed %d'%(seq, state.max_seq))
+      # we are screwed. ignore the packet
+      return False
+    # else, seq < expected_seq and seq >= state.max_seq. That's not possible... it's current packet.
+    # it's a dup already dedupped ? partial fragment ?
+    log.warning('received a bogus fragment seq: %d for %s'%(seq, self))
+    return False
+
   def cbSSHPacket(self, obj):
     ''' callback function to pile packets in socket'''
     packet=obj[self.protocolName]
     pLen=len(packet.payload)
-    if pLen > 0:
-      # DEDUPs..
-      # yeah ok, we need an id... seqnum could be ok, but that's tcp
-      # but we can hash the payload too... surely no SSL proto would send twice the same payload
-      pkid=hash(packet.payload.load)
-      if pkid in self._cache_seqn:
-        # dups. ignore. Happens when testing on ssh localhost & sshd localhost
-        log.debug('Duplicate packet ignored.')
-        return None
-      # Lru cache, should disappear.
-      self._cache_seqn[pkid]=True
-      # else, triage
-      if self.__is_inboundPacket(packet):
-        self.addInboundPacket( packet.payload.load )
-      elif self.__is_outboundPacket(packet):
-        self.addOutboundPacket( packet.payload.load )
-      else:
-        log.error('the packet is neither inbound nor outbound. You messed up your filter and callbacks.')
+    if self.__is_inboundPacket(packet):
+      if self.checkState(self.stack.inbound, packet) and pLen > 0:
+        self.writePacket(self.stack.inbound, packet.payload.load )
+    elif self.__is_outboundPacket(packet):
+      if self.checkState(self.stack.outbound, packet) and pLen > 0:
+        self.writePacket(self.stack.outbound, packet.payload.load )
     else:
-      log.debug("empty payload isInbound %s"%self.__is_inboundPacket(packet))
+      log.error('the packet is neither inbound nor outbound. You messed up your filter and callbacks.')
     return None
     
   def setThread(self,thread):
@@ -128,17 +196,12 @@ class socket_scapy():
     self._running_thread=thread
     return 
   
-  def addInboundPacket(self,payload):
-    log.debug("add inbound")
-    self._inbound_cnt+=self.addPacket(payload,self._inbound_writeso)
-    log.debug("addInboundPacket %d len: %d\n%s"%(self._inbound_cnt, len(payload), hexify(payload) ))
-    #log.debug( (''.join(util.format_binary(payload, '\n '))).lower() )
-    return 
-    
-  def addOutboundPacket(self,payload):
-    self._outbound_cnt+=self.addPacket(payload,self._outbound_writeso)
-    #log.info("addOutboundPacket %d len: %d"%(self._outbound_cnt, len(payload) ) )
-    log.debug("addOutboundPacket %d len: %d\n%s"%(self._outbound_cnt, len(payload), hexify(payload)) )
+  def writePacket(self,state, payload):
+    state.byte_count+=self.addPacket(payload,state.write_socket)
+    state.packet_count+=1
+    if state.name == 'inbound':
+      log.debug("writePacket%s %d len: %d"%(state.name, state.byte_count, len(payload) ) )
+    #log.debug("writePacket%s %d len: %d\n%s"%(state.name, state.byte_count, len(payload), hexify(payload) ) )
     #log.debug( (''.join(util.format_binary(payload, '\n '))).lower() )
     return 
     
@@ -148,7 +211,7 @@ class socket_scapy():
     return cnt
   
   def __str__(self):
-    return "inbound: %d bytes, outbound: %d bytes"%(self._inbound_cnt,self._outbound_cnt)
+    return "<socket_scapy %s "%(self.stack) 
 
 # if Linux use socket.socketpair()
 class pipe_socketpair(object):
