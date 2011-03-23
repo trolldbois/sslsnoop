@@ -63,12 +63,7 @@ class StatefulAESEngine(Engine):
   #AES_encrypt(ivec, ecount_buf, key); # aes_key is struct with cnt, key is really AES_KEY->aes_ctx
   #AES_ctr128_inc(ivec); #ssh_Ctr128_inc semble etre different, mais paramiko le fait non ?
   def __init__(self, context ):
-    self.aes_key_ctx = ssh_aes_ctr_ctx().fromPyObj(context.app_data)
-    # we need nothing else
-    self.key = self.aes_key_ctx.aes_ctx
-    # copy counter content
-    self.counter = self.aes_key_ctx.aes_counter
-    log.info('Counter value is %s'%(myhex(self.aes_key_ctx.getCounter())) )
+    self.sync(context)
     self._AES_ctr=libopenssl.AES_ctr128_encrypt
     log.debug('cipher:%s block_size: %d key_len: %d '%(context.name, context.block_size, context.key_len))
   
@@ -85,7 +80,15 @@ class StatefulAESEngine(Engine):
               ctypes.byref(self.counter), ctypes.byref(buf), ctypes.byref(num) ) 
     log.debug('AFTER  %s'%( myhex(self.aes_key_ctx.getCounter())) )
     return model.array2bytes(dest)
-        
+  
+  def sync(self, context):
+    ''' refresh the crypto state '''
+    self.aes_key_ctx = ssh_aes_ctr_ctx().fromPyObj(context.app_data)
+    # we need nothing else
+    self.key = self.aes_key_ctx.aes_ctx
+    # copy counter content
+    self.counter = self.aes_key_ctx.aes_counter
+    log.info('Counter value is %s'%(myhex(self.aes_key_ctx.getCounter())) )
 
 
 def testDecrypt():
