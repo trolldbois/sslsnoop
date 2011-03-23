@@ -349,7 +349,8 @@ case2:
 DEBUG:socket.scapy:Queuing packet seq: 1494689839 len: 160 inbound: 398912 bytes/559 packets max_seq:1494689471 expected_seq:1494689727
 DEBUG:socket.scapy:Queuing packet seq: 1494689999 len: 80 inbound: 398912 bytes/559 packets max_seq:1494689471 expected_seq:1494689727
 
-explaination : missing packet in pcap capture. bad scapy.
+explaination   : missing packet in pcap capture. bad scapy.
+explaination 2 : missing packet in TCP srteam. retranmission will be done by legit socket.
 
 2 solutions:
 a) ask for transmission. hard. get a better packet capture ?

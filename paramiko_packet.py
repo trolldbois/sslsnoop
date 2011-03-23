@@ -207,7 +207,7 @@ class Packetizer (object):
         while n > 0:
             got_timeout = False
             try:
-                self._log(DEBUG,'self.__socket.recv(%d)'%n)
+                self._log(DEBUG,'self.__socket.recv(%d) %d'%(n,self.__received_bytes))
                 x = self.__socket.recv(n)
                 if len(x) == 0:
                     raise EOFError()
@@ -342,12 +342,15 @@ class Packetizer (object):
             self._log(DEBUG, util.format_binary(header, 'IN: '));
         packet_size = struct.unpack('>I', header[:4])[0]
         if (packet_size > PACKET_MAX_SIZE):
+            self._log(WARNING, 'packet_size: %d max:%d'%(packet_size,PACKET_MAX_SIZE));
             raise SSHException('Invalid packet size')
         # leftover contains decrypted bytes from the first block (after the length field)
         leftover = header[4:]
         if (packet_size - len(leftover)) % self.__block_size_in != 0:
             raise SSHException('Invalid packet blocking')
         buf = self.read_all(packet_size + self.__mac_size_in - len(leftover))
+        self._log(DEBUG,"self.read_all(packet_size(%d) + self.__mac_size_in(%d) - len(leftover)(%d))"%(packet_size,self.__mac_size_in,len(leftover)) )
+        
         packet = buf[:packet_size - len(leftover)]
         post_packet = buf[packet_size - len(leftover):]
         if self.__block_engine_in != None:

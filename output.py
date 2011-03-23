@@ -25,12 +25,15 @@ class SSHStreamToFile():
      between upload and download.
   '''
   BUFSIZE=4096
-  def __init__(self, packetizer, basename, folder='outputs', fmt="%Y%m%d-%H%M%S"):
+  def __init__(self, packetizer, engine, basename, folder='outputs', fmt="%Y%m%d-%H%M%S"):
     self.packetizer = packetizer
     #self.refresher = refresher
     self.datename = "%s"%time.strftime(fmt,time.gmtime())
     self.fname=os.path.sep.join([folder,basename])
     self.outs=dict()
+    self.engine=engine
+    ##
+    self.lastMessage=None
     return
 
   def process(self):
@@ -53,15 +56,28 @@ class SSHStreamToFile():
     _expected_packet = tuple()
     try:
       ptype, m = self.packetizer.read_message()
-      #print ptype, len(str(m))
+      self.lastMessage=m
+      #log.error("now  message was (%d) : %s"%(len(str(m)),repr(str(m))) )
+      self.lastCounter=self.engine.getCounter()
+      if ptype != 94:
+        log.warning("===================== ptype:%d len:%d "%(ptype, len(str(m)) ) )
     except NeedRekeyException:
-      log.warning('Please refresh keys for rekey')
+      log.warning('=============================== Please refresh keys for rekey')
       return
     except SSHException,e:
       log.warning('SSH exception catched on %s - %s'%(self.fname,e))
-      #t,v,bt=sys.exc_info()
-      #print bt
+      ## doesn't work, it's not that...
+      ## drop block, decrement counter, and get next one...
+      #self.engine.decCounter()
+      ##return # drop block
+      
       print self.packetizer
+      m=self.lastMessage
+      c=self.lastCounter
+      log.error("last counter was : %s"%(c) )
+      log.error("last message was (%d) : %s"%(len(str(m)),repr(str(m))) )
+      log.error("last counter was : %s"%( self.engine.getCounter() ) )
+      os.kill(os.getpid())
       sys.exit()
       raise e
       #self.refresher.refresh()
@@ -71,9 +87,10 @@ class SSHStreamToFile():
       #self.refresher.refresh()
       return
     if ptype == MSG_IGNORE:
+      log.warning('================================== MSG_IGNORE')
       return
     elif ptype == MSG_DISCONNECT:
-      log.info( "DISCONNECT MESSAGE")
+      log.info( "==================================== DISCONNECT MESSAGE")
       log.info( m)
       self.packetizer.close()
       return
@@ -81,7 +98,7 @@ class SSHStreamToFile():
       always_display = m.get_boolean()
       msg = m.get_string()
       lang = m.get_string()
-      log.debug('Debug msg: ' + util.safe_string(msg))
+      log.warning('Debug msg: ' + util.safe_string(msg))
       return
     if len(_expected_packet) > 0:
       if ptype not in _expected_packet:

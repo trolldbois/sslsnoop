@@ -210,7 +210,7 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     self.inbound['packetizer'] = Packetizer(self.inbound['socket'])
     self.inbound['packetizer'].set_log(logging.getLogger('inbound.packetizer'))
     self.inbound['engine'] = self.activate_cipher(self.inbound['packetizer'], receiveCtx )
-    self.inbound['filewriter'] =  output.SSHStreamToFile(self.inbound['packetizer'], 'ssh-in')
+    self.inbound['filewriter'] =  output.SSHStreamToFile(self.inbound['packetizer'], self.inbound['engine'], 'ssh-in')
 
     # out bound
     log.info('activate OUTBOUND send')
@@ -219,11 +219,11 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     self.outbound['packetizer'] = Packetizer(self.outbound['socket'])
     self.outbound['packetizer'].set_log(logging.getLogger('outbound.packetizer'))
     self.outbound['engine'] = self.activate_cipher(self.outbound['packetizer'], self.outbound['context'] )
-    self.outbound['filewriter'] =  output.SSHStreamToFile(self.outbound['packetizer'], 'ssh-out')
+    self.outbound['filewriter'] =  output.SSHStreamToFile(self.outbound['packetizer'], self.outbound['engine'], 'ssh-out')
 
     self.worker = output.Supervisor()
     self.worker.add( self.inbound['socket'], self.inbound['filewriter'].process )
-    self.worker.add(self.outbound['socket'], self.outbound['filewriter'].process )
+    #self.worker.add(self.outbound['socket'], self.outbound['filewriter'].process )
     return
     
   def loop(self):
@@ -245,6 +245,7 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     # again , we need a stateful HMAC engine. 
     # we disable HMAC checking to get around.
     # fix our engines in packetizer
+    ## packetizer.set_hexdump(True)
     packetizer.set_inbound_cipher(engine, context.block_size, mac_engine, mac_len , mac_key)
     if context.comp.enabled != 0:
       name = context.comp.name
@@ -288,8 +289,11 @@ def launchScapyThread(serverMode):
     soscapy=socket_scapy.socket_scapy(sshfilter)
     log.info(' --- SSH  CLIENT MODE ---- ')
   sniffer = Thread(target=soscapy.run)
-  soscapy.setThread(sniffer)
+  worker  = Thread(target=soscapy.run2)
+  sniffer.worker = worker
+  soscapy.setThread( sniffer )
   sniffer.start()
+  worker.start()
   return soscapy
 
 
@@ -352,7 +356,7 @@ def main(argv):
   ##logging.getLogger('openssh.model').setLevel(logging.INFO)
   ##logging.getLogger('scapy').setLevel(logging.ERROR)
   #logging.getLogger('socket.scapy').setLevel(logging.INFO)
-  logging.getLogger('engine').setLevel(logging.INFO)
+  #logging.getLogger('engine').setLevel(logging.INFO)
   logging.getLogger('output').setLevel(logging.INFO)
   ##logging.getLogger('root').setLevel(logging.DEBUG)
   ##logging.getLogger('sslnoop.openssh').setLevel(logging.DEBUG)
