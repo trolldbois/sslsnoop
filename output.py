@@ -6,7 +6,7 @@
 
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
-import os,logging,sys,time,io,select
+import os,logging,sys,time,io,select,socket
 import threading
 from threading import Thread
 
@@ -40,6 +40,7 @@ class SSHStreamToFile():
     self.socket=ctx['socket']
     ##
     self.lastMessage=None
+    self.decrypt_errors=0
     return
 
   def process(self):
@@ -58,9 +59,16 @@ class SSHStreamToFile():
 
   def process(self):
     try:
-      self._process()
-    except SSHException2,e:  # only size errror... no sense. should be only one exception. 
-      log.warning('SSH exception catched on %s - %s - will try to find next good Message'%(self.fname,e))
+      m = self._process()
+      if self.decrypt_errors:
+        log.info("we read %d blocks/%d bytes and couldn't make sense out of it"%(self.decrypt_errors, self.decrypt_errors*16 ))
+        log.info("But we made it : to %s"%(str(m) ) )
+        self.decrypt_errors = 0
+
+    except SSHException,e:  # only size errror... no sense. should be only one exception. 
+      self.decrypt_errors+=1
+      log.debug('SSH exception catched on %s - %s - will try to find next good Message'%(self.fname,e))
+      return
       ## searching for right start block of Message
       ## readMessage, on error,  size block is invalid, get to next block
       i=0
@@ -104,22 +112,36 @@ class SSHStreamToFile():
       self.lastCounter=self.engine.getCounter()
       if ptype != 94:
         log.warning("===================== ptype:%d len:%d "%(ptype, len(str(m)) ) )
-    except NeedRekeyException:
+    except NeedRekeyException,e:
       log.warning('=============================== Please refresh keys for rekey')
-      return
+      return e
     except OverflowError,e:
       log.warning('SSH exception catched/bad packet size on %s'%(self.fname))
       #self.refresher.refresh()
-      return
+      return e
     except MissingDataException, e:
       # skip as much bytes as possibles
       for i in range(1, 1+(e.nb / AES_BLOCK_SIZE) ):
         self.engine.incCounter()
       log.warning('missing %d bytes of data - faked %d/%d blocks encryption'%(e.nb, i , e.nb / AES_BLOCK_SIZE ))
       #self.engine.decrypt('.'*e.nb)
-      d = self.socket.recv( len(MISSING_DATA_MESSAGE) )
+      log.warning('trying to read %d in %s'%(len(MISSING_DATA_MESSAGE), self.socket))
+      #
+      delay=0
+      while (True):
+        r,w,o=select.select([self.socket],[],[],0)
+        if len(r) > 0:
+          print 'data to read'
+          d = self.socket.recv( len(MISSING_DATA_MESSAGE))
+          print 'read',d
+          break
+        delay+=0.2
+        print 'NO data ',
+        continue
       if d != MISSING_DATA_MESSAGE:
         log.error("Oops, I read something I should'nt have .... len %d, str : %s"%( len(d), d))
+      else:
+        log.warning(' DUMMY READ OK !')
       # read the dummy
       m = Message()
       m.add_string(d)
@@ -127,9 +149,10 @@ class SSHStreamToFile():
       ## we now need to rounds to block_size.
       remains=e.nb % AES_BLOCK_SIZE
       if (remains):
-      # replace it ?
-        d = self.socket.recv(AES_BLOCK_SIZE-remains)
-        log.warning('rounding for %d bytes of non aligned bytes. received %d expected %s '%(remains, len(d), AES_BLOCK_SIZE-remains))
+        ######## we can't read remains. they do not exists. they are dumped by socket_scapy
+        log.warning('Reading remains .... %d'%(AES_BLOCK_SIZE-remains))
+        ##d = self.socket.recv(AES_BLOCK_SIZE-remains, socket.MSG_DONTWAIT)
+        #log.warning('rounding for %d bytes of non aligned bytes. received %d expected %s '%(remains, len(d), AES_BLOCK_SIZE-remains))
         # and ignore that new block
         self.engine.incCounter()
         log.warning('faked another block encryption ')        
@@ -137,28 +160,28 @@ class SSHStreamToFile():
       else:
         log.warning('ignored missing %d bytes '%(e.nb) )
       ###
-      return
+      return e
     if ptype == MSG_IGNORE:
       log.warning('================================== MSG_IGNORE')
-      return
+      return 'MSG_IGNORE'
     elif ptype == MSG_DISCONNECT:
       log.info( "==================================== DISCONNECT MESSAGE")
       log.info( m)
       self.packetizer.close()
-      return
+      return 'MSG_DISCONNECT'
     elif ptype == MSG_DEBUG:
       always_display = m.get_boolean()
       msg = m.get_string()
       lang = m.get_string()
       log.warning('Debug msg: ' + util.safe_string(msg))
-      return
+      return 'MSG_DEBUG'
     if len(_expected_packet) > 0:
       if ptype not in _expected_packet:
         raise SSHException('Expecting packet from %r, got %d' % (_expected_packet, ptype))
       _expected_packet = tuple()
       if (ptype >= 30) and (ptype <= 39):
         log.info("KEX Message, we need to rekey")
-        return
+        return 'KEX'
     #
     out=self._outputStream(ptype)
     ret=out.write( str(m) )

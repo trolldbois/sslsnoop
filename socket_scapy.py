@@ -6,7 +6,7 @@
 
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
-import logging,os,socket,sys,threading, time
+import logging,os,socket,select, sys,threading, time
 
 import scapy.sendrecv
 from scapy.all import sniff
@@ -14,12 +14,13 @@ from scapy.all import sniff
 from paramiko import util
 
 from lrucache import LRUCache
+from ctypes_openssh import AES_BLOCK_SIZE
 
 log=logging.getLogger('socket.scapy')
 
 
 WAIT_RETRANSMIT=5
-MISSING_DATA_MESSAGE='[MISSINGDATA]'
+MISSING_DATA_MESSAGE='[MISSINGDATA456]'
 
 def isdestport22(packet):
   return  packet.dport == 22
@@ -64,8 +65,10 @@ class state:
     read, write = pair
     self.read_socket=socket.socket(_sock=read)
     self.read_socket_revc_func=self.read_socket.recv
+    #self.read_socket.recv = self._wrapped_recv # will be used to lock-wrap
     self.write_socket=write
     self.lock=threading.Lock()
+    self.solock=threading.Lock()
     return  
 
   def enqueue(self, packet):
@@ -73,6 +76,22 @@ class state:
     self.queue[packet.seq]= packet
     self.lock.release()
     return
+
+  ''' il faut debloquer le send si le read est bloque
+  '''
+  def _wrapped_recv(self, n):
+    self.solock.acquire()
+    ret = self.read_socket_revc_func(n)
+    self.solock.release()
+    return ret
+  def _wrapped_send(self, data):
+    got=self.solock.acquire(False)
+    ret= self.write_socket.send(data)
+    if got:
+      self.solock.release()
+    return ret
+
+    
 
   def forget_missing_data(self):
     ''' switch recv() method on readsocket to alert reader()
@@ -84,16 +103,41 @@ class state:
     self.ts_missing=None
     #
     if self.read_socket.recv != self._read_missing_data:
+      delay=0
+      while (True):
+        r,w,o=select.select([self.read_socket],[],[],0)
+        if len(r) > 0:
+          log.warning('data still in the pipes...')
+          delay+=0.1
+          time.sleep(delay)
+          continue
+        break
+      # i'm the only thread to write data
+      log.warning('socket empty... we switch to Missing mode => send(MISSING_DATA_MESSAGE)')
       self.read_socket.recv = self._read_missing_data
       nb=self.expected_seq-self.max_seq
-      log.debug('%s: ***********888 Signaling about missing data %d bytes (at least) from %d to %d'%(self.name, nb, self.max_seq, self.expected_seq))
-      self.write_socket.send(MISSING_DATA_MESSAGE)
+      # send marker out select()
+      # if partial block, we will need to :
+      #   # ignore future partial block by dropping the bytes  # todo -> use partial retransmission
+      #   # and inc counter on this partial block. # done
+      ret = self.write_socket.send(MISSING_DATA_MESSAGE)
+        
+      #print 'recv'
+      #for i in range(0,120):
+      #  print i,
+      #  d = self.read_socket.recv( 1 )
+      #print ' ============ recv ok ===',len(d)
+      #os.kill(os.getpid(),9)
+      #ret = 0
+      log.debug('%s: ***********888 Signaling about missing data %d bytes (at least) from %d to %d (%d)'%(
+                          self.name, nb, self.max_seq, self.expected_seq, ret))
       # this thread should not be doing anything until the reader has flushed missing data by releasing it
       self.lock.acquire() # blocks until reader reads.
     else :
       log.warning('your locking sucks')
       pass # mmmh, the timer was on, but the function was already positionned ?
     self.lock.release() # restore state
+    log.debug('%s: ***********888 finished signaling'%(self.name ) )
     return
     
   def _read_missing_data(self, n):
@@ -101,6 +145,7 @@ class state:
     ### self.lock.acquire() it should be locked
     # repair socket for further use
     self.read_socket.recv = self.read_socket_revc_func
+    #self.read_socket.recv = self._wrapped_recv
     
     nb = self.expected_seq - self.max_seq
     new_seq = min(self.queue.keys())
@@ -108,11 +153,16 @@ class state:
     log.debug('%s: Forgetting about r:%d e:%d bytes / %d pkts left, expected: %d, new_seq: %d'%(
                             self.name, nbreal, nb, len(self.queue), self.expected_seq ,new_seq ))
     # reinit counters with lowest value, and prequeue will naturally occur (supposedly)
-    self.expected_seq = new_seq
-    self.max_seq = self.expected_seq
+    #self.expected_seq = new_seq
+    #self.max_seq = self.expected_seq
+    ## we are gonna dump future bytes for (AES_BLOCK_SIZE-nbreal) % AES_BLOCK_SIZE has been ok until now
+    ## the block has artificially been fake-decrypted already
+    self.expected_seq = new_seq + ((AES_BLOCK_SIZE-nbreal) % AES_BLOCK_SIZE) # dump partial packet if any.
+    self.max_seq = self.expected_seq # consider partial bytes as already parsed. We should go into case 3 of state machine
     #    
     self.lock.release() # exception if not
     raise MissingDataException(nbreal)
+  
   def __str__(self):
     return "%s: %d bytes/%d packets max_seq:%d expected_seq:%d q:%d"%(self.name, self.byte_count,self.packet_count,
                 self.max_seq,self.expected_seq, len(self.queue))
@@ -387,7 +437,7 @@ class socket_scapy():
       #  seq2=seq+len(self.packets[seq].payload)
       #  log.warning('first+1 packet : %s'%(repr(self.packets[seq2].underlayer ) ))
       if seq+payloadLen > state.expected_seq :
-        log.warning(' ***** EXTRA DATA FOUND ONT TCP RETRANSMISSION ')
+        log.warning(' ***** EXTRA DATA FOUND ON TCP RETRANSMISSION ')
         # we need to recover the extra data to put it in the stream
         nb=(seq+payloadLen) - state.expected_seq
         data=packet.payload.load[-nb:]
@@ -402,6 +452,7 @@ class socket_scapy():
         state.max_seq = seq
         state.expected_seq = seq2
         if payloadLen > 0: 
+          ### ????
           self.packets[seq]=packet # debug the packets
 
         ##os.kill(os.getpid())
@@ -450,14 +501,16 @@ class socket_scapy():
     #if state.name == 'inbound':
     #  log.debug("writePacket%s %d + len: %d = %d"%(state.name, state.byte_count, len(payload), state.byte_count+ len(payload) ) )
 
-    state.byte_count+=self.addPacket(payload,state.write_socket)
+    state.byte_count+=self.addPacket(payload,state)
     state.packet_count+=1
     #log.debug("writePacket%s %d len: %d\n%s"%(state.name, state.byte_count, len(payload), hexify(payload) ) )
     #log.debug( (''.join(util.format_binary(payload, '\n '))).lower() )
     return 
     
-  def addPacket(self,payload,so):
-    cnt=so.send(payload)
+  def addPacket(self,payload, state):
+    ###cnt=state._wrapped_send(payload)
+    #log.debug("state.write_socket.send(payload) ")
+    cnt=state.write_socket.send(payload)
     #log.debug("buffered %d/%d bytes"%(cnt, len(payload) ) )
     return cnt
   
