@@ -15,9 +15,8 @@ use python.
 
 State:
 ------
-works if scapy doesn't drop packets. 
+works if scapy doesn't drop packets. using pcap instead of SOCK_RAW  helps a lot now.
 works better on interactive traffic with slow traffic.
-Doesn't work on loopback because scapy truncates packets to 1600 bytes. (FIXED)
 Dumps one file by fd in outputs/
 Attaching a process is quickier with --addr 0xb788aa98 as provided by abouchet.py
     INFO:abouchet:found instance <class 'ctypes_openssh.session_state'> @ 0xb788aa98

@@ -8,16 +8,14 @@ __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
 import logging,os,socket,select, sys,threading, time
 
-import scapy.sendrecv
-from scapy.all import sniff
-#from scapy.sendrecv import sniff, send
+import scapy.config
+
 from paramiko import util
 
 from lrucache import LRUCache
 from ctypes_openssh import AES_BLOCK_SIZE
 
 log=logging.getLogger('socket.scapy')
-
 
 WAIT_RETRANSMIT=5
 MISSING_DATA_MESSAGE='[MISSINGDATA456]'
@@ -120,9 +118,14 @@ class socket_scapy():
     @param packetCount: 0/Unlimited or packet capture limit
     @param timeout: None/Unlimited or stop after
     '''
+    # set scapy to use native pcap instead of SOCK_RAW
+    scapy.config.conf.use_pcap=True
+
     self._cache_seqn = LRUCache(128)
-    maxSize="\' -s \'0xffff" # abusing scapy-to-tcpdump string format 
-    self.filterRules=filterRules + maxSize
+    ## if using SOCK_RAW, we need to mess with filter to up the capture size higher than 1514/1600 bytes
+    #maxSize="\' -s \'0xffff" # abusing scapy-to-tcpdump string format 
+    #self.filterRules=filterRules + maxSize
+    self.filterRules=filterRules
     self.protocolName=protocolName
     self.packetCount=packetCount
     self.timeout=timeout
@@ -169,9 +172,12 @@ class socket_scapy():
     return self.stack.outbound.read_socket
 
   def run(self):
-    # scapy
+    # scapy - with config initialised
     #scapy.sendrecv.sniff(count=self.packetCount,timeout=self.timeout,store=0,filter=self.filterRules,prn=self.cbSSHPacket)
-    sniff(count=self.packetCount,timeout=self.timeout,store=0,filter=self.filterRules,prn=self.enqueue)
+    from scapy.all import sniff
+    log.info('Using L2listen = %s'%(scapy.config.conf.L2listen)) 
+    # XXX TODO, define iface from saddr and daddr // scapy.all.read_routes()
+    sniff(count=self.packetCount, timeout=self.timeout, store=0, filter=self.filterRules, prn=self.enqueue, iface='any')
     log.warning('============ SNIFF Terminated ====================')
     return
 
