@@ -67,6 +67,13 @@ class state:
     self.write_socket=write
     self.lock=threading.Lock()
     return  
+
+  def enqueue(self, packet):
+    self.lock.acquire()
+    self.queue[packet.seq]= packet
+    self.lock.release()
+    return
+
   def forget_missing_data(self):
     ''' switch recv() method on readsocket to alert reader()
      push missing data in socket to wakeup reader
@@ -79,24 +86,33 @@ class state:
     if self.read_socket.recv != self._read_missing_data:
       self.read_socket.recv = self._read_missing_data
       nb=self.expected_seq-self.max_seq
-      log.debug('%s: ***********888 Signaling about missing data %d bytes from %d to %d'%(self.name, nb, self.max_seq, self.expected_seq))
+      log.debug('%s: ***********888 Signaling about missing data %d bytes (at least) from %d to %d'%(self.name, nb, self.max_seq, self.expected_seq))
       self.write_socket.send(MISSING_DATA_MESSAGE)
-    self.lock.release()
+      # this thread should not be doing anything until the reader has flushed missing data by releasing it
+      self.lock.acquire() # blocks until reader reads.
+    else :
+      log.warning('your locking sucks')
+      pass # mmmh, the timer was on, but the function was already positionned ?
+    self.lock.release() # restore state
     return
     
   def _read_missing_data(self, n):
     ''' exception contains lenght of missing data '''
-    self.lock.acquire()
+    ### self.lock.acquire() it should be locked
     # repair socket for further use
     self.read_socket.recv = self.read_socket_revc_func
+    
     nb = self.expected_seq - self.max_seq
     new_seq = min(self.queue.keys())
-    log.debug('%s: Forgetting about %d bytes / %d pkts left, expected: %d, new_seq: %d'%(self.name, nb, len(self.queue), self.expected_seq ,new_seq ))
+    nbreal = new_seq - self.max_seq
+    log.debug('%s: Forgetting about r:%d e:%d bytes / %d pkts left, expected: %d, new_seq: %d'%(
+                            self.name, nbreal, nb, len(self.queue), self.expected_seq ,new_seq ))
     # reinit counters with lowest value, and prequeue will naturally occur (supposedly)
     self.expected_seq = new_seq
     self.max_seq = self.expected_seq
-    self.lock.release()
-    raise MissingDataException(nb)
+    #    
+    self.lock.release() # exception if not
+    raise MissingDataException(nbreal)
   def __str__(self):
     return "%s: %d bytes/%d packets max_seq:%d expected_seq:%d q:%d"%(self.name, self.byte_count,self.packet_count,
                 self.max_seq,self.expected_seq, len(self.queue))
@@ -192,11 +208,11 @@ class socket_scapy():
     queue.sort(key=lambda p: p.seq)
     # add the first and the next that are in perfect suite.
     toadd=[queue.pop(0),]
-    for i in xrange(1,len(queue)):
-      log.debug('prequeue queue[0].seq: %d , toadd[-1].seq+len(toadd[-1].payload): %d'%(queue[0].seq, toadd[0].seq+len(toadd[0].payload)))
-      if queue[0].seq == toadd[-1].seq+len(toadd[-1].payload):
+    for i in xrange(0,len(queue)):
+      if toadd[-1].seq+len(toadd[-1].payload) == queue[0].seq :
         toadd.append(queue.pop(0))
       else:
+        log.debug('Stop prequeuing  toadd[-1].seq+len(toadd[-1].payload): %d , queue[0].seq: %d'%(toadd[-1].seq+len(toadd[-1].payload) , queue[0].seq ))
         break
     # let remaining in state.queue
     state.queue=dict( [ (p.seq, p) for p in queue])
@@ -204,7 +220,9 @@ class socket_scapy():
     #preprend packets
     self.bigqueue = toadd + self.bigqueue
     self.lock.release()
-    log.debug('Prequeued %d packets, remaining %d'%(len(toadd), len(state.queue)))
+    log.debug('Prequeued %d packets, remaining %d, queued from %d to %d '%(
+                        len(toadd), len(state.queue), toadd[0].seq, (toadd[-1].seq + len(toadd[-1].payload)) 
+                        ))
     # reset time counter
     if len(state.queue) > 0:
       state.ts_missing  = time.time()
@@ -218,8 +236,9 @@ class socket_scapy():
       packet=self.dequeue()
       self.cbSSHPacket(packet)
       if packet is None:
-        #log.debug('%s'%(self))
-        time.sleep(0.5)          
+        if time.time() %10 == 0:
+          log.debug('%s'%(self))
+        time.sleep(0.5)
     log.warning('============ SNIFF WORKER Terminated ====================')
     return
   
@@ -261,29 +280,32 @@ class socket_scapy():
     if state.start_seq is None:
       state.start_seq=seq
       state.expected_seq=seq
-    ## debug
+    ## we should not processs empty packets
     payloadLen=len(packet.payload)
-    # DEDUPs..
+    if payloadLen == 0:
+      return False
+    # DEDUPs.. Useless wwith state machine
     # yeah ok, we need an id... seqnum could be ok, but that's tcp
     # but we can hash the payload too... surely no SSL proto would send twice the same payload
+    '''
     pkid=hash((packet.sport,packet.dport,  packet.seq, packet.ack, packet.flags, len(packet)))
     
     if pkid in self._cache_seqn and payloadLen > 0:
       # dups. ignore. Happens when testing on ssh localhost & sshd localhost
-      log.debug('seqnum %d -     %d len: %d %s  *** DUPLICATE IGNORED *** '%(seq-state.start_seq, seq, payloadLen, state ))
+      log.debug('seqnum %d len: %d %s  *** DUPLICATE IGNORED *** '%(seq, payloadLen, state ))
       return False # ignore it, we already got it
       '''
+    '''
       log.debug('Duplicate packet ignored. seq: %d'%(seq))
       log.debug('orig packet : %s'%(repr(self._cache_seqn[pkid].underlayer ) ))
       log.debug('Duplicate packet : %s'%(repr(packet.underlayer) ))
       sys.exit()
       return False
-      '''
-    self._cache_seqn[pkid]=packet
+    '''
     
     # always for wireshark, don't log ACKs
     #if state.name == 'inbound' : #and  payloadLen > 0:
-    #  log.debug('seqnum %d -     %d len: %d %s'%(seq-state.start_seq, seq, payloadLen, state ))
+    #  log.debug('seqnum %d len: %d %s'%(seq, payloadLen, state ))
 
 
     # debug, is that useful at all....?
@@ -300,9 +322,11 @@ class socket_scapy():
         state.ts_missing = None
         # check if next is already in state.queue , if expected has changed
         if state.expected_seq in state.queue : 
-          log.debug('seqnum %d - ok  %d len: %d %s'%(seq-state.start_seq, seq, payloadLen, state ))
+          log.debug('in state.queue: seqnum %d len: %d %s'%(seq, payloadLen, state ))
           log.debug('we have next ones in buffer %d'%(state.expected_seq)) # prepend the queue to parse list.
           self.prequeue(state)
+        # references it only if its added.
+        ## self._cache_seqn[pkid]=packet ## useless with state machine
       return True
       # ignore acks
       #log.debug('IGNORE empty packet with expected_seq')
@@ -310,7 +334,7 @@ class socket_scapy():
     if seq > state.expected_seq: # future anterieur
       if payloadLen > 0: 
         # seq is in advance
-        state.queue[seq]= packet
+        state.enqueue(packet)
         #log.debug('Queuing packet seq: %d len: %d %s'%(seq, payloadLen, state))
 
         ## if ~5 sec, we will forget about missing data
@@ -324,7 +348,7 @@ class socket_scapy():
 
       # check if next is already in state.queue 
       if state.expected_seq in state.queue :
-        log.debug('queuing, seqnum %d -  q  %d len: %d %s'%(seq-state.start_seq, seq, payloadLen, state ))
+        log.debug('queuing, seqnum %d len: %d %s'%(seq, payloadLen, state ))
         log.debug('queuing, we have next ones in buffer %d'%(state.expected_seq)) # prepend the queue to parse list.
         self.prequeue(state)
         # reset time counter
@@ -402,8 +426,8 @@ class socket_scapy():
     ###self.lock.acquire()
     packet=obj[self.protocolName]
     pLen=len(packet.payload)
-    #if pLen == 0: # ignore acks and stuff // retransmit not working
-    #  return None
+    if pLen == 0: # ignore acks and stuff // retransmit not working
+      return None
     if self.__is_inboundPacket(packet):
       self.stack.inbound.lastpacket = packet
       if self.checkState(self.stack.inbound, packet) and pLen > 0:

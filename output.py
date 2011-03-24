@@ -59,7 +59,7 @@ class SSHStreamToFile():
   def process(self):
     try:
       self._process()
-    except SSHException2,e:
+    except SSHException2,e:  # only size errror... no sense. should be only one exception. 
       log.warning('SSH exception catched on %s - %s - will try to find next good Message'%(self.fname,e))
       ## searching for right start block of Message
       ## readMessage, on error,  size block is invalid, get to next block
@@ -67,8 +67,8 @@ class SSHStreamToFile():
       while (True):
         try:
           m = self._process()
+        except SSHException, e: # or SSHException2, by definition
           i+=1
-        except SSHException2, e:
           continue  
         log.info("we read %d blocks/%d bytes and couldn't make sense out of it"%(i, i*16 ))
         log.info("But we made it : to %s"%(str(m) ) )
@@ -117,11 +117,11 @@ class SSHStreamToFile():
         self.engine.incCounter()
       log.warning('missing %d bytes of data - faked %d/%d blocks encryption'%(e.nb, i , e.nb / AES_BLOCK_SIZE ))
       #self.engine.decrypt('.'*e.nb)
-      m= Message()
       d = self.socket.recv( len(MISSING_DATA_MESSAGE) )
       if d != MISSING_DATA_MESSAGE:
-        log.error("Oops, I read something I should'nt have ....")
+        log.error("Oops, I read something I should'nt have .... len %d, str : %s"%( len(d), d))
       # read the dummy
+      m = Message()
       m.add_string(d)
       ptype = 94
       ## we now need to rounds to block_size.
