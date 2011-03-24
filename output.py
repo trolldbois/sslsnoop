@@ -64,42 +64,11 @@ class SSHStreamToFile():
         log.info("we read %d blocks/%d bytes and couldn't make sense out of it"%(self.decrypt_errors, self.decrypt_errors*16 ))
         log.info("But we made it : to %s"%(str(m) ) )
         self.decrypt_errors = 0
-
     except SSHException,e:  # only size errror... no sense. should be only one exception. 
       self.decrypt_errors+=1
       log.debug('SSH exception catched on %s - %s - will try to find next good Message'%(self.fname,e))
       return
-      ## searching for right start block of Message
-      ## readMessage, on error,  size block is invalid, get to next block
-      i=0
-      while (True):
-        try:
-          m = self._process()
-        except SSHException, e: # or SSHException2, by definition
-          i+=1
-          continue  
-        log.info("we read %d blocks/%d bytes and couldn't make sense out of it"%(i, i*16 ))
-        log.info("But we made it : to %s"%(str(m) ) )
-        break
 
-      #self.engine.decCounter()
-      ##return # drop block
-      '''
-      print self.packetizer
-      m=self.lastMessage
-      c=self.lastCounter
-      log.error("last counter was : %s"%(c) )
-      log.error("last message was (%d) : %s"%(len(str(m)),repr(str(m))) )
-      log.error("last counter was : %s"%( self.engine.getCounter() ) )
-      os.kill(os.getpid(),9)
-      sys.exit()
-      raise e
-      #self.refresher.refresh()
-      return'''
-      # purge data not strat of message.
-      # read until we find a valid Message
-      ##os.kill(os.getpid(),9)
-      pass
 
   def _process(self):
     ''' m can be rewind()-ed , __str__ ()-ed or others...
@@ -120,46 +89,7 @@ class SSHStreamToFile():
       #self.refresher.refresh()
       return e
     except MissingDataException, e:
-      # skip as much bytes as possibles
-      for i in range(1, 1+(e.nb / AES_BLOCK_SIZE) ):
-        self.engine.incCounter()
-      log.warning('missing %d bytes of data - faked %d/%d blocks encryption'%(e.nb, i , e.nb / AES_BLOCK_SIZE ))
-      #self.engine.decrypt('.'*e.nb)
-      log.warning('trying to read %d in %s'%(len(MISSING_DATA_MESSAGE), self.socket))
-      #
-      delay=0
-      while (True):
-        r,w,o=select.select([self.socket],[],[],0)
-        if len(r) > 0:
-          print 'data to read'
-          d = self.socket.recv( len(MISSING_DATA_MESSAGE))
-          print 'read',d
-          break
-        delay+=0.2
-        print 'NO data ',
-        continue
-      if d != MISSING_DATA_MESSAGE:
-        log.error("Oops, I read something I should'nt have .... len %d, str : %s"%( len(d), d))
-      else:
-        log.warning(' DUMMY READ OK !')
-      # read the dummy
-      m = Message()
-      m.add_string(d)
-      ptype = 94
-      ## we now need to rounds to block_size.
-      remains=e.nb % AES_BLOCK_SIZE
-      if (remains):
-        ######## we can't read remains. they do not exists. they are dumped by socket_scapy
-        log.warning('Reading remains .... %d'%(AES_BLOCK_SIZE-remains))
-        ##d = self.socket.recv(AES_BLOCK_SIZE-remains, socket.MSG_DONTWAIT)
-        #log.warning('rounding for %d bytes of non aligned bytes. received %d expected %s '%(remains, len(d), AES_BLOCK_SIZE-remains))
-        # and ignore that new block
-        self.engine.incCounter()
-        log.warning('faked another block encryption ')        
-        log.warning('ignored missing %d bytes + %d extra of data'%(e.nb, AES_BLOCK_SIZE-remains ))
-      else:
-        log.warning('ignored missing %d bytes '%(e.nb) )
-      ###
+      log.warning('=============================== Missing data. Please refresh keys for rekey')
       return e
     if ptype == MSG_IGNORE:
       log.warning('================================== MSG_IGNORE')
