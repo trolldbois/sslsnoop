@@ -64,7 +64,6 @@ class SSHStreamToFile():
         log.info("we read %d blocks/%d bytes and couldn't make sense out of it"%(self.decrypt_errors, self.decrypt_errors*16 ))
         log.info("But we made it : to %s"%(str(m) ) )
         self.decrypt_errors = 0
-
     except SSHException,e:  # only size errror... no sense. should be only one exception. 
       self.decrypt_errors+=1
       log.debug('SSH exception catched on %s - %s - will try to find next good Message'%(self.fname,e))
