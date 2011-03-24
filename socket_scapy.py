@@ -121,7 +121,8 @@ class socket_scapy():
     @param timeout: None/Unlimited or stop after
     '''
     self._cache_seqn = LRUCache(128)
-    self.filterRules=filterRules
+    maxSize="\' -s \'0xffff" # abusing scapy-to-tcpdump string format 
+    self.filterRules=filterRules + maxSize
     self.protocolName=protocolName
     self.packetCount=packetCount
     self.timeout=timeout
