@@ -71,14 +71,25 @@ class StatefulAESEngine(Engine):
     buf=(ctypes.c_ubyte*AES_BLOCK_SIZE)()
     dest=(ctypes.c_ubyte*bLen)()
     num=ctypes.c_uint()
-    log.debug('BEFORE %s'%( myhex(self.aes_key_ctx.getCounter())) )
+    ##log.debug('BEFORE %s'%( myhex(self.aes_key_ctx.getCounter())) )
     #void AES_ctr128_encrypt(
     #      const unsigned char *in, unsigned char *out, const unsigned long length, 
     #           const AES_KEY *key, unsigned char ivec[AES_BLOCK_SIZE],     
     #        	  unsigned char ecount_buf[AES_BLOCK_SIZE],  unsigned int *num)
+    # debug counter overflow
+    ###last=self.aes_key_ctx.getCounter()[-1]
+    ###before=self.getCounter()
     self._AES_ctr( ctypes.byref(block), ctypes.byref(dest), bLen, ctypes.byref(self.key), 
               ctypes.byref(self.counter), ctypes.byref(buf), ctypes.byref(num) ) 
-    log.debug('AFTER  %s'%( myhex(self.aes_key_ctx.getCounter())) )
+    '''
+    newlast=self.aes_key_ctx.getCounter()[-1]
+    if newlast < last :
+      log.warning('Counter has overflown')
+      after=self.getCounter()
+      log.warning('Before %s'%(before))
+      log.warning('After  %s'%(after))
+    '''
+    ##log.debug('AFTER  %s'%( myhex(self.aes_key_ctx.getCounter())) )
     return model.array2bytes(dest)
   
   def sync(self, context):
@@ -90,7 +101,24 @@ class StatefulAESEngine(Engine):
     self.counter = self.aes_key_ctx.aes_counter
     log.info('Counter value is %s'%(myhex(self.aes_key_ctx.getCounter())) )
 
+  def getCounter(self):
+    return myhex(self.aes_key_ctx.getCounter())
 
+  def incCounter(self):
+    ctr=self.counter
+    for i in range(len(ctr)-1,-1,-1):
+      ctr[i] += 1
+      if ctr[i] != 0:
+        return
+    
+  def decCounter(self):
+    ctr=self.counter
+    for i in range(len(ctr)-1,-1,-1):
+      old = ctr[i]         
+      ctr[i] -= 1
+      if old != 0: # underflow
+        return
+   
 def testDecrypt():
   buf='?A\xb7\ru\xc9\x08\xe2em\x16\x06\x1a\x18\xfb\x805,\xd8\x1f\x11\xa3\x1b )G\xe2\r`\xfaw\x87\xef\xfa\xa7\x95\xe1\x84>\xe1\x90\xec\xe1\xfa\xe5\x1e\x9c\xe3'
 

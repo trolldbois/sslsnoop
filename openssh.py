@@ -207,10 +207,10 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     log.info('activate INBOUND receive')
     self.inbound['context'] = receiveCtx
     self.inbound['socket'] = self.soscapy.getInboundSocket()
-    self.inbound['packetizer'] = Packetizer(self.inbound['socket'])
+    self.inbound['packetizer'] = Packetizer( self.inbound['socket'] )
     self.inbound['packetizer'].set_log(logging.getLogger('inbound.packetizer'))
     self.inbound['engine'] = self.activate_cipher(self.inbound['packetizer'], receiveCtx )
-    self.inbound['filewriter'] =  output.SSHStreamToFile(self.inbound['packetizer'], self.inbound['engine'], 'ssh-in')
+    self.inbound['filewriter'] =  output.SSHStreamToFile(self.inbound['packetizer'], self.inbound, 'ssh-in')
 
     # out bound
     log.info('activate OUTBOUND send')
@@ -219,7 +219,7 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     self.outbound['packetizer'] = Packetizer(self.outbound['socket'])
     self.outbound['packetizer'].set_log(logging.getLogger('outbound.packetizer'))
     self.outbound['engine'] = self.activate_cipher(self.outbound['packetizer'], self.outbound['context'] )
-    self.outbound['filewriter'] =  output.SSHStreamToFile(self.outbound['packetizer'], self.outbound['engine'], 'ssh-out')
+    self.outbound['filewriter'] =  output.SSHStreamToFile(self.outbound['packetizer'], self.outbound, 'ssh-out')
 
     self.worker = output.Supervisor()
     self.worker.add( self.inbound['socket'], self.inbound['filewriter'].process )

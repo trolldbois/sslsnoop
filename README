@@ -350,15 +350,30 @@ DEBUG:socket.scapy:Queuing packet seq: 1494689839 len: 160 inbound: 398912 bytes
 DEBUG:socket.scapy:Queuing packet seq: 1494689999 len: 80 inbound: 398912 bytes/559 packets max_seq:1494689471 expected_seq:1494689727
 
 explaination   : missing packet in pcap capture. bad scapy.
-explaination 2 : missing packet in TCP srteam. retranmission will be done by legit socket.
+explaination 2 : missing packet in TCP stream. retranmission will be done by legit socket.
 
 2 solutions:
 a) ask for transmission. hard. get a better packet capture ?
 b) drop packet, and ignore the len/AES_BLOCK_SIZE block in decrypt. hard2. means we probably have to 'refresh key' as it would be easier. 
 
 
+with retransmission :
+DEBUG:socket.scapy:seqnum 103660 -     1539462155 len: 1460 inbound: 103660 bytes/121 packets max_seq:1539460695 expected_seq:1539462155
+DEBUG:socket.scapy:seqnum 105120 -     1539463615 len: 1460 inbound: 105120 bytes/122 packets max_seq:1539462155 expected_seq:1539463615
+DEBUG:socket.scapy:seqnum 106580 -     1539465075 len: 1460 inbound: 106580 bytes/123 packets max_seq:1539463615 expected_seq:1539465075
+DEBUG:socket.scapy:seqnum 116800 -     1539475295 len: 1460 inbound: 108040 bytes/124 packets max_seq:1539465075 expected_seq:1539466535
+10220 de difference, on a perdu 7 packets
+merde c'est pas moi.
 
+DEBUG:socket.scapy:Queuing packet seq: 1539475295 len: 1460 inbound: 108040 bytes/124 packets max_seq:1539465075 expected_seq:1539466535
+DEBUG:socket.scapy:seqnum 157384 -     1539515879 len: 1460 inbound: 116800 bytes/130 packets max_seq:1539473835 expected_seq:1539475295
 
+6 packets recuperes ou traites
+DEBUG:socket.scapy:seqnum 139864 -     1539498359 len: 1460 inbound: 109500 bytes/125 packets max_seq:1539466535 expected_seq:1539467995
+
+DEBUG:socket.scapy:Queuing packet seq: 4018828221 len: 0 outbound: 192 bytes/4 packets max_seq:4018827221 expected_seq:4018827269
+DEBUG:socket.scapy:seqnum 110500 -     1539468995 len: 0 inbound: 116800 bytes/130 packets max_seq:1539473835 expected_seq:1539475295
+WARNING:socket.scapy:We just received 1539 468 995 when we already processed 1539 473 835
 
 
 

@@ -50,6 +50,9 @@ def compute_hmac(key, message, digest_class):
 class NeedRekeyException (Exception):
     pass
 
+class SSHException2 (SSHException):
+    pass
+
 
 class Packetizer (object):
     """
@@ -342,8 +345,8 @@ class Packetizer (object):
             self._log(DEBUG, util.format_binary(header, 'IN: '));
         packet_size = struct.unpack('>I', header[:4])[0]
         if (packet_size > PACKET_MAX_SIZE):
-            self._log(WARNING, 'packet_size: %d max:%d'%(packet_size,PACKET_MAX_SIZE));
-            raise SSHException('Invalid packet size')
+            self._log(DEBUG, 'packet_size: %d max:%d'%(packet_size,PACKET_MAX_SIZE));
+            raise SSHException2('Invalid packet size')
         # leftover contains decrypted bytes from the first block (after the length field)
         leftover = header[4:]
         if (packet_size - len(leftover)) % self.__block_size_in != 0:
