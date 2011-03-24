@@ -223,7 +223,7 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
 
     self.worker = output.Supervisor()
     self.worker.add( self.inbound['socket'], self.inbound['filewriter'].process )
-    #self.worker.add(self.outbound['socket'], self.outbound['filewriter'].process )
+    self.worker.add(self.outbound['socket'], self.outbound['filewriter'].process )
     return
     
   def loop(self):
@@ -350,13 +350,13 @@ def search(args):
 
 
 def main(argv):
-  logging.basicConfig(level=logging.DEBUG)
+  logging.basicConfig(level=logging.INFO)
   logging.getLogger('abouchet').setLevel(logging.INFO)
   logging.getLogger('model').setLevel(logging.INFO)
   ##logging.getLogger('openssh.model').setLevel(logging.INFO)
   ##logging.getLogger('scapy').setLevel(logging.ERROR)
-  #logging.getLogger('socket.scapy').setLevel(logging.INFO)
-  #logging.getLogger('engine').setLevel(logging.INFO)
+  logging.getLogger('socket.scapy').setLevel(logging.INFO)
+  logging.getLogger('engine').setLevel(logging.INFO)
   logging.getLogger('output').setLevel(logging.INFO)
   ##logging.getLogger('root').setLevel(logging.DEBUG)
   ##logging.getLogger('sslnoop.openssh').setLevel(logging.DEBUG)

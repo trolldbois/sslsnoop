@@ -15,7 +15,12 @@ use python.
 
 State:
 ------
-somewhat works . Doesn't work on loopback. because scapy/python truncate loopback traffic to 1600 bytes.
+works if scapy doesn't drop packets. 
+works better on interactive traffic with slow traffic.
+Doesn't work on loopback because scapy truncates packets to 1600 bytes.
+Dumps one file by fd in outputs/
+Attaching a process is quickier with --addr 0xb788aa98 as provided by abouchet.py
+    INFO:abouchet:found instance <class 'ctypes_openssh.session_state'> @ 0xb788aa98
 
   $ sudo python openssh.py `pgrep ssh`
   $ sudo python openssh.py `pgrep ssh` --server # for sshd
@@ -23,17 +28,29 @@ somewhat works . Doesn't work on loopback. because scapy/python truncate loopbac
 Outputs :
 
 WARNING: No route found for IPv6 destination :: (no default route?)
-INFO:sslsnoop.openssh:Target has pid 16697
-INFO:root:Attach process 16697
-INFO:root:Attach <PtraceProcess #16697> to debugger
-INFO:root:Set <PtraceProcess #16697> options to 1
-INFO:sslsnoop.openssh:looking for struct session_state
-INFO:abouchet:found instance @ 0xb8d32268
-INFO:root:Quit debugger
-INFO:sslsnoop.openssh:Active state ciphers : <SessionCiphers RECEIVE: 'aes128-ctr/hmac-md5' SEND: 'aes128-ctr/hmac-md5' > at 0xb8d32268
+DEBUG:root:['6210']
+INFO:sslsnoop.openssh:Target has pid 6210
+INFO:sslsnoop.openssh: --- SSH  CLIENT MODE ---- 
+INFO:root:Attach process 6210
+INFO:root:Attach <PtraceProcess #6210> to debugger
+INFO:root:Set <PtraceProcess #6210> options to 1
+WARNING:abouchet:Restricting search to heap.
+INFO:abouchet:found instance <class 'ctypes_openssh.session_state'> @ 0xb788aa98
+INFO:abouchet:Found enough instance. returning results.
+INFO:abouchet:done for pid 6210
+INFO:sslsnoop.openssh:Active state ciphers : <SessionCiphers RECEIVE: 'aes128-ctr/hmac-md5' SEND: 'aes128-ctr/hmac-md5' > at 0xb788aa98
 INFO:sslsnoop.openssh:Please make some ssh  traffic
-u n a m e   - a v
-Linux ssh1.90.ha.ovh.net 2.6.32.7-mutu-grs-ipv4-32 #2 SMP Sat Feb 6 13:33:23 UTC 2010 i686 GNU/Linux
+INFO:sslsnoop.openssh:activate INBOUND receive
+INFO:engine:Counter value is \xf9\x9\xcd\x5\x0\x23\x66\x8e\xdd\xc\x16\x6b\x2e\x18\xec\x57
+DEBUG:engine:cipher:aes128-ctr block_size: 16 key_len: 16 
+DEBUG:sslsnoop.openssh:cipher:aes128-ctr block_size: 16 key_len: 16 
+INFO:sslsnoop.openssh:activate OUTBOUND send
+INFO:engine:Counter value is \x97\x34\x79\xe5\xd2\x20\xef\x6a\xe9\x63\x6a\xba\xda\xb8\xa3\x7b
+DEBUG:engine:cipher:aes128-ctr block_size: 16 key_len: 16 
+DEBUG:sslsnoop.openssh:cipher:aes128-ctr block_size: 16 key_len: 16 
+
+INFO:output:New Output Filename is outputs/ssh-in.20110324-071457.94
+INFO:output:New Output Filename is outputs/ssh-out.20110324-071458.94
 
 EOF
 

@@ -81,7 +81,7 @@ class StructFinder:
       else:
         log.debug("%s,%s"%(m,m.permissions))
       log.debug('look for %s'%(struct))
-      outputs.extend(self.find_struct_in( m, struct, maxNum))
+      outputs.extend(self.find_struct_in( m, struct, maxNum=maxNum))
       # check out
       if len(outputs) >= maxNum:
         log.info('Found enough instance. returning results.')
@@ -124,7 +124,7 @@ class StructFinder:
         # do stuff with it.
         outputs.append( (instance,offset) )
       if len(outputs) >= maxNum:
-        log.info('Found enough instance. returning results.')
+        log.info('Found enough instance. returning results. find_struct_in')
         break
     return outputs
 
