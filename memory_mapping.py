@@ -113,17 +113,17 @@ class MemoryMapping:
         """Address have to be aligned!"""
         if self.local_mmap : # WORD is type long
             laddr = ctypes.addressof(self.local_mmap) + address-self.start
-            word = ctypes.c_long.from_address(laddr).value # is non-aligned a pb ?
+            word = ctypes.c_ulong.from_address(laddr).value # is non-aligned a pb ?
         else:
             word = self._process().readWord(address)
         return word
 
     def readBytes(self, address, size):
         if self.local_mmap :
-            laddr = ctypes.addressof(self.local_mmap) + address-self.start
-            data = b''.join([ struct.pack('b',x) for x in self.local_mmap[laddr:laddr+size] ])
+            laddr = address-self.start
+            data = b''.join([ struct.pack('B',x) for x in self.local_mmap[laddr:laddr+size] ])
         else:
-            data = self._process().readBytes(address)
+            data = self._process().readBytes(address, size)
         return data
 
     def readStruct(self, address, struct):
