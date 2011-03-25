@@ -297,23 +297,26 @@ def launchScapyThread(serverMode):
   return soscapy
 
 
-
-
-
-def parseSSHClient(pid,name):
-  keysFinder=OpenSSHKeysFinder(pid)
-  ciphers,addr=keysFinder.findActiveKeys()
-  keysFinder.save(ciphers.session_state)
+def parseSSHClient(proc,pcapfilter): ## TODO replace by search
+  parser=argparser()
+  opts = parser.parse_args([str(proc.pid)])
+  opts.func(opts)
+  #keysFinder=OpenSSHKeysFinder(proc.pid)
+  #ciphers,addr=keysFinder.findActiveKeys()
+  #keysFinder.save(ciphers.session_state)
   return 
   
-def parseSSHServer(pid,name):
-  keysFinder=OpenSSHKeysFinder(pid)
-  ciphers,addr=keysFinder.findActiveKeys()
-  keysFinder.save(ciphers.session_state)
+def parseSSHServer(proc,pcapfilter):  ## TODO replace by search --server
+  parser=argparser()
+  opts = parser.parse_args([str(proc.pid),'--server'])
+  opts.func(opts)
+  #keysFinder=OpenSSHKeysFinder(proc.pid)
+  #ciphers,addr=keysFinder.findActiveKeys()
+  #keysFinder.save(ciphers.session_state)
   return 
   
-def parseSSHAgent(pid,name):
-  keysFinder=OpenSSLStructFinder(pid)
+def parseSSHAgent(proc,ignore):
+  keysFinder=OpenSSLStructFinder(proc.pid)
   return keysFinder.findAndSave()
 
 def usage(parser):

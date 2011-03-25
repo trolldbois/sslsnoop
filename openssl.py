@@ -6,7 +6,7 @@
 
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
-import os,logging,sys
+import os,logging,sys, argparse, abouchet
 
 import ctypes_openssl,ctypes_openssh
 #from  model import DSA,RSA
@@ -18,7 +18,7 @@ from ptrace.ctypes_libc import libc
 from ptrace.debugger.debugger import PtraceDebugger
 from ptrace.debugger.memory_mapping import readProcessMappings
 
-log=logging.getLogger('abouchet')
+log=logging.getLogger('openssl')
 MAX_KEYS=255
 
 verbose = 0
@@ -26,73 +26,6 @@ verbose = 0
 from abouchet import FileWriter,StructFinder
 
 _libssl = ctypes.cdll.LoadLibrary("libssl.so")
-
-
-
-
-'''
-int extract_rsa_key(RSA *rsa, proc_t *p) {
-
-
-   switch ( RSA_check_key( rsa )) {
-     case 1 :
-       return 0;
-     case 0 :
-       if (verbose > 1)
-         fprintf(stderr, "warn: invalid RSA key found.\n");
-       break;
-     case -1 :
-       if (verbose > 1)
-         fprintf(stderr, "warn: unable to check key.\n");
-       break;
-   }
-'''
-
-'''
-int extract_dsa_key( DSA * dsa, proc_t *p ) {
-
-  dsa->method_mont_p = NULL;
-  dsa->meth = NULL;
-  dsa->engine = NULL;
-
-  /* in DSA, we should have :
-   * pub_key = g^priv_key mod p
-   */
-  BIGNUM * res = BN_new();
-  if ( res == NULL )
-    err(p, "failed to allocate result BN");
-
-  BN_CTX * ctx = BN_CTX_new();
-  if ( ctx == NULL ) {
-    fprintf(stderr, "[-] error allocating BN_CTX ctx\n");
-    goto free_res;
-  }
-  /* a ^ p % m
-    int BN_mod_exp(BIGNUM *r, BIGNUM *a, const BIGNUM *p,
-    const BIGNUM *m, BN_CTX *ctx);
-    */
-  error = BN_mod_exp(res, dsa->g, dsa->priv_key, dsa->p, ctx);
-  if ( error == 0 ) {
-    if (verbose > 0)
-      fprintf(stderr, "warn: failed to check DSA key.\n");
-    goto free_ctx;
-  }
-  if ( BN_cmp(res, dsa->pub_key) != 0 ) {
-    if (verbose > 0)
-      fprintf(stderr, "warn: invalid DSA key.\n");
-    goto free_ctx;
-  }
-  BN_clear_free(res);
-  BN_CTX_free(ctx);
-
-  fprintf(stderr, "[X] Valid DSA key found.\n");
-
-  return 0;
-
-'''
-
-
-
 
 
 class RSAFileWriter(FileWriter):
@@ -140,23 +73,23 @@ class DSAFileWriter(FileWriter):
   
 
 class OpenSSLStructFinder(StructFinder):
-  ''' '''
+  ''' Must not fork to ptrace. We need the real ctypes structs '''
   # interesting structs
   rsaw=RSAFileWriter()
   dsaw=DSAFileWriter()  
-  def __init__(self,pid, fullScan=False):
-    StructFinder.__init__(self,pid, fullScan=fullScan)
+  def __init__(self,pid):
+    StructFinder.__init__(self,pid)
     self.OPENSSL_STRUCTS={     # name, ( struct, callback)
       'RSA': (ctypes_openssl.RSA, self.rsaw.writeToFile ),
       'DSA': (ctypes_openssl.DSA, self.dsaw.writeToFile )
       }
-  def findAndSave(self):
+  def findAndSave(self, maxNum=1, fullScan=False, nommap=False):
     log.debug('look for RSA keys')
-    outs=self.find_struct(ctypes_openssl.RSA)
+    outs=self.find_struct(ctypes_openssl.RSA, maxNum=maxNum, fullScan=fullScan )
     for rsa,addr in outs:
       self.save(rsa)    
     log.debug('look for DSA keys')
-    outs=self.find_struct(ctypes_openssl.DSA)
+    outs=self.find_struct(ctypes_openssl.DSA, maxNum=maxNum, fullScan=fullScan )
     for dsa,addr in outs:
       self.save(dsa)    
     return
@@ -167,41 +100,42 @@ class OpenSSLStructFinder(StructFinder):
     elif type(instance) == ctypes_openssl.DSA:
       self.dsaw.writeToFile(instance)
     else:
-      log.error('I dont know how to save that')
+      log.error('I dont know how to save that : %s'%(instance))
 
 def usage(txt):
   log.error("Usage : %s <pid> [offset] # find SSL Structs in process"% txt)
   sys.exit(-1)
 
 
+def argparser():
+  parser = argparse.ArgumentParser(prog='openssl.py', description='Capture of RSA and DSA keys.')
+  parser.add_argument('pid', type=int, help='Target PID')
+  parser.set_defaults(func=search)
+  return parser
+
+
+def search(args):
+  log.info("Target has pid %d"%args.pid)
+  finder = OpenSSLStructFinder(args.pid )
+  outs=finder.findAndSave()
+  return
+
+
+
 def main(argv):
   logging.basicConfig(level=logging.INFO)
 
-  if ( len(argv) < 1 ):
-    usage(sys.argv[0])
-    return
-
   # use optarg on v, a and to
-  pid = int(argv[0])
-  log.info("Target has pid %d"%pid)
+  parser = argparser()
+  opts = parser.parse_args(argv)
+  try:
+    opts.func(opts)
+  except ImportError,e:
+    log.error('Struct type does not exists.')
+    print e
 
-  finder = OpenSSLStructFinder(pid, fullScan=True )
-  
-  addr=None  
-  #### force offset
-  if len(argv) == 2:
-    addr=int(argv[1],16)
-    instance,validated = finder.loadAt(addr, ctypes_openssl.DSA)
-    if validated:
-      finder.save(instance)    
-    instance,validated = finder.loadAt(addr, ctypes_openssl.RSA)
-    if validated:
-      finder.save(instance)    
-    return
-
-  outs=finder.findAndSave()
         
-  log.info("done for pid %d"%pid)
+  log.info("done for pid %d"%opts.pid)
 
   return -1
 

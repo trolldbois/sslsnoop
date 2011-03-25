@@ -6,9 +6,9 @@
 
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
-import os,logging,psutil,sys
+import os,logging,psutil,sys, time
 import openssh
-import ptrace
+import threading
 
 log=logging.getLogger('finder')
 
@@ -24,7 +24,7 @@ def buildTuples(targets):
   rets=[]
   for proc in psutil.process_iter():
     if proc.name in targets:
-      rets.append( (proc.pid,proc.name,targets[proc.name]) )
+      rets.append( (proc.pid,proc) )
   return rets
 
     
@@ -35,6 +35,30 @@ def pgrep(name):
       pids.append(name)
   return pids
 
+def makeFilter(conn):
+  # [connection(fd=3, family=2, type=1, local_address=('192.168.1.101', 36386), remote_address=('213.186.33.2', 22), status='ESTABLISHED')]
+  pcap_filter = "host %s and port %s and host %s and port %s" %(conn.local_address[0],conn.local_address[1] ,
+                            conn.remote_address[0],conn.remote_address[1]  )
+  return pcap_filter
+
+def checkConnections(proc):
+  conns=proc.get_connections()
+  if len(conns) == 0 :
+    return False
+  elif len(conns) > 1 :
+    if proc.name == 'sshd':
+      estab = [ c for c in conns if c.status == 'ESTABLISHED'] 
+      log.info('Found %d connections for %s'%(len(estab), proc.name))
+      return ' or '.join(makeFilter(estab))
+    log.warning(' %s has more than 1 connection ?'%(proc.name))
+    return False
+  elif conns[0].status != 'ESTABLISHED' :
+    log.warning(' %s has noESTABLISHED connections (1 %s)'%(conn[0].status))
+    return False
+  # else ok for ssh
+  f=makeFilter(conns[0])
+  log.info('Found connection %s for %s'%(conns[0], proc.name))
+  return f
 
 def usage(txt):
   log.error("Usage : %s "% txt)
@@ -52,16 +76,21 @@ def main(argv):
     return
     
   options=buildTuples(_targets)
+  threads=[]
+  for pid,proc in options:
+    log.info("Searching in %s/%d memory"%(proc.name,proc.pid))
+    pcap_filter = checkConnections(proc)
+    if not pcap_filter and not 'ssh-agent' == proc.name:
+      continue
+    # call cb
+    t=threading.Thread(target=_targets[proc.name], args=(proc, pcap_filter)) 
+    t.start()
+    threads.append(t)
+    log.info('Thread launched on pid %d'%(proc.pid))
 
-  for pid,name,func in options:
-    try:
-      log.info("Searching in %s/%d memory"%(name,pid))
-      status=func(pid,name) 
-      log.info(status)
-    except ptrace.error.PtraceError,e:
-      log.warning("%s/%d not ptraceable"%(name,pid))
-      continue      
-
+  # wait for all threads
+  while (threading.active_count() > 0 ):
+    time.sleep(1)
   sys.exit(0)
   return 0
 

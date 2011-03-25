@@ -84,7 +84,7 @@ class StructFinder:
       self.process.cont()
       log.info('Memory mmaped, process released after %02.02f secs'%(time.time()-t0))
 
-  def find_struct(self, struct, hintOffset=None, maxNum = 10, maxDepth=10 , fullScan=False):
+  def find_struct(self, struct, hintOffset=0, maxNum = 10, maxDepth=10 , fullScan=False):
     if not fullScan:
       log.warning("Restricting search to heap.")
     outputs=[]
@@ -108,7 +108,7 @@ class StructFinder:
     # if we mmap, we could yield
     return outputs
 
-  def find_struct_in(self, memoryMap, struct, hintOffset=None, maxNum=10, maxDepth=99 ):
+  def find_struct_in(self, memoryMap, struct, hintOffset=0, maxNum=10, maxDepth=99 ):
     '''
       Looks for struct in memory, using :
         hints from struct (default values, and such)
@@ -132,7 +132,7 @@ class StructFinder:
     if hintOffset in memoryMap: # absolute offset
       align=hintOffset%plen
       start=hintOffset-align
-    elif hintOffset  < end-start: # relative offset
+    elif hintOffset != 0 and hintOffset  < end-start: # relative offset
       align=hintOffset%plen
       start=start+ (hintOffset-align)
      
@@ -187,6 +187,8 @@ def _callFinder(cmd_line):
 
 def findStruct(pid, struct, maxNum=1, fullScan=False, nommap=False):
   ''' '''
+  if type(struct) != str:
+    struct = '.'.join([struct.__module__,struct.__name__])
   cmd_line=['python', 'abouchet.py', 'search', "%d"%pid, "%s"%struct, '--maxnum', str(int(maxNum))] #, '--nommap'
   if fullScan:
     cmd_line.append('--fullscan')
@@ -201,6 +203,8 @@ def findStruct(pid, struct, maxNum=1, fullScan=False, nommap=False):
 
 def refreshStruct(pid, struct, offset):
   ''' '''
+  if type(struct) != str:
+    struct = '.'.join([struct.__module__,struct.__name__])
   cmd_line=['python', 'abouchet.py', 'refresh', "%d"%pid , '%s'%struct, "0x%lx"%offset ]
   instance,validated=_callFinder(cmd_line)
   if not validated:

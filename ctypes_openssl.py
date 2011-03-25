@@ -11,7 +11,8 @@ from ptrace.debugger.memory_mapping import readProcessMappings
 import logging
 log=logging.getLogger('openssl.model')
 
-from model import is_valid_address,getaddress,array2bytes,bytes2array,LoadableMembers,RangeValue,NotNull,CString,EVP_CIPHER_CTX_APP_DATA_PTR
+from model import is_valid_address,is_valid_address_value,getaddress,array2bytes,bytes2array
+from model import LoadableMembers,RangeValue,NotNull,CString,EVP_CIPHER_CTX_APP_DATA_PTR
 
 
 ''' hmac.h:69 '''
