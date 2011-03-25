@@ -49,8 +49,7 @@ class FileWriter:
 
 class StructFinder:
   ''' Generic tructure mapping '''
-  def __init__(self, pid, fullScan=False):
-    self.fullScan=fullScan
+  def __init__(self, pid):
     self.dbg = PtraceDebugger()
     self.process = self.dbg.addProcess(pid,is_attached=False)
     if self.process is None:
@@ -65,18 +64,18 @@ class StructFinder:
         break
     self.mappings.extend(tmp)
 
-  def find_struct(self, struct, hintOffset=None, maxNum = 10, maxDepth=99 ):
-    if not self.fullScan:
+  def find_struct(self, struct, hintOffset=None, maxNum = 10, maxDepth=99 , fullScan=False):
+    if not fullScan:
       log.warning("Restricting search to heap.")
     outputs=[]
     for m in self.mappings:
       ##debug, most structures are on head
-      if not self.fullScan and m.pathname != '[heap]':
+      if not fullScan and m.pathname != '[heap]':
         continue
       if not hasValidPermissions(m):
         log.warning("Invalid permission for memory %s"%m)
         continue
-      if self.fullScan:
+      if fullScan:
         log.info("Looking at %s"%(m))
       else:
         log.debug("%s,%s"%(m,m.permissions))
@@ -154,9 +153,13 @@ def _callFinder(cmd_line):
   instance=pickle.loads(instance)
   return instance
 
-def findStruct(pid, struct, maxNum=1):
+def findStruct(pid, struct, maxNum=1, fullScan=False):
   ''' '''
   cmd_line=['python', 'abouchet.py', 'search', "%d"%pid, "%s"%struct]
+  if fullScan:
+    cmd_line.append('--fullscan')
+  cmd_line.append('--maxnum')
+  cmd_line.append(str(int(maxNum)))
   outs=_callFinder(cmd_line)
   if len(outs) == 0:
     log.error("The %s has not been found."%(struct))
@@ -187,6 +190,8 @@ def argparser():
   search_parser = subparsers.add_parser('search', help='search help')
   search_parser.add_argument('pid', type=int, help='Target PID')
   search_parser.add_argument('structType', type=str, help='Structure type name')
+  search_parser.add_argument('--fullscan', action='store_const', const=True, default=False, help='do a full memory scan, otherwise, restrict to the heap')
+  search_parser.add_argument('--maxnum', type=int, action='store', default=1, help='Limit to maxnum numbers of results')
   search_parser.set_defaults(func=search)
   #
   refresh_parser = subparsers.add_parser('refresh', help='refresh help')
@@ -208,8 +213,8 @@ def search(args):
   pid=int(args.pid)
   structType=getKlass(args.structType)
 
-  finder = StructFinder(pid)  
-  outs=finder.find_struct( structType, maxNum=1)
+  finder = StructFinder(pid)
+  outs=finder.find_struct( structType, maxNum=args.maxnum, fullScan=args.fullscan)
   if args.human:
     print '[',
     for ss, addr in outs:
