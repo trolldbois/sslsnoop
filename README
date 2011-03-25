@@ -12,13 +12,23 @@ flowgrep
 
 use python.
 
+
+dependencies:
+-------------
+python-ptrace
+scapy
+python-pcap / python-xxxpcap ( recommended )
+paramiko (for ssh decryption) [ TODO, extract & kill dep ]
+python-psutil 
+
+
 TODO:
 ====
 use psutils to get p.get_connections(), to construct the filter or update the socket with a new stream filter ( doable )
 automatise ssh/sshd detection through name matching // get_connections ( done in finder.py )
 
 
-State:
+HOWTO:
 ------
 works if scapy doesn't drop packets. using pcap instead of SOCK_RAW  helps a lot now.
 works better on interactive traffic with slow traffic.
