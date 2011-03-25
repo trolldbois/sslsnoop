@@ -18,9 +18,10 @@ from paramiko_packet import Packetizer
 # todo : replace by one empty shell of ours
 from paramiko.transport import Transport
 
+from abouchet import FileWriter
+
 log=logging.getLogger('sslsnoop.openssh')
 
-from abouchet import FileWriter
 
 
 CLIENT_STRUCTS=[ctypes_openssh.session_state]
