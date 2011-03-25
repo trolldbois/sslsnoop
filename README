@@ -14,7 +14,7 @@ use python.
 
 TODO:
 ====
-add memmap to ptrace's MemoryMap
+add memmap to ptrace's MemoryMap (Done)
 use psutils to get p.get_connections(), to construct the filter or update the socket with a new stream filter
 automatise ssh/sshd detection through name matching // get_connections 
 
