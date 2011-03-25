@@ -6,40 +6,21 @@
 
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
-import os,logging,sys,time, pickle
+import argparse, os, logging, sys, time, pickle, struct
 
-import abouchet
-from openssl import OpenSSLStructFinder
-import output
-
-import ctypes, model, ctypes_openssh, ctypes_openssl
-from ctypes import cdll
-from ctypes_openssh import AES_BLOCK_SIZE
+import ctypes, ctypes_openssh, ctypes_openssl
+import abouchet, output, socket_scapy
 from engine import StatefulAESEngine
 
-# linux only
-from ptrace.debugger.debugger import PtraceDebugger
-from ptrace.debugger.memory_mapping import readProcessMappings
-
 #our impl
-from paramiko_packet import Packetizer, NeedRekeyException
+from paramiko_packet import Packetizer
 
-
+# todo : replace by one empty shell of ours
 from paramiko.transport import Transport
-from paramiko import util
-import paramiko
-from paramiko.util import Counter
-from paramiko.common import *
-
-
-import socket_scapy,struct
-from socket_scapy import hexify
-from threading import Thread
 
 log=logging.getLogger('sslsnoop.openssh')
 
-from abouchet import FileWriter,StructFinder
-import argparse
+from abouchet import FileWriter
 
 
 CLIENT_STRUCTS=[ctypes_openssh.session_state]
@@ -277,6 +258,7 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
 
 
 def launchScapyThread(serverMode):
+  from threading import Thread
   # @ at param
   port=22
   sshfilter="tcp and port %d"%(port)
@@ -316,6 +298,7 @@ def parseSSHServer(proc,pcapfilter):  ## TODO replace by search --server
   return 
   
 def parseSSHAgent(proc,ignore):
+  from openssl import OpenSSLStructFinder
   keysFinder=OpenSSLStructFinder(proc.pid)
   return keysFinder.findAndSave()
 
@@ -487,7 +470,7 @@ def test(pid,addr):
 
 def testSimpleDecrypt(readso,engine_in):
   block = readso.recv(16)
-  print hexify(block)
+  print socket_scapy.hexify(block)
   header = engine_in.decrypt(block)
   print 'First 4 char  data=',repr(header[:4])
   print 'p_size %d or %d'%(struct.unpack('>I', header[:4])[0], struct.unpack('<I', header[:4])[0])
