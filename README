@@ -71,9 +71,20 @@ What does it do ?:
 ------------------
 The basic functionnality is to search in a process' memory maps for a specific C Structures.
 
+What does it do, really ?:
+--------------------------
+It dumps live AES keys from an openssh in aes128-ctr , and decrypts the traffic on the fly.
+
 How do it knows that the structures is valid ? :
 ------------------------------------------------
 You add some constraints ( expectedValues ) on the fields. Pointers are also a good start.
+
+Yeah, but you have to be root, so what's the use ? :
+----------------------------------------------------
+Monitoring ssh traffic on honeypots ?
+Monitoring encrypted traffic on honeypots ?
+Monitoring encrypted traffic on ... somewhere your are root ?
+
  
 Where does the idea comes from ? :
 -----------------------------------
