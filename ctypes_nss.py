@@ -61,6 +61,14 @@ gen.SECItem.expectedValues={
   'type':RangeValue(0,15), # security/nss/lib/util/seccomon.h:64
 }
 
+gen.SECKEYPublicKey.expectedValues={
+  'keyType':RangeValue(0,6), # security/nss/lib/cryptohi/keythi.h:189
+}
+
+#gen.NSSLOWKEYPublicKey.expectedValues={
+#  'keyType':RangeValue(0,5), # security/nss/lib/softoken/legacydb/lowkeyti.h:123
+#}
+
 gen.CERTCertificate.expectedValues={ # XXX TODO CHECK VALUES security/nss/lib/certdb/certt.h
   'keyIDGenerated': [0,1], # ok
   'keyUsage': [RangeValue(0,gen.KU_ALL), # security/nss/lib/certdb/certt.h:570
