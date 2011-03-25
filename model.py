@@ -38,7 +38,7 @@ def is_valid_address_value(addr,mappings,structType=None):
         s=ctypes.sizeof(structType)
         if (addr+s) not in m:
           return False
-      return True
+      return m
   return False
 
 def is_address_local(obj, structType=None):
