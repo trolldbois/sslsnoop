@@ -72,7 +72,8 @@ class StructFinder:
         self.mappings.append(m)
         continue
       remains.append(m)
-    tmp = [x for x in remains if not x.pathname.startswith('/')] # delete memmapped dll
+    #tmp = [x for x in remains if not x.pathname.startswith('/')] # delete memmapped dll
+    tmp=remains
     tmp.sort(key=lambda x: x.start )
     tmp.reverse()
     self.mappings.extend(tmp)
