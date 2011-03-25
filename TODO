@@ -1,0 +1,12 @@
+TODO:
+====
+use psutils to get p.get_connections(), to construct the filter or update the socket with a new stream filter ( doable )
+automatise ssh/sshd detection through name matching // get_connections ( done in finder.py )
+find that bug that sigsegv abouchet sometimes. probably a pointer going in loadMembers.else
+
+find interesting struct in firefox.
+
+look at windows portability.
+
+look at volatility compatibility.
+

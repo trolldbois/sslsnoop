@@ -1,33 +1,3 @@
-
-
-idea :
-
-use http://www.hsc.fr/ressources/breves/passe-partout.html.fr  to get keys
-use http://pauldotcom.com/2010/10/tsharkwireshark-ssl-decryption.html  
- or http://www.rtfm.com/ssldump/ to read streams
-use scapy, because it's fun ? but we need IP reassembly . 
-pynids could be more useful...
-dsniff is now in python ?
-flowgrep
-
-use python.
-
-
-dependencies:
--------------
-python-ptrace
-scapy
-python-pcap / python-xxxpcap ( recommended for perf issues )
-paramiko (for ssh decryption) [ TODO, extract & kill dep. we only need Message and Packetizer ]
-python-psutil 
-
-
-TODO:
-====
-use psutils to get p.get_connections(), to construct the filter or update the socket with a new stream filter ( doable )
-automatise ssh/sshd detection through name matching // get_connections ( done in finder.py )
-find that bug that sigsegv abouchet sometimes. probably a pointer going in loadMembers.else
-
 HOWTO:
 ------
 works if scapy doesn't drop packets. using pcap instead of SOCK_RAW  helps a lot now.
@@ -40,34 +10,15 @@ Attaching a process is quickier with --addr 0xb788aa98 as provided by abouchet.p
   $ sudo python openssh.py `pgrep ssh`
   $ sudo python openssh.py `pgrep ssh` --server # for sshd
 
-Outputs :
+and go and check outputs/ :
 
-WARNING: No route found for IPv6 destination :: (no default route?)
-DEBUG:root:['6210']
-INFO:sslsnoop.openssh:Target has pid 6210
-INFO:sslsnoop.openssh: --- SSH  CLIENT MODE ---- 
-INFO:root:Attach process 6210
-INFO:root:Attach <PtraceProcess #6210> to debugger
-INFO:root:Set <PtraceProcess #6210> options to 1
-WARNING:abouchet:Restricting search to heap.
-INFO:abouchet:found instance <class 'ctypes_openssh.session_state'> @ 0xb788aa98
-INFO:abouchet:Found enough instance. returning results.
-INFO:abouchet:done for pid 6210
-INFO:sslsnoop.openssh:Active state ciphers : <SessionCiphers RECEIVE: 'aes128-ctr/hmac-md5' SEND: 'aes128-ctr/hmac-md5' > at 0xb788aa98
-INFO:sslsnoop.openssh:Please make some ssh  traffic
-INFO:sslsnoop.openssh:activate INBOUND receive
-INFO:engine:Counter value is \xf9\x9\xcd\x5\x0\x23\x66\x8e\xdd\xc\x16\x6b\x2e\x18\xec\x57
-DEBUG:engine:cipher:aes128-ctr block_size: 16 key_len: 16 
-DEBUG:sslsnoop.openssh:cipher:aes128-ctr block_size: 16 key_len: 16 
-INFO:sslsnoop.openssh:activate OUTBOUND send
-INFO:engine:Counter value is \x97\x34\x79\xe5\xd2\x20\xef\x6a\xe9\x63\x6a\xba\xda\xb8\xa3\x7b
-DEBUG:engine:cipher:aes128-ctr block_size: 16 key_len: 16 
-DEBUG:sslsnoop.openssh:cipher:aes128-ctr block_size: 16 key_len: 16 
+You can also do some ctypes structures search in memory :
 
-INFO:output:New Output Filename is outputs/ssh-in.20110324-071457.94
-INFO:output:New Output Filename is outputs/ssh-out.20110324-071458.94
+  $ sudo python  abouchet.py --string search 31493 ctypes_openssl.RSA --maxnum 2
+  $ # 31493 is ssh-agent
+  
+It's easy to add new structures (check ctypeslib or do it by hand )
 
-EOF
 
 Other tricks :
 --------------
@@ -113,7 +64,41 @@ INFO:abouchet:[X] Key saved to file outputs/id_dsa-6.key
 INFO:finder:None
 
 
+not so FAQ :
+============
+
+What does it do ?:
+------------------
+The basic functionnality is to search in a process' memory maps for a specific C Structures.
+
+How do it knows that the structures is valid ? :
+------------------------------------------------
+You add some constraints ( expectedValues ) on the fields. Pointers are also a good start.
+ 
+Where does the idea comes from ? :
+-----------------------------------
+use http://www.hsc.fr/ressources/breves/passe-partout.html.fr  to get keys
+use http://pauldotcom.com/2010/10/tsharkwireshark-ssl-decryption.html  
+ or http://www.rtfm.com/ssldump/ to read streams
+use scapy, because it's fun ? but we need IP reassembly . 
+pynids could be more useful...
+dsniff is now in python ?
+flowgrep
+use python.
+
+
+What are the dependencies ? :
+----------------------------
+python-ptrace
+scapy
+python-pcap / python-xxxpcap ( recommended for perf issues )
+paramiko (for ssh decryption) [ TODO, extract & kill dep. we only need Message and Packetizer ]
+python-psutil 
+
+Conclusion :
+------------
 poc done.
+Next, `pgrep firefox`. 
 
 
 Biblio
