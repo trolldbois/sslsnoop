@@ -122,6 +122,7 @@ class CipherContext(OpenSSHStruct):
   def loadMembers(self, mappings, maxDepth):
     if not LoadableMembers.loadMembers(self, mappings, maxDepth):
       return False
+    #print 'app_data attr_obj_address=',getaddress(self.evp.app_data)
     # cast evp.app_data into a valid struct
     if self.cipher.contents.name.string in self.cipherContexts:
       struct,fieldname=self.cipherContexts[self.cipher.contents.name.string]
@@ -367,6 +368,17 @@ packet._fields_ = [
   ("payload", Buffer )
   ] 
 
+packet.expectedValues={
+    "next": IgnoreMember, 
+}
+'''
+TAILQ_HEAD_PACKET.expectedValues={
+    "next": IgnoreMember, 
+}
+.expectedValues={
+    "next": IgnoreMember, 
+}
+'''
 class session_state(OpenSSHStruct):
   ''' openssh/packet.c:103 '''
   _fields_ = [

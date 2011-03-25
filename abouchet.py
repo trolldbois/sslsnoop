@@ -65,6 +65,7 @@ class StructFinder:
       if mmap:
         ### mmap memory in local space
         m.mmap()
+        #log.warning('mmap() : %d'%(len(m.local_mmap)))
       if ( m.pathname == '[heap]' or 
            m.pathname == '[vdso]' or
            m.pathname == '[stack]' or
@@ -80,7 +81,7 @@ class StructFinder:
     self.mappings.reverse()
     ### mmap done, we can release process...
     if mmap:
-      self.process.cont()
+      ##DEBUG self.process.cont()
       log.info('Memory mmaped, process released after %02.02f secs'%(time.time()-t0))
 
   def find_struct(self, struct, hintOffset=None, maxNum = 10, maxDepth=10 , fullScan=False):
@@ -184,13 +185,13 @@ def _callFinder(cmd_line):
   instance=pickle.loads(instance)
   return instance
 
-def findStruct(pid, struct, maxNum=1, fullScan=False):
+def findStruct(pid, struct, maxNum=1, fullScan=False, nommap=True):
   ''' '''
-  cmd_line=['python', 'abouchet.py', 'search', "%d"%pid, "%s"%struct]
+  cmd_line=['python', 'abouchet.py', 'search', "%d"%pid, "%s"%struct, '--maxnum', str(int(maxNum))] #, '--nommap'
   if fullScan:
     cmd_line.append('--fullscan')
-  cmd_line.append('--maxnum')
-  cmd_line.append(str(int(maxNum)))
+  if nommap:
+    cmd_line.append('--nommap')
   outs=_callFinder(cmd_line)
   if len(outs) == 0:
     log.error("The %s has not been found."%(struct))
@@ -224,6 +225,7 @@ def argparser():
   search_parser.add_argument('--fullscan', action='store_const', const=True, default=False, help='do a full memory scan, otherwise, restrict to the heap')
   search_parser.add_argument('--maxnum', type=int, action='store', default=1, help='Limit to maxnum numbers of results')
   search_parser.add_argument('--hint', type=int, action='store', default=1, help='hintOffset to start at')
+  search_parser.add_argument('--nommap', action='store_const', const=True, default=False, help='disable mmap()-ing')
   search_parser.set_defaults(func=search)
   #
   refresh_parser = subparsers.add_parser('refresh', help='refresh help')
@@ -241,12 +243,14 @@ def getKlass(name):
   klass = getattr(mod, kname)  
   return klass
 
+
 def search(args):
   pid=int(args.pid)
   structType=getKlass(args.structType)
 
-  finder = StructFinder(pid, mmap=True)
+  finder = StructFinder(pid, mmap=(not args.nommap))
   outs=finder.find_struct( structType, hintOffset=args.hint ,maxNum=args.maxnum, fullScan=args.fullscan)
+  #return
   if args.human:
     print '[',
     for ss, addr in outs:
@@ -254,7 +258,7 @@ def search(args):
       pass
     print ']'
   else:
-    ret=[ (ss.toPyObject(),addr) for ss, addr in outs]
+    ret=[ (ss.toPyObject(),addr) for ss, addr in outs]    
     print pickle.dumps(ret)
   return outs
 
