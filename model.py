@@ -454,12 +454,7 @@ class LoadableMembers(ctypes.Structure):
       MAX_SIZE=255
       log.debug("%s %s is defined as a CString, loading from 0x%lx is_valid_address %s"%(
                       attrname,attr,attr_obj_address, is_valid_address(attr,mappings) ))
-      # i don't know how to read CString
       txt,full = memoryMap.readCString(attr_obj_address, MAX_SIZE )
-      txt2,full = memoryMap._process().readCString(attr_obj_address, MAX_SIZE )
-      w1 = memoryMap.readBytes(attr_obj_address, 4)
-      w2 = memoryMap._process().readBytes(attr_obj_address, 4)
-      #print "%s @ 0x%lx ===> %s / %s \t w1:%s w2:%s"%(memoryMap, attr_obj_address, txt, txt2, repr(w1) , repr(w2) )
       if not full:
         log.warning('buffer size was too small for this CString')
       attr.string=txt
@@ -532,11 +527,11 @@ class LoadableMembers(ctypes.Structure):
         if isStructType(contents):
           s=prefix+'"%s": { #(0x%lx) -> %s%s},\n'%(field, getaddress(attr), attr.contents.toString(prefix+'\t'),prefix) # use struct printer
         elif isPointerType(contents):
-          s=prefix+'"%s": { #(0x%lx) -> %s%s},\n'%(field, getaddress(attr), self._attrToString(attr.contents, prefix+'\t') ) # use struct printer
+          s=prefix+'"%s": { #(0x%lx) -> %s%s},\n'%(field, getaddress(attr), self._attrToString(attr.contents, None, None, prefix+'\t'), prefix ) # use struct printer
         else:
           s=prefix+'"%s": { #(0x%lx) -> %s\n%s},\n'%(field, getaddress(attr), attr.contents, prefix) # use struct printer
     elif isCStringPointer(attr):
-      s=prefix+'"%s": "%s" , #(CString) @ 0x%lx\n'%(field, attr.string, ctypes.addressof(attr.ptr.contents))  
+      s=prefix+'"%s": "%s" , #(CString)\n'%(field, attr.string)  
     else:
       s=prefix+'"%s": %s, # DEFAULT toString\n'%(field, repr(attr) )  
     return s

@@ -79,9 +79,9 @@ class StructFinder:
     tmp.reverse()
     self.mappings.extend(tmp)
     self.mappings.reverse()
-    ### mmap done, we can release process...
     if mmap:
-      ##DEBUG self.process.cont()
+      ### mmap done, we can release process...
+      self.process.cont()
       log.info('Memory mmaped, process released after %02.02f secs'%(time.time()-t0))
 
   def find_struct(self, struct, hintOffset=None, maxNum = 10, maxDepth=10 , fullScan=False):
@@ -185,7 +185,7 @@ def _callFinder(cmd_line):
   instance=pickle.loads(instance)
   return instance
 
-def findStruct(pid, struct, maxNum=1, fullScan=False, nommap=True):
+def findStruct(pid, struct, maxNum=1, fullScan=False, nommap=False):
   ''' '''
   cmd_line=['python', 'abouchet.py', 'search', "%d"%pid, "%s"%struct, '--maxnum', str(int(maxNum))] #, '--nommap'
   if fullScan:
