@@ -136,7 +136,8 @@ def isBasicType(obj):
 
 def isStructType(obj):
   ''' a struct is what WE have created '''
-  return isinstance(obj,LoadableMembers)
+  #return isinstance(obj,LoadableMembers)
+  return isinstance(obj, ctypes.Structure)
   # or use obj.classRef
   
 def isPointerType(obj):
@@ -580,6 +581,12 @@ class LoadableMembers(ctypes.Structure):
     return obj
 
 import inspect,sys
+
+def pasteLoadableMemberMethodsOn(klass):
+  for n,v in inspect.getmembers(LoadableMembers, inspect.ismethod):
+    setattr(klass, n, v)
+  return klass
+
 ''' Load all model classes and create a similar non-ctypes Python class  
   thoses will be used to translate non pickable ctypes into POPOs.
 '''
