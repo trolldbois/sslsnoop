@@ -8,7 +8,7 @@ __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
 import os,logging,psutil,sys, time
 import openssh
-import threading
+import subprocess
 
 log=logging.getLogger('finder')
 
@@ -74,23 +74,28 @@ def main(argv):
   if os.getuid() + os.geteuid() != 0:
     log.error("You must be root/using sudo to read memory and sniff traffic. So there's no point in going further")
     return
-    
+  
+  if not os.access('outputs', os.X_OK) :
+    os.mkdir('outputs/')
+  
   options=buildTuples(_targets)
   threads=[]
+  forked=0
   for pid,proc in options:
     log.info("Searching in %s/%d memory"%(proc.name,proc.pid))
     pcap_filter = checkConnections(proc)
     if not pcap_filter and not 'ssh-agent' == proc.name:
       continue
     # call cb
-    t=threading.Thread(target=_targets[proc.name], args=(proc, pcap_filter)) 
-    t.start()
-    threads.append(t)
-    log.info('Thread launched on pid %d'%(proc.pid))
+    if (os.fork() == 0):
+      _targets[proc.name](proc, pcap_filter)
+      sys.exit(0)
+      break
+    forked+=1
+    log.info('Subprocess launched on pid %d'%(proc.pid))
 
-  # wait for all threads
-  while (threading.active_count() > 0 ):
-    time.sleep(1)
+  time.sleep(5)
+  log.info(' ============== %d process forked. look into outputs/ for data '%(forked))
   sys.exit(0)
   return 0
 

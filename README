@@ -14,9 +14,8 @@ use python.
 
 TODO:
 ====
-add memmap to ptrace's MemoryMap (Done)
-use psutils to get p.get_connections(), to construct the filter or update the socket with a new stream filter
-automatise ssh/sshd detection through name matching // get_connections 
+use psutils to get p.get_connections(), to construct the filter or update the socket with a new stream filter ( doable )
+automatise ssh/sshd detection through name matching // get_connections ( done in finder.py )
 
 
 State:
@@ -27,6 +26,7 @@ Dumps one file by fd in outputs/
 Attaching a process is quickier with --addr 0xb788aa98 as provided by abouchet.py
     INFO:abouchet:found instance <class 'ctypes_openssh.session_state'> @ 0xb788aa98
 
+  $ sudo python finder.py    # try ssh, sshd and ssh-agent...
   $ sudo python openssh.py `pgrep ssh`
   $ sudo python openssh.py `pgrep ssh` --server # for sshd
 
