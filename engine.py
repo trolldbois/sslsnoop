@@ -7,25 +7,11 @@
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
 import os,logging,sys, copy
-#use volatility?
 
-import abouchet
-import ctypes, model, ctypes_openssh
+import ctypes, model
 from ctypes import cdll
 from ctypes_openssh import AES_BLOCK_SIZE, ssh_aes_ctr_ctx
 from ctypes_openssl import AES_KEY
-
-#our impl
-from paramiko_packet import Packetizer, NeedRekeyException
-
-from paramiko.transport import Transport
-from paramiko import util
-from paramiko.util import Counter
-from paramiko.common import *
-
-
-import socket_scapy
-from threading import Thread
 
 log=logging.getLogger('engine')
 
