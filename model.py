@@ -12,6 +12,10 @@ from ptrace.debugger.memory_mapping import readProcessMappings
 import logging
 log=logging.getLogger('model')
 
+def devnull(arg, **args):
+  return
+log.debug = devnull
+
 MEMCACHE=[]
 
 
@@ -168,6 +172,8 @@ class RangeValue:
     self.high=high
   def __contains__(self,obj):
     return self.low <= obj <= self.high
+  def __eq__(self,obj):
+    return self.low <= obj <= self.high
 
 class NotNullComparable:
   def __contains__(self,obj):
@@ -211,11 +217,8 @@ def printWhois(attr):
 
 
 class LoadableMembers(ctypes.Structure):
-  #loaded=False ## useless member instance doesn't stick
-  #valid=False ## useless members doesn't stick
   ''' ctypes.POINTER types for automatic address space checks '''
   classRef=dict()
-  #validFields=set() #useless
   expectedValues=dict()
 
   def isValid(self,mappings):
@@ -245,13 +248,25 @@ class LoadableMembers(ctypes.Structure):
            check getaddress against is_valid_address() 
               if False, return False, else continue
     '''
+    # precheck for quick unvalidation
+    myfields=dict(self._fields_)
+    for attrname, expected in self.expectedValues.iteritems():
+      attrtype = myfields[attrname]
+      attr=getattr(self,attrname)
+      if expected is IgnoreMember:
+        continue
+      if not self._isValidAttr(attr,attrname,attrtype,mappings):
+        return False
+    #if len(self.expectedValues) >0 :
+    #  log.info('maybe valid . full validation follows validated :%s'%(self.expectedValues.keys()))    
+    # normal check
     for attrname,attrtype in self._fields_:
       attr=getattr(self,attrname)
       # get expected values
       if attrname in self.expectedValues:
         # shortcut
         if self.expectedValues[attrname] is IgnoreMember:
-          return True
+          continue # oho ho
       # validate
       if not self._isValidAttr(attr,attrname,attrtype,mappings):
         return False
@@ -328,11 +343,12 @@ class LoadableMembers(ctypes.Structure):
       # all case, 
       _attrType=None
       if attrtype not in self.classRef:
-        #log.debug("I can't know the size of the basic type behind the %s pointer, it's a pointer to basic type")
+        log.debug("I can't know the size of the basic type behind the %s pointer, it's a pointer to basic type")
         _attrType=None
       else:
         # test valid address mapping
         _attrType=self.classRef[attrtype]
+      #log.debug(" ihave decided on pointed attrType to be %s"%(_attrType))
       if ( not is_valid_address( attr, mappings, _attrType) ) and (getaddress(attr) != 0):
         log.debug('%s %s %s 0x%lx INVALID'%(attrname,attrtype, repr(attr) ,getaddress(attr)))
         return False
@@ -381,8 +397,13 @@ class LoadableMembers(ctypes.Structure):
           # make an new empty ctypes
           setattr(self, attrname, attrtype())
           return True      
-      if not self._loadMember(attr,attrname,attrtype,process,mappings, maxDepth):
-        return False
+      try:
+        if not self._loadMember(attr,attrname,attrtype,process,mappings, maxDepth):
+          return False
+      except ValueError, e:
+        print 'maxDepath was ', maxDepth
+        raise e
+
     log.debug('%s END loadMembers ----------------'%(self.__class__.__name__))
     return True
     
@@ -587,8 +608,10 @@ def pasteLoadableMemberMethodsOn(klass):
     #setattr(klass, n, types.MethodType(func, klass) )  # bad self type. need LoadableMembers not Struct
     # Py2.x
     setattr(klass, n, func.im_func)
-  setattr( klass, 'expectedValues', dict() )
-  setattr( klass, 'classRef', dict() )
+  if not hasattr(klass, 'expectedValues' ):
+    setattr( klass, 'expectedValues', dict() )
+  if not hasattr(klass, 'classRef' ):
+    setattr( klass, 'classRef', dict() )
   return klass
 
 ''' Load all model classes and create a similar non-ctypes Python class  

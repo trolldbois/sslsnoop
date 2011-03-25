@@ -12,6 +12,12 @@ flowgrep
 
 use python.
 
+TODO:
+====
+add memmap to ptrace's MemoryMap
+use psutils to get p.get_connections(), to construct the filter or update the socket with a new stream filter
+automatise ssh/sshd detection through name matching // get_connections 
+
 
 State:
 ------
@@ -394,7 +400,13 @@ WARNING:socket.scapy:We just received 1539 468 995 when we already processed 153
 
 
 
+firefox & NSS
+=============
+INFO:abouchet:found instance <class 'ctypes_nss_generated.CERTCertificateStr'> @ 0xbfe12c20   => sur la stack
 
+INFO:abouchet:Looking at 0x85f00000-0x86000000 (rw-p)
+INFO:abouchet:processed 6465536 bytes
+ptrace.debugger.process_error.ProcessError: readBytes(0x84d28ae4, 392) error: [Errno 5] Input/output error
+## weird ....
 
-
-
+4894720
