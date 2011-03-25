@@ -10,8 +10,7 @@ import os,logging,sys,time,io,select,socket
 import threading
 from threading import Thread
 
-from paramiko import Message
-from paramiko_packet import NeedRekeyException, SSHException2
+from paramiko_packet import NeedRekeyException
 from paramiko.ssh_exception import SSHException
 from paramiko.common import *
 
