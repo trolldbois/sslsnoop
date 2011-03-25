@@ -362,6 +362,15 @@ class EVP_CIPHER(OpenSSLStruct):
   ("ctrl",  ctypes.POINTER(ctypes.c_int)), # function () 
   ("app_data",  ctypes.POINTER(ctypes.c_ubyte)) 
   ]
+  expectedValues={
+    "key_len": RangeValue(1,0xff), # key_len *8 bits ..2040 bits for a key is enought ? 
+                                   # Default value for variable length ciphers 
+    "iv_len": RangeValue(1,0xff), #  
+    "init": [NotNull], 
+    "do_cipher": [NotNull], 
+    "cleanup": [NotNull], 
+    "ctx_size": RangeValue(0,0xffff), #  app_data struct should not be too big
+  }
 
 #mok
 class EVP_CIPHER_CTX(OpenSSLStruct):
@@ -383,6 +392,15 @@ class EVP_CIPHER_CTX(OpenSSLStruct):
   ("block_mask",  ctypes.c_int), 
   ("final",  ctypes.c_ubyte*EVP_MAX_BLOCK_LENGTH) ###unsigned char final[EVP_MAX_BLOCK_LENGTH]
   ]
+  expectedValues={
+    "cipher": [NotNull], 
+    "encrypt": [0,1], 
+    "buf_len": RangeValue(0,EVP_MAX_BLOCK_LENGTH), ## number we have left, so must be less than buffer_size
+    #"engine": , # can be null
+    #"app_data": , # can be null if cipher_data is not
+    #"cipher_data": , # can be null if app_data is not
+    "key_len": RangeValue(1,0xff), # key_len *8 bits ..2040 bits for a key is enought ? 
+  }
   def getAppData(self,structType):
     log.debug('CAST app_data into %s'%(structType))
     return structType.from_address(getaddress(self.app_data))
