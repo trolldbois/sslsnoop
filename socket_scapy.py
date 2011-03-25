@@ -10,8 +10,6 @@ import logging,os,socket,select, sys,threading, time
 
 import scapy.config
 
-from paramiko import util
-
 from lrucache import LRUCache
 from ctypes_openssh import AES_BLOCK_SIZE
 
@@ -359,7 +357,6 @@ class socket_scapy():
     state.byte_count+=self.addPacket(payload,state)
     state.packet_count+=1
     #log.debug("writePacket%s %d len: %d\n%s"%(state.name, state.byte_count, len(payload), hexify(payload) ) )
-    #log.debug( (''.join(util.format_binary(payload, '\n '))).lower() )
     return 
     
   def addPacket(self,payload, state):
