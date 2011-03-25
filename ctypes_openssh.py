@@ -119,8 +119,8 @@ class CipherContext(OpenSSHStruct):
 	 "aes256-ctr": (ssh_aes_ctr_ctx, 'app_data'),
 	 "acss@openssh.org": None,
   }
-  def loadMembers(self,process, mappings, maxDepth):
-    if not LoadableMembers.loadMembers(self,process, mappings, maxDepth):
+  def loadMembers(self, mappings, maxDepth):
+    if not LoadableMembers.loadMembers(self, mappings, maxDepth):
       return False
     # cast evp.app_data into a valid struct
     if self.cipher.contents.name.string in self.cipherContexts:
@@ -131,9 +131,9 @@ class CipherContext(OpenSSHStruct):
       attr=getattr(self.evp,fieldname)
       attr_obj_address=getaddress(attr)
       #print attr
-      
+      memoryMap = is_valid_address_value( attr_obj_address, mappings, struct)
       #print "CAST %s into : %s "%(fieldname, struct)
-      st=struct.from_buffer_copy(process.readStruct(attr_obj_address, struct ) )
+      st=struct.from_buffer_copy(memoryMap.readStruct(attr_obj_address, struct ) )
       # XXX CAST do not copy buffer when casting, sinon on perds des bytes
       attr.contents=(type(attr.contents)).from_buffer(st)
 
@@ -170,18 +170,20 @@ class Enc(OpenSSHStruct):
   ("key",  ctypes.POINTER(ctypes.c_ubyte)), #u_char ? -> ctypes.c_ubyte_p ?
   ("iv",  ctypes.POINTER(ctypes.c_ubyte))
   ]
-  def loadMembers(self,process, mappings, maxDepth):
-    if not LoadableMembers.loadMembers(self,process, mappings, maxDepth):
+  def loadMembers(self, mappings, maxDepth):
+    if not LoadableMembers.loadMembers(self, mappings, maxDepth):
       return False
     # Load and memcopy key and iv
     log.debug('Memcopying a Key with %d bytes'%self.key_len)
     attr_obj_address=getaddress(self.key)
-    array=(ctypes.c_ubyte*self.key_len).from_buffer_copy(process.readArray(attr_obj_address, ctypes.c_ubyte, self.key_len))
+    memoryMap = is_valid_address_value( attr_obj_address, mappings)
+    array=(ctypes.c_ubyte*self.key_len).from_buffer_copy(memoryMap.readArray(attr_obj_address, ctypes.c_ubyte, self.key_len))
     self.key.contents=ctypes.c_ubyte.from_buffer(array)
     
     log.debug('Memcopying a IV with %d bytes'%( self.block_size) )
     attr_obj_address=getaddress(self.iv)
-    array=(ctypes.c_ubyte*self.block_size).from_buffer_copy(process.readArray(attr_obj_address, ctypes.c_ubyte,self.block_size))
+    memoryMap = is_valid_address_value( attr_obj_address, mappings)
+    array=(ctypes.c_ubyte*self.block_size).from_buffer_copy(memoryMap.readArray(attr_obj_address, ctypes.c_ubyte,self.block_size))
     self.iv.contents=ctypes.c_ubyte.from_buffer(array)
     
     log.debug('ENC KEY(%d bytes) and IV(%d bytes) acquired'%(self.key_len,self.block_size))
@@ -274,13 +276,14 @@ class Mac(OpenSSHStruct):
 
      We should conditionnally loadMembers on evp_ctx or umac_ctx, but, hey.. poc here...
   '''
-  def loadMembers(self,process, mappings, maxDepth):
-    if not LoadableMembers.loadMembers(self,process, mappings, maxDepth):
+  def loadMembers(self, mappings, maxDepth):
+    if not LoadableMembers.loadMembers(self, mappings, maxDepth):
       return False
     # Load and memcopy key 
     log.debug('Memcopying a Key with %d bytes'%self.key_len)
     attr_obj_address=getaddress(self.key)
-    array=(ctypes.c_ubyte*self.key_len).from_buffer_copy(process.readArray(attr_obj_address, ctypes.c_ubyte, self.key_len))
+    memoryMap = is_valid_address_value( attr_obj_address, mappings)    
+    array=(ctypes.c_ubyte*self.key_len).from_buffer_copy(memoryMap.readArray(attr_obj_address, ctypes.c_ubyte, self.key_len))
     self.key.contents=ctypes.c_ubyte.from_buffer(array)
     log.debug('unmac_ctx has been nulled and ignored. its not often used by any ssh impl. Not useful for us anyway.')
     log.debug('MAC KEY(%d bytes) acquired'%(self.key_len))

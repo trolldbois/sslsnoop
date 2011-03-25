@@ -372,7 +372,7 @@ class LoadableMembers(ctypes.Structure):
               isStructType(attr)  or isCStringPointer(attr) or
               (isArrayType(attr) and not isBasicTypeArrayType(attr) ) ) # should we iterate on Basictypes ? no
 
-  def loadMembers(self,process,mappings, maxDepth):
+  def loadMembers(self, mappings, maxDepth):
     ''' 
     isValid() should have been tested before, otherwise.. it's gonna fail...
     we copy memory from process for each pointer
@@ -398,7 +398,7 @@ class LoadableMembers(ctypes.Structure):
           setattr(self, attrname, attrtype())
           return True      
       try:
-        if not self._loadMember(attr,attrname,attrtype,process,mappings, maxDepth):
+        if not self._loadMember(attr,attrname,attrtype,mappings, maxDepth):
           return False
       except ValueError, e:
         print 'maxDepath was ', maxDepth
@@ -407,7 +407,7 @@ class LoadableMembers(ctypes.Structure):
     log.debug('%s END loadMembers ----------------'%(self.__class__.__name__))
     return True
     
-  def _loadMember(self,attr,attrname,attrtype,process,mappings, maxDepth):
+  def _loadMember(self,attr,attrname,attrtype,mappings, maxDepth):
     ### debug
     if attrname in []:
       #if True:
@@ -424,7 +424,7 @@ class LoadableMembers(ctypes.Structure):
     # load it, fields are valid
     if isStructType(attr):
       log.debug('%s %s is STRUCT'%(attrname,attrtype) )
-      if not attr.loadMembers(process,mappings, maxDepth+1):
+      if not attr.loadMembers(mappings, maxDepth+1):
         log.debug("%s %s not valid, erreur while loading inner struct "%(attrname,attrtype) )
         return False
       log.debug("%s %s inner struct LOADED "%(attrname,attrtype) )
@@ -439,19 +439,23 @@ class LoadableMembers(ctypes.Structure):
         return True
       elType=type(attr[0])
       for i in range(0,attrLen):
-        if not self._loadMember(attr[i], "%s[%d]"%(attrname,i), elType, process, mappings, maxDepth):
+        if not self._loadMember(attr[i], "%s[%d]"%(attrname,i), elType, mappings, maxDepth):
           return False
       return True
     # we have PointerType here . Basic or complex
     # exception cases
     if isCStringPointer(attr):
       # can't use basic c_char_p because we can't load in foreign memory
-      attr_obj_address=getaddress(attr.ptr)
+      attr_obj_address = getaddress(attr.ptr)
+      memoryMap = is_valid_address_value(attr_obj_address, mappings)
+      if not memoryMap :
+        log.warning('Error on addr while fetching a CString. should not happen')
+        return False
       setattr(self,'__'+attrname,attr_obj_address)
       MAX_SIZE=255
       log.debug("%s %s is defined as a CString, loading from 0x%lx is_valid_address %s"%(
                       attrname,attr,attr_obj_address, is_valid_address(attr,mappings) ))
-      txt,full=process.readCString(attr_obj_address, MAX_SIZE )
+      txt,full = memoryMap.readCString(attr_obj_address, MAX_SIZE )
       if not full:
         log.warning('buffer size was too small for this CString')
       attr.string=txt
@@ -467,14 +471,14 @@ class LoadableMembers(ctypes.Structure):
         log.warning('Change of pointer value between validation and loading... 0x%lx 0x%lx'%(previous,attr_obj_address))
       # memcpy and save objet ref + pointer in attr
       # we know the field is considered valid, so if it's not in memory_space, we can ignore it
-      fieldIsValid=is_valid_address( attr, mappings, _attrType)
-      if(not fieldIsValid):
+      memoryMap = is_valid_address( attr, mappings, _attrType)
+      if(not memoryMap):
         # big BUG Badaboum, why did pointer changed validity/value ?
         log.warning("%s %s not loadable 0x%lx but VALID "%(attrname, attr,attr_obj_address ))
         return True
-      log.debug("%s %s loading from 0x%lx (is_valid_address: %s)"%(attrname,attr,attr_obj_address, fieldIsValid ))
+      log.debug("%s %s loading from 0x%lx (is_valid_address: %s)"%(attrname,attr,attr_obj_address, memoryMap ))
       ##### VALID INSTR.
-      attr.contents=_attrType.from_buffer_copy(process.readStruct(attr_obj_address, _attrType ))
+      attr.contents=_attrType.from_buffer_copy(memoryMap.readStruct(attr_obj_address, _attrType ))
       #####
       log.debug("%s %s loaded memcopy from 0x%lx to 0x%lx"%(attrname, attr,attr_obj_address, (getaddress(attr))   ))
       # recursive validation checks on new struct
@@ -482,7 +486,7 @@ class LoadableMembers(ctypes.Structure):
         log.warning('Member %s is null after copy: %s'%(attrname,attr))
         return True
       # go and load the pointed struct members recursively
-      if not attr.contents.loadMembers(process,mappings, maxDepth):
+      if not attr.contents.loadMembers(mappings, maxDepth):
         log.debug('member %s was not loaded'%(attrname))
         return False
     #TATAFN

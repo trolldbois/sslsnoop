@@ -82,7 +82,7 @@ class BIGNUM(OpenSSLStruct):
   expectedValues={
     "neg": [0,1]
   }
-  def loadMembers(self,process, mappings, maxDepth):
+  def loadMembers(self, mappings, maxDepth):
     ''' 
     #self._d = process.readArray(attr_obj_address, ctypes.c_ulong, self.top) 
     ## or    
@@ -94,7 +94,8 @@ class BIGNUM(OpenSSLStruct):
     if True:
       # Load and memcopy d / BN_ULONG *
       attr_obj_address=getaddress(self.d)
-      contents=(BN_ULONG*self.top).from_buffer_copy(process.readArray(attr_obj_address, BN_ULONG, self.top))
+      memoryMap = is_valid_address_value( attr_obj_address, mappings)
+      contents=(BN_ULONG*self.top).from_buffer_copy(memoryMap.readArray(attr_obj_address, BN_ULONG, self.top))
       log.debug('contents acquired %d'%ctypes.sizeof(contents))
       self.d.contents=BN_ULONG.from_address(ctypes.addressof(contents))
       # TODO ctypes.from_address(address)
@@ -152,10 +153,10 @@ class CRYPTO_EX_DATA(OpenSSLStruct):
   _fields_ = [
   ("sk",ctypes.POINTER(STACK) ),
   ("dummy",ctypes.c_int)]
-  def loadMembers(self,process,mappings, maxDepth):
+  def loadMembers(self, mappings, maxDepth):
     ''' erase self.sk'''
     #self.sk=ctypes.POINTER(STACK)()
-    return LoadableMembers.loadMembers(self,process,mappings, maxDepth)
+    return LoadableMembers.loadMembers(self, mappings, maxDepth)
   def isValid(self,mappings):
     ''' erase self.sk'''
     # TODO why ?
@@ -274,7 +275,7 @@ class RSA(OpenSSLStruct):
     log.debug(is_valid_address( self.dmq1, mappings) )
     log.debug(is_valid_address( self.iqmp, mappings) )
     return
-  def loadMembers(self,process,mappings, maxDepth):
+  def loadMembers(self, mappings, maxDepth):
     # XXXX clean other structs
     self.meth = None
     #self._method_mod_n = ctypes.POINTER(BN_MONT_CTX)()
@@ -284,7 +285,7 @@ class RSA(OpenSSLStruct):
     self.blinding = None
     self.mt_blinding = None
 
-    if not LoadableMembers.loadMembers(self,process,mappings, maxDepth):
+    if not LoadableMembers.loadMembers(self, mappings, maxDepth):
       log.debug('RSA not loaded')
       return False
     return True
@@ -331,14 +332,14 @@ class DSA(OpenSSLStruct):
     '''  pub_key = g^privKey mod p '''
     return
 
-  def loadMembers(self,process, mappings, maxDepth):
+  def loadMembers(self, mappings, maxDepth):
     # clean other structs
     # r and kinv can be null
     self.meth = None
     self._method_mod_p = None
     #self.engine = None
     
-    if not LoadableMembers.loadMembers(self,process, mappings, maxDepth):
+    if not LoadableMembers.loadMembers(self, mappings, maxDepth):
       log.debug('DSA not loaded')
       return False
 

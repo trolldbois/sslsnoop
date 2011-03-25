@@ -147,9 +147,6 @@ class StructFinder:
         log.info('processed %d bytes  - %02.02f test/sec'%(p2, (p2-p)/(plen*(time.time()-t0)) ))
         t0=time.time()
         p=p2
-      #if memoryMap.local_mmap:
-      #  instance,validated = self.loadFromMMap(memoryMap.local_mmap, start, offset, struct, depth=99 )
-      #else:
       instance,validated= self.loadAt( memoryMap, offset, struct, maxDepth) 
       if validated:
         log.debug( "found instance @ 0x%lx"%(offset) )
@@ -160,35 +157,12 @@ class StructFinder:
         break
     return outputs
 
-  def memmap(self, m):
-    ''' 20% perf increase '''
-    mlen=m.end-m.start
-    ##mem = (ctypes.c_ubyte*mlen)(self.process.readBytes(m.start, mlen) )
-    mem = self.process.readArray(m.start, ctypes.c_ubyte, mlen)
-    #print type(mem)
-    return mem
-
-  def loadFromMMap(self, mem, mapstart, offset, struct, depth=99 ):
-    ''' offset is absolute , mapstart is map.start '''
-    log.debug("Loading %s from 0x%lx "%(struct,offset))
-    #sLen = ctypes.sizeof(struct)
-    start = ctypes.addressof(mem)
-    instance=struct.from_address(start + (offset - mapstart) )
-    # check if data matches
-    if ( instance.loadMembers(self.process, self.mappings, depth) ):
-      log.info( "found instance %s @ 0x%lx"%(struct,offset) )
-      # do stuff with it.
-      validated=True
-    else:
-      log.debug("Address not validated")
-      validated=False
-    return instance,validated
 
   def loadAt(self, memoryMap, offset, struct, depth=99 ):
     log.debug("Loading %s from 0x%lx "%(struct,offset))
     instance=struct.from_buffer_copy(memoryMap.readStruct(offset,struct))
     # check if data matches
-    if ( instance.loadMembers(self.process, self.mappings, depth) ):
+    if ( instance.loadMembers(self.mappings, depth) ):
       log.info( "found instance %s @ 0x%lx"%(struct,offset) )
       # do stuff with it.
       validated=True
@@ -271,7 +245,7 @@ def search(args):
   pid=int(args.pid)
   structType=getKlass(args.structType)
 
-  finder = StructFinder(pid)
+  finder = StructFinder(pid, mmap=True)
   outs=finder.find_struct( structType, hintOffset=args.hint ,maxNum=args.maxnum, fullScan=args.fullscan)
   if args.human:
     print '[',
@@ -290,7 +264,7 @@ def refresh(args):
   addr=int(args.addr,16)
   structType=getKlass(args.structType)
 
-  finder = StructFinder(pid)  
+  finder = StructFinder(pid, mmap=False)  
   instance,validated = finder.loadAt(addr, structType)
   if validated:
     if args.human:
