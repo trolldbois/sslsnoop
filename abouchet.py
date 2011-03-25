@@ -6,7 +6,7 @@
 
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
-import os,logging,sys
+import os,logging,sys, time
 import subprocess
 
 import ctypes_openssh
@@ -16,7 +16,8 @@ from ptrace.ctypes_libc import libc
 
 # linux only
 from ptrace.debugger.debugger import PtraceDebugger
-from ptrace.debugger.memory_mapping import readProcessMappings
+#from ptrace.debugger.memory_mapping import readProcessMappings
+from memory_mapping import readProcessMappings
 
 import argparse,pickle
 
@@ -49,7 +50,7 @@ class FileWriter:
 
 class StructFinder:
   ''' Generic tructure mapping '''
-  def __init__(self, pid):
+  def __init__(self, pid, mmap=False):
     self.dbg = PtraceDebugger()
     self.process = self.dbg.addProcess(pid,is_attached=False)
     if self.process is None:
@@ -58,13 +59,30 @@ class StructFinder:
       # ptrace exception is raised before that
     tmp = readProcessMappings(self.process)
     self.mappings=[]
-    for i in range(0,len(tmp)):
-      if tmp[i].pathname == '[heap]':
-        self.mappings.append(tmp.pop(i))
-        break
+    remains=[]
+    t0=time.time()
+    for m in tmp :
+      if mmap:
+        ### mmap memory in local space
+        m.mmap()
+      if ( m.pathname == '[heap]' or 
+           m.pathname == '[vdso]' or
+           m.pathname == '[stack]' or
+           m.pathname is None ):
+        self.mappings.append(m)
+        continue
+      remains.append(m)
+    tmp = [x for x in remains if not x.pathname.startswith('/')] # delete memmapped dll
+    tmp.sort(key=lambda x: x.start )
+    tmp.reverse()
     self.mappings.extend(tmp)
+    self.mappings.reverse()
+    ### mmap done, we can release process...
+    if mmap:
+      self.process.cont()
+      log.info('Memory mmaped, process released after %02.02f secs'%(time.time()-t0))
 
-  def find_struct(self, struct, hintOffset=None, maxNum = 10, maxDepth=99 , fullScan=False):
+  def find_struct(self, struct, hintOffset=None, maxNum = 10, maxDepth=10 , fullScan=False):
     if not fullScan:
       log.warning("Restricting search to heap.")
     outputs=[]
@@ -76,11 +94,11 @@ class StructFinder:
         log.warning("Invalid permission for memory %s"%m)
         continue
       if fullScan:
-        log.info("Looking at %s"%(m))
+        log.info("Looking at %s (%d bytes)"%(m, m.end-m.start))
       else:
         log.debug("%s,%s"%(m,m.permissions))
       log.debug('look for %s'%(struct))
-      outputs.extend(self.find_struct_in( m, struct, maxNum=maxNum))
+      outputs.extend(self.find_struct_in( m, struct, hintOffset=hintOffset, maxNum=maxNum, maxDepth=maxDepth))
       # check out
       if len(outputs) >= maxNum:
         log.info('Found enough instance. returning results.')
@@ -109,15 +127,29 @@ class StructFinder:
     #ret vals
     outputs=[]
     # alignement
-    if hintOffset in memoryMap:
+    if hintOffset in memoryMap: # absolute offset
       align=hintOffset%plen
-      start=hintOffset-plen
+      start=hintOffset-align
+    elif hintOffset  < end-start: # relative offset
+      align=hintOffset%plen
+      start=start+ (hintOffset-align)
      
     # parse for struct on each aligned word
     log.debug("checking 0x%lx-0x%lx by increment of %d"%(start, (end-structlen), plen))
     instance=None
+    import time
+    t0=time.time()
+    p=0
     for offset in range(start, end-structlen, plen):
-      instance,validated=self.loadAt( offset, struct, maxDepth)
+      if offset % (1024<<6) == 0:
+        p2=offset-start
+        log.info('processed %d bytes  - %02.02f test/sec'%(p2, (p2-p)/(plen*(time.time()-t0)) ))
+        t0=time.time()
+        p=p2
+      #if memoryMap.local_mmap:
+      #  instance,validated = self.loadFromMMap(memoryMap.local_mmap, start, offset, struct, depth=99 )
+      #else:
+      instance,validated= self.loadAt( memoryMap, offset, struct, maxDepth) 
       if validated:
         log.debug( "found instance @ 0x%lx"%(offset) )
         # do stuff with it.
@@ -127,9 +159,33 @@ class StructFinder:
         break
     return outputs
 
-  def loadAt(self, offset, struct, depth=99 ):
+  def memmap(self, m):
+    ''' 20% perf increase '''
+    mlen=m.end-m.start
+    ##mem = (ctypes.c_ubyte*mlen)(self.process.readBytes(m.start, mlen) )
+    mem = self.process.readArray(m.start, ctypes.c_ubyte, mlen)
+    #print type(mem)
+    return mem
+
+  def loadFromMMap(self, mem, mapstart, offset, struct, depth=99 ):
+    ''' offset is absolute , mapstart is map.start '''
     log.debug("Loading %s from 0x%lx "%(struct,offset))
-    instance=struct.from_buffer_copy(self.process.readStruct(offset,struct))
+    #sLen = ctypes.sizeof(struct)
+    start = ctypes.addressof(mem)
+    instance=struct.from_address(start + (offset - mapstart) )
+    # check if data matches
+    if ( instance.loadMembers(self.process, self.mappings, depth) ):
+      log.info( "found instance %s @ 0x%lx"%(struct,offset) )
+      # do stuff with it.
+      validated=True
+    else:
+      log.debug("Address not validated")
+      validated=False
+    return instance,validated
+
+  def loadAt(self, memoryMap, offset, struct, depth=99 ):
+    log.debug("Loading %s from 0x%lx "%(struct,offset))
+    instance=struct.from_buffer_copy(memoryMap.readStruct(offset,struct))
     # check if data matches
     if ( instance.loadMembers(self.process, self.mappings, depth) ):
       log.info( "found instance %s @ 0x%lx"%(struct,offset) )
@@ -192,6 +248,7 @@ def argparser():
   search_parser.add_argument('structType', type=str, help='Structure type name')
   search_parser.add_argument('--fullscan', action='store_const', const=True, default=False, help='do a full memory scan, otherwise, restrict to the heap')
   search_parser.add_argument('--maxnum', type=int, action='store', default=1, help='Limit to maxnum numbers of results')
+  search_parser.add_argument('--hint', type=int, action='store', default=1, help='hintOffset to start at')
   search_parser.set_defaults(func=search)
   #
   refresh_parser = subparsers.add_parser('refresh', help='refresh help')
@@ -206,7 +263,7 @@ def argparser():
 def getKlass(name):
   module,sep,kname=name.rpartition('.')
   mod = __import__(module, globals(), locals(), [kname])
-  klass = getattr(mod, kname)
+  klass = getattr(mod, kname)  
   return klass
 
 def search(args):
@@ -214,7 +271,7 @@ def search(args):
   structType=getKlass(args.structType)
 
   finder = StructFinder(pid)
-  outs=finder.find_struct( structType, maxNum=args.maxnum, fullScan=args.fullscan)
+  outs=finder.find_struct( structType, hintOffset=args.hint ,maxNum=args.maxnum, fullScan=args.fullscan)
   if args.human:
     print '[',
     for ss, addr in outs:
@@ -258,9 +315,13 @@ def test():
   instance=eval(instance)
   return instance
 
+def devnull(arg, **args):
+  return
 
 def main(argv):
   logging.basicConfig(level=logging.INFO)
+  log.debug = devnull
+  #model.log.debug = devnull
   logging.debug(argv)
   
   parser = argparser()
