@@ -6,7 +6,7 @@
 
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
-import ctypes,os
+import ctypes,os, types
 from struct import pack,unpack
 from ptrace.debugger.memory_mapping import readProcessMappings
 import logging
@@ -214,7 +214,7 @@ class LoadableMembers(ctypes.Structure):
   #loaded=False ## useless member instance doesn't stick
   #valid=False ## useless members doesn't stick
   ''' ctypes.POINTER types for automatic address space checks '''
-  classRef=[]  
+  classRef=dict()
   #validFields=set() #useless
   expectedValues=dict()
 
@@ -583,8 +583,12 @@ class LoadableMembers(ctypes.Structure):
 import inspect,sys
 
 def pasteLoadableMemberMethodsOn(klass):
-  for n,v in inspect.getmembers(LoadableMembers, inspect.ismethod):
-    setattr(klass, n, v)
+  for n,func in inspect.getmembers(LoadableMembers, inspect.ismethod):
+    #setattr(klass, n, types.MethodType(func, klass) )  # bad self type. need LoadableMembers not Struct
+    # Py2.x
+    setattr(klass, n, func.im_func)
+  setattr( klass, 'expectedValues', dict() )
+  setattr( klass, 'classRef', dict() )
   return klass
 
 ''' Load all model classes and create a similar non-ctypes Python class  

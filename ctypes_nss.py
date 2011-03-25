@@ -7,7 +7,6 @@
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
 import ctypes
-from ptrace.debugger.memory_mapping import readProcessMappings
 import logging
 log=logging.getLogger('ctypes_nss')
 
@@ -36,6 +35,17 @@ def pasteNSSStructOver(klass):
  
  We just have to define expectedValues
 '''
+
+from model import CString
+# replace c_char_p with our String handler
+gen.STRING = CString
+if type(gen.STRING) != type(CString):
+  print 'STRING is not model.CString. Please correct ctypes_nss_geenrated with :' 
+  print 'from model import CString' 
+  print 'STRING = CString' 
+  import sys
+  sys.exit()
+
 # set expected values 
 gen.SSLCipherSuiteInfo.expectedValues={
   "cipherSuite": RangeValue(0,0x0100), # sslproto.h , ECC is 0xc00
@@ -71,7 +81,6 @@ NSSStruct.classRef=dict([ (ctypes.POINTER( klass), klass) for (name,klass) in in
 for klass,typ in inspect.getmembers(sys.modules[__name__], inspect.isclass):
   if typ.__module__ == __name__:
     setattr(sys.modules[__name__], '%s_py'%(klass), type('%s_py'%(klass),(object,),{}) )
-
 
 
 def printSizeof(mini=-1):
