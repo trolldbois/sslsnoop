@@ -5,7 +5,7 @@ from ptrace.debugger.process_error import ProcessError
 from ptrace.ctypes_tools import formatAddress
 import re
 from weakref import ref
-import ctypes, struct
+import ctypes, struct, mmap
 
 PROC_MAP_REGEX = re.compile(
     # Address range: '08048000-080b0000 '
@@ -164,6 +164,52 @@ class MemoryMapping:
             size += chunk_length
             address += chunk_length
         return ''.join(string), truncated
+
+
+class MemoryDumpMemoryMapping(MemoryMapping):
+    """ A memoryMapping wrapper around a memory file dump"""
+    def __init__(self, memdump, start, end):
+        self._process = None
+        self.start = start
+        self.end = end
+        self.permissions = 'rwx-'
+        self.offset = 0x0
+        self.major_device = 0x0
+        self.minor_device = 0x0
+        self.inode = 0x0
+        self.pathname = 'MEMORYDUMP'
+        self.local_mmap = mmap.mmap(memdump.fileno(), end-start, access=mmap.ACCESS_READ)
+
+    def search(self, bytestr):
+        self.local_mmap.find(bytestr)
+
+    def readWord(self, address):
+        """Address have to be aligned!"""
+        laddr = address-self.start
+        word = ctypes.c_ulong.from_buffer_copy(self.local_mmap, laddr).value # is non-aligned a pb ?
+        return word
+
+    def readBytes(self, address, size):
+        laddr = address-self.start
+        data = self.local_mmap[laddr:laddr+size]
+        return data
+
+    def readStruct(self, address, struct):
+        laddr = address-self.start
+        struct = struct.from_buffer_copy(self.local_mmap, laddr)
+        return struct
+
+    def readArray(self, address, basetype, count):
+        laddr = address-self.start
+        array = (basetype *count).from_buffer_copy(self.local_mmap, laddr)
+        return array
+
+    def __str__(self):
+        text = "0x%lx-%s" % (self.start, formatAddress(self.end))
+        text += " => %s" % self.pathname
+        text += " (%s)" % self.permissions
+        return text
+
 
 def readProcessMappings(process):
     """

@@ -9,7 +9,7 @@ __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 import os,logging,sys, time
 import subprocess
 
-import ctypes_openssh
+import ctypes_openssh, model
 import ctypes
 #from ctypes import *
 from ptrace.ctypes_libc import libc
@@ -17,7 +17,7 @@ from ptrace.ctypes_libc import libc
 # linux only
 from ptrace.debugger.debugger import PtraceDebugger
 #from ptrace.debugger.memory_mapping import readProcessMappings
-from memory_mapping import readProcessMappings
+from memory_mapping import readProcessMappings, MemoryDumpMemoryMapping
 
 import argparse,pickle
 
@@ -35,7 +35,7 @@ class FileWriter:
     self.folder=folder
   def get_valid_filename(self):
     filename_FMT="%s-%d.%s"
-    for i in range(1,MAX_KEYS):
+    for i in xrange(1,MAX_KEYS):
       filename=filename_FMT%(self.prefix,i,self.suffix)
       afilename=os.path.normpath(os.path.sep.join([self.folder,filename]))
       if not os.access(afilename,os.F_OK):
@@ -50,7 +50,21 @@ class FileWriter:
 
 class StructFinder:
   ''' Generic tructure mapping '''
-  def __init__(self, pid, mmap=False):
+  def __init__(self, pid=None, mmap=False, memdump=None):
+    if pid is None and memdump is None:
+      raise ValueError('You have to choose pid or dumpfile')
+    if not (pid is None) and not (memdump is None):
+      raise ValueError('You have to choose pid or dumpfile')
+    if not (pid is None):
+      self.initPid(pid,mmap)
+    elif not (memdump is None):
+      self.initMemdump(memdump)
+
+  def initMemdump(self,memdump):
+    mem = MemoryDumpMemoryMapping(memdump, 0, os.fstat(memdump.fileno()).st_size) ## is that valid ?
+    self.mappings=[mem]
+  
+  def initPid(self,pid, mmap):
     self.dbg = PtraceDebugger()
     self.process = self.dbg.addProcess(pid,is_attached=False)
     if self.process is None:
@@ -142,7 +156,7 @@ class StructFinder:
     import time
     t0=time.time()
     p=0
-    for offset in range(start, end-structlen, plen):
+    for offset in xrange(start, end-structlen, plen):
       if offset % (1024<<6) == 0:
         p2=offset-start
         log.info('processed %d bytes  - %02.02f test/sec'%(p2, (p2-p)/(plen*(time.time()-t0)) ))
@@ -222,11 +236,14 @@ def argparser():
   rootparser = argparse.ArgumentParser(prog='StructFinder', description='Parse memory structs and pickle them.')
   rootparser.add_argument('--string', dest='human', action='store_const', const=True, help='Print results as human readable string')
   rootparser.add_argument('--debug', dest='debug', action='store_const', const=True, help='setLevel to DEBUG')
+  rootparser.add_argument('structType', type=str, help='Structure type name')
+  
+  target = rootparser.add_mutually_exclusive_group(required=True)
+  target.add_argument('--pid', type=int, help='Target PID')
+  target.add_argument('--fromdump', type=argparse.FileType('r'), dest='memdump', action='store', default=None, help='Use a memory dump instead of a live process ID')
   
   subparsers = rootparser.add_subparsers(help='sub-command help')
   search_parser = subparsers.add_parser('search', help='search help')
-  search_parser.add_argument('pid', type=int, help='Target PID')
-  search_parser.add_argument('structType', type=str, help='Structure type name')
   search_parser.add_argument('--fullscan', action='store_const', const=True, default=False, help='do a full memory scan, otherwise, restrict to the heap')
   search_parser.add_argument('--maxnum', type=int, action='store', default=1, help='Limit to maxnum numbers of results')
   search_parser.add_argument('--hint', type=int, action='store', default=1, help='hintOffset to start at')
@@ -234,8 +251,6 @@ def argparser():
   search_parser.set_defaults(func=search)
   #
   refresh_parser = subparsers.add_parser('refresh', help='refresh help')
-  refresh_parser.add_argument('pid', type=int, help='Target PID')
-  refresh_parser.add_argument('structType', type=str, help='Structure type name')
   refresh_parser.add_argument('addr', type=str, help='Structure memory address')
   refresh_parser.set_defaults(func=refresh)
   #
@@ -250,10 +265,13 @@ def getKlass(name):
 
 
 def search(args):
-  pid=int(args.pid)
   structType=getKlass(args.structType)
-
-  finder = StructFinder(pid, mmap=(not args.nommap))
+  if args.pid :
+    finder = StructFinder(pid=args.pid, mmap=(not args.nommap))
+  else : # from dump
+    finder = StructFinder(memdump=args.memdump)
+    log.debug('starting a memory file dump search')
+  
   outs=finder.find_struct( structType, hintOffset=args.hint ,maxNum=args.maxnum, fullScan=args.fullscan)
   #return
   if args.human:
@@ -269,12 +287,17 @@ def search(args):
 
 
 def refresh(args):
-  pid=int(args.pid)
   addr=int(args.addr,16)
   structType=getKlass(args.structType)
 
-  finder = StructFinder(pid, mmap=False)  
-  instance,validated = finder.loadAt(addr, structType)
+  if args.pid :
+    finder = StructFinder(pid=args.pid, mmap=(not args.nommap))
+  else : # from dump
+    finder = StructFinder(memdump=args.memdump)
+    log.debug('starting a memory file dump search')
+
+  instance,validated = finder.loadAt( model.is_valid_address_value(addr, finder.mappings), 
+          addr, structType)
   if validated:
     if args.human:
        print '( %s, %s )'%(instance.toString(),validated)
@@ -318,8 +341,11 @@ def main(argv):
   except ImportError,e:
     log.error('Struct type does not exists.')
     print e
-  
-  log.info("done for pid %d"%opts.pid)
+
+  if opts.pid:  
+    log.info("done for pid %d"%opts.pid)
+  else:
+    log.info("done for file %s"%opts.memdump.name)
   return 0
 
 
