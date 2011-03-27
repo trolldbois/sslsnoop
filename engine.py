@@ -17,6 +17,26 @@ log=logging.getLogger('engine')
 
 libopenssl=cdll.LoadLibrary('libssl.so')
 
+CIPHERS[] = {
+  "none": None, #(		SSH_CIPHER_NONE, 8, 0, 0, 0, EVP_enc_null ),
+  "des": None, #(		SSH_CIPHER_DES, 8, 8, 0, 1, EVP_des_cbc ),
+  "3des": None, #(		SSH_CIPHER_3DES, 8, 16, 0, 1, evp_ssh1_3des ),
+  "blowfish": None, #(		SSH_CIPHER_BLOWFISH, 8, 32, 0, 1, evp_ssh1_bf ),
+  "3des-cbc": None, #(		SSH_CIPHER_SSH2, 8, 24, 0, 1, EVP_des_ede3_cbc ),
+  "blowfish-cbc": None, #(	SSH_CIPHER_SSH2, 8, 16, 0, 1, EVP_bf_cbc ),
+  "cast128-cbc": None, #(	SSH_CIPHER_SSH2, 8, 16, 0, 1, EVP_cast5_cbc ),
+  "arcfour": None, #(		SSH_CIPHER_SSH2, 8, 16, 0, 0, EVP_rc4 ),
+  "arcfour128": None, #(		SSH_CIPHER_SSH2, 8, 16, 1536, 0, EVP_rc4 ),
+  "arcfour256": None, #(		SSH_CIPHER_SSH2, 8, 32, 1536, 0, EVP_rc4 ),
+  "aes128-cbc": StatefulAES_CBC_Engine, 
+  "aes192-cbc": StatefulAES_CBC_Engine, 
+  "aes256-cbc": StatefulAES_CBC_Engine, 
+  "rijndael-cbc@lysator.liu.se": StatefulAES_CBC_Engine, 
+  "aes128-ctr": StatefulAES_Ctr_Engine,
+  "aes192-ctr": StatefulAES_Ctr_Engine,
+  "aes256-ctr": StatefulAES_Ctr_Engine,
+}
+
 
 class Engine:
 
@@ -43,7 +63,39 @@ def myhex(bstr):
     s+='\\'+hex(ord(el))[1:]
   return s
 
-class StatefulAESEngine(Engine):
+
+class StatefulAES_CBC_Engine(Engine):
+  def __init__(self, context ):
+    self.sync(context)
+    self._AES_cbc=libopenssl.AES_cbc_encrypt
+    log.debug('cipher:%s block_size: %d key_len: %d '%(context.name, context.block_size, context.key_len))
+  
+  def _decrypt(self, src, bLen):
+    buf=(ctypes.c_ubyte*AES_BLOCK_SIZE)()
+    dest=(ctypes.c_ubyte*bLen)()
+    enc=ctypes.c_uint(1)
+    ##log.debug('BEFORE %s'%( myhex(self.aes_key_ctx.getCounter())) )
+    #void AES_cbc_encrypt(
+    #      const unsigned char *in, unsigned char *out, const unsigned long length, 
+    #           const AES_KEY *key, unsigned char ivec[AES_BLOCK_SIZE], const int enc
+    #        	  )
+    self._AES_cbc( ctypes.byref(src), ctypes.byref(dest), bLen, ctypes.byref(self.key), 
+              ctypes.byref(self.iv), enc ) 
+    ##log.debug('AFTER  %s'%( myhex(self.aes_key_ctx.getCounter())) )
+    return model.array2bytes(dest)
+  
+  def sync(self, context):
+    ''' refresh the crypto state '''
+    self.aes_key_ctx = ssh_rijndael_ctx().fromPyObj(context.app_data)
+    # we need nothing else
+    self.key = self.aes_key_ctx.r_ctx
+    # copy counter content
+    self.iv = self.aes_key_ctx.r_iv
+    log.info('IV value is %s'%(myhex(self.aes_key_ctx.getIV())) )
+
+
+
+class StatefulAES_Ctr_Engine(Engine):
   #ctx->cipher->do_cipher(ctx,out,in,inl);
   # -> openssl.AES_ctr128_encrypt(&in,&out,length,&aes_key, ivecArray, ecount_bufArray, &num )
   #AES_encrypt(ivec, ecount_buf, key); # aes_key is struct with cnt, key is really AES_KEY->aes_ctx
@@ -104,7 +156,9 @@ class StatefulAESEngine(Engine):
       ctr[i] -= 1
       if old != 0: # underflow
         return
-   
+
+
+
 def testDecrypt():
   buf='?A\xb7\ru\xc9\x08\xe2em\x16\x06\x1a\x18\xfb\x805,\xd8\x1f\x11\xa3\x1b )G\xe2\r`\xfaw\x87\xef\xfa\xa7\x95\xe1\x84>\xe1\x90\xec\xe1\xfa\xe5\x1e\x9c\xe3'
 

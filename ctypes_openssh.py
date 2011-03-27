@@ -60,6 +60,24 @@ class ssh_aes_ctr_ctx(OpenSSHStruct):
     #copy counter
     self.aes_counter=bytes2array(pyobj.aes_counter, ctypes.c_ubyte)
     return self
+
+class rijndael_ctx(OpenSSHStruct):
+  _fields_ = [
+  ('decrypt', ctypes.c_int),
+  ('Nr', ctypes.c_int),
+  ('ek', ctypes.c_uint32*(4*(MAXNR + 1))),
+  ('dk', ctypes.c_uint32*(4*(MAXNR + 1)))
+  ]
+  def getEk(self):
+    return array2bytes(self.ek)
+  def getDk(self):
+    return array2bytes(self.dk)
+  def fromPyObj(self,pyobj):
+    self.decrypt = pyobj.decrypt
+    self.Nr = pyobj.Nr
+    self.ek = bytes2array(pyobj.ek, ctypes.c_uint32)
+    self.dk = bytes2array(pyobj.dk, ctypes.c_uint32)
+    return self
   
 class ssh_rijndael_ctx(OpenSSHStruct):
   ''' cipher-aes.c:43 '''
@@ -67,6 +85,16 @@ class ssh_rijndael_ctx(OpenSSHStruct):
   ('r_ctx', rijndael_ctx),
   ('r_iv', ctypes.c_ubyte*RIJNDAEL_BLOCKSIZE)
   ]
+  def getCtx(self):
+    return self.r_ctx.getKey() 
+  def getIV(self):
+    return array2bytes(self.r_iv)
+  def fromPyObj(self,pyobj):
+    #recurse copy aes_ctx
+    self.r_ctx = rijndael_ctx().fromPyObj(pyobj.r_ctx)
+    #copy counter
+    self.r_iv = bytes2array(pyobj.r_iv, ctypes.c_ubyte)
+    return self
 
 
 #EVP_CIPHER_CTX_APP_DATA_PTR._fields_=[ ('contents', ctypes.POINTER(ctypes.c_ubyte)) ,
