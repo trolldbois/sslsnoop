@@ -10,7 +10,7 @@ import argparse, os, logging, sys, time, pickle, struct
 
 import ctypes, ctypes_openssh, ctypes_openssl
 import abouchet, output, socket_scapy
-from engine import StatefulAESEngine
+import engine 
 
 #our impl
 from paramiko_packet import Packetizer
@@ -215,8 +215,9 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
   def activate_cipher(self, packetizer, context):
     "switch on newly negotiated encryption parameters for inbound traffic"
     #packetizer.set_log(log)
-    #packetizer.set_hexdump(True)    
-    engine = StatefulAESEngine(context)
+    #packetizer.set_hexdump(True)
+    # find Engine from engine.ciphers
+    engine = engine.CIPHERS[context.name](context) 
     log.debug( 'cipher:%s block_size: %d key_len: %d '%(context.name, context.block_size, context.key_len ) )
     #print engine, type(engine)
     mac = context.mac
@@ -390,8 +391,8 @@ def testEncDec(pid):
   
   ciphers,addr=finder.findActiveKeys(offset=finder.session_state_addr)
   logging.basicConfig(level=logging.DEBUG)
-  engine = StatefulAESEngine(ciphers.receiveCtx)
-  engine2 = StatefulAESEngine(ciphers.receiveCtx)
+  engine = StatefulAES_Ctr_Engine(ciphers.receiveCtx)
+  engine2 = StatefulAES_Ctr_Engine(ciphers.receiveCtx)
   
   app_data=ciphers.receiveCtx.app_data
   key,rounds=app_data.getCtx()
@@ -423,10 +424,10 @@ def test(pid,addr):
   finder.process.cont()
 
   #readso=soscapy.getInboundSocket()
-  #engine = StatefulAESEngine(ciphers.receiveCtx)
+  #engine = StatefulAES_Ctr_Engine(ciphers.receiveCtx)
   #app_data=ciphers.receiveCtx.app_data
   readso=soscapy.getOutboundSocket()
-  engine = StatefulAESEngine(ciphers.sendCtx)
+  engine = StatefulAES_Ctr_Engine(ciphers.sendCtx)
   app_data=ciphers.sendCtx.app_data
   key,rounds=app_data.getCtx()
   print "key=",repr(key)
