@@ -46,7 +46,7 @@ def myhex(bstr):
 
 
 class StatefulAES_CBC_Engine(Engine):
-  def __init__(self, context ):
+  def __init__(self, context , ):
     self.sync(context)
     self._AES_cbc=libopenssl.AES_cbc_encrypt
     log.debug('cipher:%s block_size: %d key_len: %d '%(context.name, context.block_size, context.key_len))
@@ -54,7 +54,7 @@ class StatefulAES_CBC_Engine(Engine):
   def _decrypt(self, src, bLen):
     buf=(ctypes.c_ubyte*AES_BLOCK_SIZE)()
     dest=(ctypes.c_ubyte*bLen)()
-    enc=ctypes.c_uint(0)
+    enc=ctypes.c_uint(0)  ## 0 is decrypt for inbound traffic
     ##log.debug('BEFORE %s'%( myhex(self.aes_key_ctx.getCounter())) )
     #void AES_cbc_encrypt(
     #      const unsigned char *in, unsigned char *out, const unsigned long length, 
@@ -63,6 +63,7 @@ class StatefulAES_CBC_Engine(Engine):
     self._AES_cbc( ctypes.byref(src), ctypes.byref(dest), bLen, ctypes.byref(self.key), 
               ctypes.byref(self.iv), enc ) 
     ##log.debug('AFTER  %s'%( myhex(self.aes_key_ctx.getCounter())) )
+    #print self, repr(model.array2bytes(dest))
     return model.array2bytes(dest)
   
   def sync(self, context):
