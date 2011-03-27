@@ -10,7 +10,7 @@ import argparse, os, logging, sys, time, pickle, struct
 
 import ctypes, ctypes_openssh, ctypes_openssl
 import abouchet, output, socket_scapy
-import engine 
+from engine import CIPHERS
 
 #our impl
 from paramiko_packet import Packetizer
@@ -217,7 +217,7 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     #packetizer.set_log(log)
     #packetizer.set_hexdump(True)
     # find Engine from engine.ciphers
-    engine = engine.CIPHERS[context.name](context) 
+    engine = CIPHERS[context.name](context) 
     log.debug( 'cipher:%s block_size: %d key_len: %d '%(context.name, context.block_size, context.key_len ) )
     #print engine, type(engine)
     mac = context.mac

@@ -17,25 +17,6 @@ log=logging.getLogger('engine')
 
 libopenssl=cdll.LoadLibrary('libssl.so')
 
-CIPHERS[] = {
-  "none": None, #(		SSH_CIPHER_NONE, 8, 0, 0, 0, EVP_enc_null ),
-  "des": None, #(		SSH_CIPHER_DES, 8, 8, 0, 1, EVP_des_cbc ),
-  "3des": None, #(		SSH_CIPHER_3DES, 8, 16, 0, 1, evp_ssh1_3des ),
-  "blowfish": None, #(		SSH_CIPHER_BLOWFISH, 8, 32, 0, 1, evp_ssh1_bf ),
-  "3des-cbc": None, #(		SSH_CIPHER_SSH2, 8, 24, 0, 1, EVP_des_ede3_cbc ),
-  "blowfish-cbc": None, #(	SSH_CIPHER_SSH2, 8, 16, 0, 1, EVP_bf_cbc ),
-  "cast128-cbc": None, #(	SSH_CIPHER_SSH2, 8, 16, 0, 1, EVP_cast5_cbc ),
-  "arcfour": None, #(		SSH_CIPHER_SSH2, 8, 16, 0, 0, EVP_rc4 ),
-  "arcfour128": None, #(		SSH_CIPHER_SSH2, 8, 16, 1536, 0, EVP_rc4 ),
-  "arcfour256": None, #(		SSH_CIPHER_SSH2, 8, 32, 1536, 0, EVP_rc4 ),
-  "aes128-cbc": StatefulAES_CBC_Engine, 
-  "aes192-cbc": StatefulAES_CBC_Engine, 
-  "aes256-cbc": StatefulAES_CBC_Engine, 
-  "rijndael-cbc@lysator.liu.se": StatefulAES_CBC_Engine, 
-  "aes128-ctr": StatefulAES_Ctr_Engine,
-  "aes192-ctr": StatefulAES_Ctr_Engine,
-  "aes256-ctr": StatefulAES_Ctr_Engine,
-}
 
 
 class Engine:
@@ -156,6 +137,29 @@ class StatefulAES_Ctr_Engine(Engine):
       ctr[i] -= 1
       if old != 0: # underflow
         return
+
+
+
+
+CIPHERS = {
+  "none": None, #(		SSH_CIPHER_NONE, 8, 0, 0, 0, EVP_enc_null ),
+  "des": None, #(		SSH_CIPHER_DES, 8, 8, 0, 1, EVP_des_cbc ),
+  "3des": None, #(		SSH_CIPHER_3DES, 8, 16, 0, 1, evp_ssh1_3des ),
+  "blowfish": None, #(		SSH_CIPHER_BLOWFISH, 8, 32, 0, 1, evp_ssh1_bf ),
+  "3des-cbc": None, #(		SSH_CIPHER_SSH2, 8, 24, 0, 1, EVP_des_ede3_cbc ),
+  "blowfish-cbc": None, #(	SSH_CIPHER_SSH2, 8, 16, 0, 1, EVP_bf_cbc ),
+  "cast128-cbc": None, #(	SSH_CIPHER_SSH2, 8, 16, 0, 1, EVP_cast5_cbc ),
+  "arcfour": None, #(		SSH_CIPHER_SSH2, 8, 16, 0, 0, EVP_rc4 ),
+  "arcfour128": None, #(		SSH_CIPHER_SSH2, 8, 16, 1536, 0, EVP_rc4 ),
+  "arcfour256": None, #(		SSH_CIPHER_SSH2, 8, 32, 1536, 0, EVP_rc4 ),
+  "aes128-cbc": StatefulAES_CBC_Engine, 
+  "aes192-cbc": StatefulAES_CBC_Engine, 
+  "aes256-cbc": StatefulAES_CBC_Engine, 
+  "rijndael-cbc@lysator.liu.se": StatefulAES_CBC_Engine, 
+  "aes128-ctr": StatefulAES_Ctr_Engine,
+  "aes192-ctr": StatefulAES_Ctr_Engine,
+  "aes256-ctr": StatefulAES_Ctr_Engine,
+}
 
 
 

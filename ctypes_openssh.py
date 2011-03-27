@@ -26,6 +26,7 @@ UMAC_OUTPUT_LEN=8 #umac.c:55
 STREAMS=(UMAC_OUTPUT_LEN / 4) #umac.c:310
 HASH_BUF_BYTES=64 # umac.c:315
 SSH_SESSION_KEY_LENGTH=32 # ssh.h:84
+MAXNR = 14
 
 ''' typedefs ptrace / ctypes_stdint.py  TODO'''
 UINT64=ctypes_stdint.uint64_t
