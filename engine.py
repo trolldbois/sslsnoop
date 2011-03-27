@@ -11,7 +11,7 @@ import os,logging,sys, copy
 import ctypes, model
 from ctypes import cdll
 from ctypes_openssh import AES_BLOCK_SIZE, ssh_aes_ctr_ctx
-from ctypes_openssl import AES_KEY
+from ctypes_openssl import AES_KEY, EVP_AES_KEY
 
 log=logging.getLogger('engine')
 
@@ -54,7 +54,7 @@ class StatefulAES_CBC_Engine(Engine):
   def _decrypt(self, src, bLen):
     buf=(ctypes.c_ubyte*AES_BLOCK_SIZE)()
     dest=(ctypes.c_ubyte*bLen)()
-    enc=ctypes.c_uint(1)
+    enc=ctypes.c_uint(0)
     ##log.debug('BEFORE %s'%( myhex(self.aes_key_ctx.getCounter())) )
     #void AES_cbc_encrypt(
     #      const unsigned char *in, unsigned char *out, const unsigned long length, 
@@ -67,12 +67,12 @@ class StatefulAES_CBC_Engine(Engine):
   
   def sync(self, context):
     ''' refresh the crypto state '''
-    self.aes_key_ctx = ssh_rijndael_ctx().fromPyObj(context.app_data)
+    self.evp_aes_key = EVP_AES_KEY().fromPyObj(context.evpCtx.cipher_data) # 
     # we need nothing else
-    self.key = self.aes_key_ctx.r_ctx
+    self.key = self.evp_aes_key.ks
     # copy counter content
-    self.iv = self.aes_key_ctx.r_iv
-    log.info('IV value is %s'%(myhex(self.aes_key_ctx.getIV())) )
+    self.iv = model.bytes2array(context.evpCtx.iv, ctypes.c_ubyte)
+    log.info('IV value is %s'%(myhex(context.evpCtx.iv)) )
 
 
 

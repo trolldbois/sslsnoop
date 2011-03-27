@@ -14,7 +14,7 @@ log=logging.getLogger('openssh.model')
 
 from model import is_valid_address,is_valid_address_value,pointer2bytes,array2bytes,bytes2array,getaddress
 from model import LoadableMembers,RangeValue,NotNull,CString,EVP_CIPHER_CTX_APP_DATA_PTR, IgnoreMember
-from ctypes_openssl import EVP_CIPHER_CTX, EVP_MD, HMAC_CTX, AES_KEY,rijndael_ctx,EVP_RC4_KEY
+from ctypes_openssl import EVP_CIPHER_CTX, EVP_MD, HMAC_CTX, EVP_AES_KEY, AES_KEY,rijndael_ctx,EVP_RC4_KEY
 
 MODE_MAX=2 #kex.h:62
 AES_BLOCK_LEN=16 #umac.c:168
@@ -61,6 +61,8 @@ class ssh_aes_ctr_ctx(OpenSSHStruct):
     #copy counter
     self.aes_counter=bytes2array(pyobj.aes_counter, ctypes.c_ubyte)
     return self
+
+
 
 class rijndael_ctx(OpenSSHStruct):
   _fields_ = [
@@ -139,10 +141,10 @@ class CipherContext(OpenSSHStruct):
 	 "arcfour": (EVP_RC4_KEY,'cipher_data'),
 	 "arcfour128": (EVP_RC4_KEY,'cipher_data'),
 	 "arcfour256": (EVP_RC4_KEY,'cipher_data'),
-	 "aes128-cbc": (ssh_rijndael_ctx, 'app_data'), # aes*cbc == rijndael
-	 "aes192-cbc": (ssh_rijndael_ctx, 'app_data'),
-	 "aes256-cbc": (ssh_rijndael_ctx, 'app_data'),
-	 "rijndael-cbc@lysator.liu.se": (ssh_rijndael_ctx, 'app_data'),
+	 "aes128-cbc": (EVP_AES_KEY, 'cipher_data'), # aes*cbc == rijndael
+	 "aes192-cbc": (EVP_AES_KEY, 'cipher_data'),
+	 "aes256-cbc": (EVP_AES_KEY, 'cipher_data'),
+	 "rijndael-cbc@lysator.liu.se": (ssh_rijndael_ctx, 'cipher_data'),
 	 "aes128-ctr": (ssh_aes_ctr_ctx, 'app_data'),
 	 "aes192-ctr": (ssh_aes_ctr_ctx, 'app_data'),
 	 "aes256-ctr": (ssh_aes_ctr_ctx, 'app_data'),
@@ -162,7 +164,7 @@ class CipherContext(OpenSSHStruct):
       attr_obj_address=getaddress(attr)
       #print attr
       memoryMap = is_valid_address_value( attr_obj_address, mappings, struct)
-      #print "CAST %s into : %s "%(fieldname, struct)
+      log.debug( "CAST %s into : %s "%(fieldname, struct) )
       st=struct.from_buffer_copy(memoryMap.readStruct(attr_obj_address, struct ) )
       # XXX CAST do not copy buffer when casting, sinon on perds des bytes
       attr.contents=(type(attr.contents)).from_buffer(st)
@@ -468,6 +470,9 @@ class session_state(OpenSSHStruct):
     # populate AppData.
     d.receive_context.evp.app_data = self.receive_context.getEvpAppData().toPyObject()
     d.send_context.evp.app_data = self.send_context.getEvpAppData().toPyObject()
+    ## TODOm find a better way to pass a void_p for that cipher data
+    d.receive_context.evp.cipher_data = self.receive_context.getEvpAppData().toPyObject()
+    d.send_context.evp.cipher_data = self.send_context.getEvpAppData().toPyObject()
     return d
 
 

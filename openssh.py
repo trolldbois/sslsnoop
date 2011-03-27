@@ -69,7 +69,8 @@ class SessionCiphers():
       ctx.evpCipher = ctx.sshCtx.evp.cipher
       # useful stuff
       ctx.name = ctx.sshCipher.name
-      ctx.app_data  = ctx.evpCtx.app_data
+      ctx.app_data  = ctx.evpCtx.app_data  #TODO delete
+      ctx.cipher_data  = ctx.evpCtx.cipher_data #TODO delete
       # original key and IV are ctx.getKey() and ctx.getIV()
       # stateful AES_key key is at ctx.app_data.aes_ctx #&c->aes_ctx
       # stateful ctr counter is at ctx.app_data.aes_ctr

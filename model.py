@@ -14,7 +14,7 @@ log=logging.getLogger('model')
 
 def devnull(arg, **args):
   return
-log.debug = devnull
+#log.debug = devnull
 
 MEMCACHE=[]
 

@@ -71,6 +71,15 @@ class AES_KEY(OpenSSLStruct):
     self.rounds=pyobj.rounds
     return self
 
+#test
+class EVP_AES_KEY(OpenSSLStruct):
+  _fields_ = [
+  ('ks', AES_KEY),
+	]
+  def fromPyObj(self,pyobj):
+    self.ks = AES_KEY().fromPyObj(pyobj.ks)
+    return self
+
 #ok
 class BIGNUM(OpenSSLStruct):
   _fields_ = [
@@ -370,7 +379,7 @@ class EVP_CIPHER(OpenSSLStruct):
     "iv_len": RangeValue(1,0xff), #  
     "init": [NotNull], 
     "do_cipher": [NotNull], 
-    "cleanup": [NotNull], 
+    #"cleanup": [NotNull], # aes-cbc ?
     "ctx_size": RangeValue(0,0xffff), #  app_data struct should not be too big
   }
 
@@ -403,6 +412,10 @@ class EVP_CIPHER_CTX(OpenSSLStruct):
     #"cipher_data": , # can be null if app_data is not
     "key_len": RangeValue(1,0xff), # key_len *8 bits ..2040 bits for a key is enought ? 
   }
+  def getOIV(self):
+    return array2bytes(self.oiv)
+  def getIV(self):
+    return array2bytes(self.iv)
   def getAppData(self,structType):
     log.debug('CAST app_data into %s'%(structType))
     return structType.from_address(getaddress(self.app_data))

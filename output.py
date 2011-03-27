@@ -77,7 +77,7 @@ class SSHStreamToFile():
       ptype, m = self.packetizer.read_message()
       self.lastMessage=m
       #log.error("now  message was (%d) : %s"%(len(str(m)),repr(str(m))) )
-      self.lastCounter=self.engine.getCounter()
+      #self.lastCounter=self.engine.getCounter()
       if ptype != 94:
         log.warning("===================== ptype:%d len:%d "%(ptype, len(str(m)) ) )
     except NeedRekeyException,e:
