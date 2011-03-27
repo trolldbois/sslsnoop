@@ -19,20 +19,19 @@ MOZSOURCE="$PWD/biblio//firefox-3.6.15+build1+nobinonly/mozilla/"
 #./ipc/chromium/src/base/third_party/nspr/
 INCLUDES="-I. -I$MOZSOURCE/nsprpub/pr/include/ -I$MOZSOURCE/security/nss/lib/ssl/ "
 INCLUDES="$INCLUDES -I$MOZSOURCE/ipc/chromium/src/base/third_party/nspr/ -I$MOZSOURCE/ipc/chromium/src/"
-
-#h2xml $INCLUDES $MOZSOURCE/security/nss/lib/ssl/sslt.h -o ctypes_sslt.xml
-#xml2py ctypes_sslt.xml -o ctypes_sslt.py
-
 INCLUDES="$INCLUDES -I$MOZSOURCE/security/nss/lib/ -I$MOZSOURCE/security/nss/lib/util/"
 INCLUDES="$INCLUDES -I$MOZSOURCE/security/nss/lib/certdb/ -I$MOZSOURCE/security/nss/lib/freebl/"
 INCLUDES="$INCLUDES -I$MOZSOURCE/security/nss/lib/softoken/ -I$MOZSOURCE/security/nss/lib/cryptohi/"
 INCLUDES="$INCLUDES -I$MOZSOURCE/nsprpub/lib/libc/include/ -I$MOZSOURCE/nsprpub/lib/ds/"
 
-#h2xml $INCLUDES $MOZSOURCE/security/nss/lib/ssl/sslimpl.h -o ctypes_sslimpl.xml
-#xml2py ctypes_sslimpl.xml -o ctypes_sslimpl.py
 
-h2xml $INCLUDES -c ctypes_nss.h -o ctypes_nss.xml \
- && xml2py ctypes_nss.xml -o ctypes_nss_generated.py
+####h2xml $INCLUDES -c ctypes_nss.h -o ctypes_nss.xml \
+#### && xml2py ctypes_nss.xml -o ctypes_nss_generated.py
+
+INCLUDES="-I$PWD -I/usr/include/openssl/"
+h2xml $INCLUDES -c ctypes_openssl.h -o ctypes_openssl.xml \
+ && xml2py ctypes_openssl.xml -o ctypes_openssl_generated.py
+
 
 
 
