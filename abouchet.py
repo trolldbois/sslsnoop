@@ -203,7 +203,7 @@ def findStruct(pid, struct, maxNum=1, fullScan=False, nommap=False):
   ''' '''
   if type(struct) != str:
     struct = '.'.join([struct.__module__,struct.__name__])
-  cmd_line=['python', 'abouchet.py', 'search', "%d"%pid, "%s"%struct, '--maxnum', str(int(maxNum))] #, '--nommap'
+  cmd_line=['python', 'abouchet.py', "%s"%struct, "--pid", "%d"%pid, 'search',  '--maxnum', str(int(maxNum))] #, '--nommap'
   if fullScan:
     cmd_line.append('--fullscan')
   if nommap:
@@ -219,7 +219,7 @@ def refreshStruct(pid, struct, offset):
   ''' '''
   if type(struct) != str:
     struct = '.'.join([struct.__module__,struct.__name__])
-  cmd_line=['python', 'abouchet.py', 'refresh', "%d"%pid , '%s'%struct, "0x%lx"%offset ]
+  cmd_line=['python', 'abouchet.py',  '%s'%struct, '--pid', "%d"%pid ,'refresh',  "0x%lx"%offset ]
   instance,validated=_callFinder(cmd_line)
   if not validated:
     log.error("The session_state has not been re-validated. You should look for it again.")
