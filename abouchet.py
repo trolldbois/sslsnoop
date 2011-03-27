@@ -221,6 +221,7 @@ def usage(parser):
 def argparser():
   rootparser = argparse.ArgumentParser(prog='StructFinder', description='Parse memory structs and pickle them.')
   rootparser.add_argument('--string', dest='human', action='store_const', const=True, help='Print results as human readable string')
+  rootparser.add_argument('--debug', dest='debug', action='store_const', const=True, help='setLevel to DEBUG')
   
   subparsers = rootparser.add_subparsers(help='sub-command help')
   search_parser = subparsers.add_parser('search', help='search help')
@@ -302,13 +303,16 @@ def devnull(arg, **args):
   return
 
 def main(argv):
-  logging.basicConfig(level=logging.INFO)
-  log.debug = devnull
+  #log.debug = devnull
   #model.log.debug = devnull
-  logging.debug(argv)
+  #logging.debug(argv)
   
   parser = argparser()
   opts = parser.parse_args(argv)
+  if opts.debug:
+    logging.basicConfig(level=logging.DEBUG)
+  else:
+    logging.basicConfig(level=logging.INFO)
   try:
     opts.func(opts)
   except ImportError,e:
