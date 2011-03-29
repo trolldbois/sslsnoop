@@ -64,8 +64,7 @@ fulldata=file('ctypes_linux_generated.c').read()
 
 REGEX_STR = r"""
 ^((static\ inline)(\s+\w+\s)*(?P<funcname>\w+)\(.+?\)\s*
-      { ([^}]+ 
-            }\s*)*? )  ^(static|typedef|extern|struct)
+     {     ( [^}]+ }\s* )*?  ) ^(static|typedef|extern|struct)?
  """
 REGEX_OBJ = re.compile(REGEX_STR, re.MULTILINE| re.VERBOSE | re.DOTALL)
 
