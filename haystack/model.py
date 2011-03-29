@@ -8,15 +8,10 @@ __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
 import ctypes,os, types
 from struct import pack,unpack
-from ptrace.debugger.memory_mapping import readProcessMappings
+from memory_mapping import readProcessMappings
 import logging
 log=logging.getLogger('model')
 
-def devnull(arg, **args):
-  return
-#log.debug = devnull
-
-MEMCACHE=[]
 
 
 ''' returns if the address of the struct is in the mapping area

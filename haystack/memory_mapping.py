@@ -5,7 +5,9 @@ from ptrace.debugger.process_error import ProcessError
 from ptrace.ctypes_tools import formatAddress
 import re
 from weakref import ref
-import ctypes, struct, mmap, model
+import ctypes, struct, mmap
+# local
+import model # TODO check ctypes_tools.bytes2array in ptrace
 
 PROC_MAP_REGEX = re.compile(
     # Address range: '08048000-080b0000 '

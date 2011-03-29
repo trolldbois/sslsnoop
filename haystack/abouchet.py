@@ -6,45 +6,17 @@
 
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
-import os,logging,sys, time
+import argparse, logging, os, pickle, sys, time, ctypes
 import subprocess
 
-import ctypes_openssh, model
-import ctypes
-#from ctypes import *
-from ptrace.ctypes_libc import libc
+import model
 
-# linux only
+# linux only ?
 from ptrace.debugger.debugger import PtraceDebugger
-#from ptrace.debugger.memory_mapping import readProcessMappings
+# ptrace fork
 from memory_mapping import readProcessMappings, MemoryDumpMemoryMapping
 
-import argparse,pickle
-
-
-log=logging.getLogger('abouchet')
-MAX_KEYS=255
-
-verbose = 0
-
-
-class FileWriter:
-  def __init__(self,prefix,suffix,folder):
-    self.prefix=prefix
-    self.suffix=suffix
-    self.folder=folder
-  def get_valid_filename(self):
-    filename_FMT="%s-%d.%s"
-    for i in xrange(1,MAX_KEYS):
-      filename=filename_FMT%(self.prefix,i,self.suffix)
-      afilename=os.path.normpath(os.path.sep.join([self.folder,filename]))
-      if not os.access(afilename,os.F_OK):
-        return afilename
-    #
-    log.error("Too many file keys extracted in %s directory"%(self.folder))
-    return None    
-  def writeToFile(self,instance):
-    raise NotImplementedError
+log=logging.getLogger('haystack')
 
 
 
@@ -138,7 +110,7 @@ class StructFinder:
     # where do we look  
     start=memoryMap.start  
     end=memoryMap.end
-    plen=ctypes.sizeof(ctypes.c_char_p) # use aligned words only
+    plen=ctypes.sizeof(ctypes.c_void_p) # use aligned words only
     structlen=ctypes.sizeof(struct)
     #ret vals
     outputs=[]
@@ -199,11 +171,15 @@ def _callFinder(cmd_line):
   instance=pickle.loads(instance)
   return instance
 
+def getMainFile():
+  return os.path.abspath(sys.modules[__name__].__file__)
+
+
 def findStruct(pid, struct, maxNum=1, fullScan=False, nommap=False):
   ''' '''
   if type(struct) != str:
     struct = '.'.join([struct.__module__,struct.__name__])
-  cmd_line=['python', 'abouchet.py', "%s"%struct, "--pid", "%d"%pid, 'search',  '--maxnum', str(int(maxNum))] #, '--nommap'
+  cmd_line=[sys.executable, getMainFile(), "%s"%struct, "--pid", "%d"%pid, 'search',  '--maxnum', str(int(maxNum))] #, '--nommap'
   if fullScan:
     cmd_line.append('--fullscan')
   if nommap:
@@ -219,7 +195,7 @@ def findStructInFile(filename, struct, hint=None, maxNum=1, fullScan=False):
   ''' '''
   if type(struct) != str:
     struct = '.'.join([struct.__module__,struct.__name__])
-  cmd_line=['python', 'abouchet.py', "--debug", "%s"%struct, "--fromdump", filename, 'search',  '--maxnum', str(int(maxNum))] #, '--nommap'
+  cmd_line=[sys.executable, getMainFile(), "--debug", "%s"%struct, "--fromdump", filename, 'search',  '--maxnum', str(int(maxNum))] #, '--nommap'
   if fullScan:
     cmd_line.append('--fullscan')
   if hint:
@@ -235,7 +211,7 @@ def refreshStruct(pid, struct, offset):
   ''' '''
   if type(struct) != str:
     struct = '.'.join([struct.__module__,struct.__name__])
-  cmd_line=['python', 'abouchet.py',  '%s'%struct, '--pid', "%d"%pid ,'refresh',  "0x%lx"%offset ]
+  cmd_line=[sys.executable, getMainFile(),  '%s'%struct, '--pid', "%d"%pid ,'refresh',  "0x%lx"%offset ]
   instance,validated=_callFinder(cmd_line)
   if not validated:
     log.error("The session_state has not been re-validated. You should look for it again.")
@@ -370,10 +346,4 @@ def main(argv):
 if __name__ == "__main__":
   main(sys.argv[1:])
 
-def a():
-  argv=[ 'refresh', '28573', 'ctypes_openssh.session_state', '0xb9116268']
-  parser = argparser()
-  opts = parser.parse_args(argv)
-  ret=opts.func(opts)
-  return ret
 
