@@ -62,9 +62,11 @@ sys.exit()
 import re
 fulldata=file('ctypes_linux_generated.c').read()
 
+   #  {     ( [^}]+ }\s* )*?  ) ^(static|typedef|extern|struct)?
+
 REGEX_STR = r"""
 ^((static\ inline)(\s+\w+\s)*(?P<funcname>\w+)\(.+?\)\s*
-     {     ( [^}]+ }\s* )*?  ) ^(static|typedef|extern|struct)?
+     {  [^/]*? ^}$    )      # [^(^}$)]+ ^}$ )
  """
 REGEX_OBJ = re.compile(REGEX_STR, re.MULTILINE| re.VERBOSE | re.DOTALL)
 
@@ -93,11 +95,11 @@ print REGEX_OBJ.sub('',data)
 
 
 
-for p in REGEX_OBJ.findall(data):
+for p in REGEX_OBJ.findall(fulldata):
   print p[0]
 
 
-data2 = REGEX_OBJ.sub('',data)
+data2 = REGEX_OBJ.sub('// supprimed',fulldata)
 file('out.c','w').write(data2)
 
 
