@@ -22,6 +22,25 @@ log=logging.getLogger('output')
 
 
 
+
+class FileWriter:
+  def __init__(self,prefix,suffix,folder):
+    self.prefix=prefix
+    self.suffix=suffix
+    self.folder=folder
+  def get_valid_filename(self):
+    filename_FMT="%s-%d.%s"
+    for i in xrange(1,MAX_KEYS):
+      filename=filename_FMT%(self.prefix,i,self.suffix)
+      afilename=os.path.normpath(os.path.sep.join([self.folder,filename]))
+      if not os.access(afilename,os.F_OK):
+        return afilename
+    #
+    log.error("Too many file keys extracted in %s directory"%(self.folder))
+    return None    
+  def writeToFile(self,instance):
+    raise NotImplementedError
+
 class SSHStreamToFile():
   ''' Pipes the data from a (ssh) socket into a different file for each packet type. 
     supposedly, this would demux channels into files.
