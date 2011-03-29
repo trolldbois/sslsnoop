@@ -62,98 +62,49 @@ sys.exit()
 import re
 fulldata=file('ctypes_linux_generated.c').read()
 
-REGEX_STR = r"""  # WORKS NICE.. presque
-^((static\ inline)(\s+\w+\s)*(?P<funcname>\w+)\(.+?\)\s*
-     {     ( [^}]+ }\s* )*?  ) ^(static|typedef|extern|struct)?
-"""
+#__attribute__((no_instrument_function)) 
 
-REGEX_STR = r"""  # works kinda nice
-^((static\ inline)(\s+\w+\s)*(?P<funcname>\w+)\(.+?\)\s*
-     {  [^/]*? ^}$    )      # [^(^}$)]+ ^}$ )
- """
-
-
-REGEX_STR = r"""  # better func sig parsing
-^((static\ inline)(\s+\w+)*(?P<funcname>\w+)\([^{;]+?\)\s*
-     {  [^/]*? ^}$    )      # [^(^}$)]+ ^}$ )
- """
-
-
-
-data='''
-static __inline__ int get_count_order(unsigned int count)
-{
- int order;
- order = fls(count) - 1;
- if (count & (count - 1))
-  order++;
- return order;
-}
-'''
-
-data='''static inline __attribute__((always_inline)) int constant_test_bit(unsigned int nr, const volatile unsigned long *addr)
-{
- return ((1UL << (nr % 32)) &
-  (((unsigned long *)addr)[nr / 32])) != 0;
-}
-'''
-REGEX_STR = r"""  # better func sig parsing 2
-^((static\ (inline|__inline__)) (\s+__attribute__\(\(always_inline\)\))*   (?P<sig> \s+\w+)*   (?P<funcname> \w+ ) (?P<args> \([^{;]+?\)\s* )
-     {  [^/]*? ^}$    )      # [^(^}$)]+ ^}$ )
- """
-
-
-REGEX_STR = r"""  # nice
-^((static\ (inline|__inline__)) (\s+__attribute__\(\(always_inline\)\))*  (?P<sig> \s+\w+)* (?P<funcname>  (\*)* \w+ ) (?P<args> \([^{;]+?\)\s* ) 
-     {  .*?  ^}$   )     
- """
- 
-data='''
-static inline const struct cpumask *get_cpu_mask(unsigned int cpu)
-{
- const unsigned long *p = cpu_bit_bitmap[1 + cpu % 32];
- p -= cpu / 32;
- return ((struct cpumask *)(1 ? (p) : (void *)sizeof(__check_is_bitmap(p))));
-}
-'''
-
-REGEX_STR = r"""  # nice - ok for pointers
-^((static\ (inline|__inline__))  (\s+__attribute__\(\(always_inline\)\))*  (?P<sig> \s+\w+)* (\s*[*]\s*)* (?P<funcname>  \w+ ) (?P<args> \([^{;]+?\)\s* ) 
-   {  .*?  ^}$ )     
- """
-REGEX_OBJ = re.compile(REGEX_STR, re.MULTILINE| re.VERBOSE | re.DOTALL)
-
+def stripFunctions(data):
+  REGEX_STR = r"""  # nice - ok for pointers
+  ^((static\ (inline|__inline__))  (\s+__attribute__\(\(always_inline\)\))*  (?P<sig> \s+\w+)* (\s*[*]\s*)* (?P<funcname>  \w+ ) (?P<args> \([^{;]+?\)\s* ) 
+     {  .*?  ^}$ )     
+   """
+  REGEX_OBJ = re.compile(REGEX_STR, re.MULTILINE| re.VERBOSE | re.DOTALL)
+  data2 = REGEX_OBJ.sub('// supprimed function',data)
+  '''
 for p in REGEX_OBJ.findall(data):
   print p[0]
   print '--------'
-
-
-
-
 fout = file('out.c','w')
 for p in REGEX_OBJ.findall(fulldata):
   fout.write(p[0])
-
 fout.close()
+'''
+  return data2
 
 
-print REGEX_OBJ.findall(data)[0][0]
-
-
-
-print REGEX_OBJ.sub('',data)
-
-
-
-
-
-
-for p in REGEX_OBJ.findall(fulldata):
+def stripExterns(data):
+  REGEX_STR2 = r"""  # 
+^((extern) [^;]* \; $ )     
+ """
+  REGEX_OBJ2 = re.compile(REGEX_STR2, re.MULTILINE| re.VERBOSE | re.DOTALL)
+  '''
+  for p in REGEX_OBJ2.findall(data):
   print p[0]
+  print '--------'
+fout = file('out.c','w')
+for p in REGEX_OBJ2.findall(fulldata):
+  fout.write(p[0]+'\n')
+  
+fout.close()
+  '''
+  data3 = REGEX_OBJ2.sub('// supprimed extern', data)
+  return data3
 
+data2 = stripFunctions(fulldata)
+data3 = stripExterns(data2)
 
-data2 = REGEX_OBJ.sub('// supprimed',fulldata)
-file('out.c','w').write(data2)
+file('out.c','w').write(data3)
 
 
 REGEX_STR = r"""# match any line that begins with a "for" or "while" statement:
