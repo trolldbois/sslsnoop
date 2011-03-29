@@ -110,7 +110,7 @@ class OpenSSHKeysFinder():
   
   def findActiveSession(self, maxNum=1):
     ''' '''
-    outs=haystack.findStruct(self.pid, 'ctypes_openssh.session_state')
+    outs=haystack.findStruct(self.pid, ctypes_openssh.session_state)
     if outs is None:
       log.error("The session_state has not been found. maybe it's not OpenSSH ?")
       return None,None
@@ -122,7 +122,7 @@ class OpenSSHKeysFinder():
 
   def refreshActiveSession(self, offset):
     ''' '''
-    instance,validated=haystack.refreshStruct(self.pid, 'ctypes_openssh.session_state', offset)
+    instance,validated=haystack.refreshStruct(self.pid, ctypes_openssh.session_state, offset)
     if not validated:
       log.error("The session_state has not been re-validated. You should look for it again.")
       return None,None
@@ -355,11 +355,13 @@ def main(argv):
   logging.getLogger("outbound.packetizer").setLevel(logging.INFO)
 
   logging.debug(argv)
-
   # we must have big privileges...
   if os.getuid() + os.geteuid() != 0:
     log.error("You must be root/using sudo to read memory and sniff traffic.")
     return
+
+  #sys.path.append('/home/jal/Compil/python-haystack/')
+  #sys.path.append('/home/jal/Compil/sslsnoop/sslsnoop/')
   
   parser = argparser()
   opts = parser.parse_args(argv)
