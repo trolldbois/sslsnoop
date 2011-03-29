@@ -5,7 +5,7 @@ from ptrace.debugger.process_error import ProcessError
 from ptrace.ctypes_tools import formatAddress
 import re
 from weakref import ref
-import ctypes, struct, mmap
+import ctypes, struct, mmap, model
 
 PROC_MAP_REGEX = re.compile(
     # Address range: '08048000-080b0000 '
@@ -194,9 +194,12 @@ class MemoryDumpMemoryMapping(MemoryMapping):
         data = self.local_mmap[laddr:laddr+size]
         return data
 
-    def readStruct(self, address, struct):
+    def readStruct(self, address, structType):
         laddr = address-self.start
-        struct = struct.from_buffer_copy(self.local_mmap, laddr)
+        structLen = ctypes.sizeof(structType)
+        st = self.local_mmap[laddr:laddr+structLen]
+        structtmp = model.bytes2array(st, ctypes.c_ubyte)
+        struct = structType.from_buffer(structtmp)
         return struct
 
     def readArray(self, address, basetype, count):

@@ -215,6 +215,22 @@ def findStruct(pid, struct, maxNum=1, fullScan=False, nommap=False):
   #
   return outs
 
+def findStructInFile(filename, struct, hint=None, maxNum=1, fullScan=False):
+  ''' '''
+  if type(struct) != str:
+    struct = '.'.join([struct.__module__,struct.__name__])
+  cmd_line=['python', 'abouchet.py', "--debug", "%s"%struct, "--fromdump", filename, 'search',  '--maxnum', str(int(maxNum))] #, '--nommap'
+  if fullScan:
+    cmd_line.append('--fullscan')
+  if hint:
+    cmd_line.extend(['--hint', str(hex(hint))])
+  outs=_callFinder(cmd_line)
+  if len(outs) == 0:
+    log.error("The %s has not been found."%(struct))
+    return None
+  #
+  return outs
+
 def refreshStruct(pid, struct, offset):
   ''' '''
   if type(struct) != str:
@@ -281,7 +297,9 @@ def search(args):
       pass
     print ']'
   else:
-    ret=[ (ss.toPyObject(),addr) for ss, addr in outs]    
+    ret=[ (ss.toPyObject(),addr) for ss, addr in outs]
+    log.info("%s %s"%(ret[0], type(ret[0]) )   )
+    #model.findCtypesInPyObj(ret)
     print pickle.dumps(ret)
   return outs
 

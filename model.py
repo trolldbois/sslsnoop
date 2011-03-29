@@ -150,10 +150,16 @@ def isPointerType(obj):
   return type(obj).__class__.__name__== 'PointerType'
 
 def isBasicTypeArrayType(obj):
-  return isArrayType(obj) and isBasicType(obj[0])
+  if isArrayType(obj):
+    if isBasicType(obj[0]):
+      return True
+  return False
 
 def isArrayType(obj):
   return type(obj).__class__.__name__=='ArrayType'
+
+def isFunctionType(obj):
+  return type(obj).__class__.__name__=='CFuncPtrType'
 
 def isCStringPointer(obj):
   return obj.__class__.__name__ == 'CString'
@@ -249,7 +255,9 @@ class LoadableMembers(ctypes.Structure):
               if False, return False, else continue
     '''
     # precheck for quick unvalidation
-    myfields=dict(self._fields_)
+    # myfields=dict(self._fields_)  ## some fields are initialised...
+    _fieldsTuple = [ (f[0],f[1]) for f in self._fields_] 
+    myfields=dict(_fieldsTuple)
     for attrname, expected in self.expectedValues.iteritems():
       attrtype = myfields[attrname]
       attr=getattr(self,attrname)
@@ -260,7 +268,7 @@ class LoadableMembers(ctypes.Structure):
     #if len(self.expectedValues) >0 :
     #  log.info('maybe valid . full validation follows validated :%s'%(self.expectedValues.keys()))    
     # normal check
-    for attrname,attrtype in self._fields_:
+    for attrname,attrtype, in _fieldsTuple:
       attr=getattr(self,attrname)
       # get expected values
       if attrname in self.expectedValues:
@@ -387,7 +395,8 @@ class LoadableMembers(ctypes.Structure):
       return False
     log.debug('%s do loadMembers ----------------'%(self.__class__.__name__))
     ## go through all members. if they are pointers AND not null AND in valid memorymapping AND a struct type, load them as struct pointers
-    for attrname,attrtype in self._fields_:
+    _fieldsTuple = [ (f[0],f[1]) for f in self._fields_] 
+    for attrname,attrtype in _fieldsTuple:
       attr=getattr(self,attrname)
       # shorcut ignores
       if attrname in self.expectedValues:
@@ -493,7 +502,8 @@ class LoadableMembers(ctypes.Structure):
   
   def toString(self,prefix=''):
     s="%s # %s\n"%(prefix,repr(self) )
-    for field,typ in self._fields_:
+    _fieldsTuple = [ (f[0],f[1]) for f in self._fields_] 
+    for field,typ in _fieldsTuple:
       attr=getattr(self,field)
       s+=self._attrToString(attr,field,typ,prefix)
     return s
@@ -538,7 +548,8 @@ class LoadableMembers(ctypes.Structure):
 
   def __str__(self):
     s=repr(self)+'\n'
-    for field,typ in self._fields_:
+    _fieldsTuple = [ (f[0],f[1]) for f in self._fields_] 
+    for field,typ in _fieldsTuple:
       attr=getattr(self,field)
       if isStructType(attr):
         s+='%s (@0x%lx) : {\t%s}\n'%(field,ctypes.addressof(attr), attr )  
@@ -570,9 +581,11 @@ class LoadableMembers(ctypes.Structure):
     
   def toPyObject(self):
     # get self class.
+    #log.info("%s %s %s_py"%(self.__class__.__module__, sys.modules[self.__class__.__module__], self.__class__.__name__) )
     my_class=getattr(sys.modules[self.__class__.__module__],"%s_py"%(self.__class__.__name__) )
     my_self=my_class()
-    for field,typ in self._fields_:
+    _fieldsTuple = [ (f[0],f[1]) for f in self._fields_] 
+    for field,typ in _fieldsTuple:
       attr=getattr(self,field)
       member=self._attrToPyObject(attr,field,typ)
       setattr(my_self, field, member)
@@ -604,10 +617,71 @@ class LoadableMembers(ctypes.Structure):
           obj=contents
     elif isCStringPointer(attr):
       obj=attr.string
+    elif isFunctionType(attr):
+      obj = repr(attr)
     else:
-      obj=attr
+      obj = attr
     return obj
 
+
+class pyObj(object):
+  def toString(self, prefix=''):
+    s='{\n'
+    for attrname,typ in self.__dict__.items():
+      attr = getattr(self, attrname)
+      s += "%s%s: %s\n"%( prefix, attrname, self._attrToString(attr, attrname, typ, prefix+'\t') )
+    s+='}'
+    return s
+
+  def _attrToString(self, attr, attrname, typ, prefix ):
+    s=''
+    if type(attr) is tuple or type(attr) is list:
+      for i in xrange(0,len(attr)):
+        s += '%s,'%(self._attrToString(attr[i], i ,None, prefix+'\t' ) )
+      s = "[%s],"%(s)
+    elif not hasattr(attr,'__dict__'):
+      s = '%s,'%( repr(attr) )
+    elif  isinstance( attr , pyObj):
+      s = ' { %s\n},'%( attr.toString(prefix) )
+    else:
+      s = '%s,'%(repr(attr) )
+      print 'ELSE type: %s %s'%(type(attr), type(type(attr)) )
+    return s
+
+  def findCtypes(self):
+    ret = False
+    for attrname,typ in self.__dict__.items():
+      attr = getattr(self, attrname)
+      if self._attrFindCtypes(self, attr, attrname,typ ):
+        log.warning('Found a ctypes in %s'%(attrname))
+        ret = True
+
+  def _attrFindCtypes(self, attr, attrname, typ):
+    ret = False
+    if type(attr) is tuple or type(attr) is list:
+      for el in attr:
+        if self._attrFindCtypes(el, 'element', None):
+          log.warning('Found a ctypes in array/tuple')
+          return True
+    elif type(attr).__module__ == 'ctypes':
+      log.warning('Found a ctypes in self  %s'%(attr))
+      return True
+    elif not hasattr(attr,'__dict__'):
+      return False
+    else:
+      #log.warning("else %s"%type(attr))
+      ret = False
+    return ret
+
+def findCtypesInPyObj(obj):
+  ret = False
+  if type(obj) is tuple or type(obj) is list:
+    for el in obj:
+      if el.findCtypes():
+        log.warning('Found a ctypes in array/tuple')
+        return True
+  obj.findCtypes()
+      
 import inspect,sys
 
 def pasteLoadableMemberMethodsOn(klass):
@@ -626,6 +700,7 @@ def pasteLoadableMemberMethodsOn(klass):
 '''
 for klass,typ in inspect.getmembers(sys.modules[__name__], inspect.isclass):
   if typ.__module__ == __name__:
-    setattr(sys.modules[__name__], '%s_py'%(klass), type('%s_py'%(klass),(object,),{}) )
+    setattr(sys.modules[__name__], '%s_py'%(klass), type('%s_py'%(klass),(pyObj,),{}) )
 
-
+''' replace c_char_p '''
+ctypes.c_char_p = CString

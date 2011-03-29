@@ -105,6 +105,7 @@ class BIGNUM(OpenSSLStruct):
       # Load and memcopy d / BN_ULONG *
       attr_obj_address=getaddress(self.d)
       memoryMap = is_valid_address_value( attr_obj_address, mappings)
+      #print memoryMap, type(memoryMap)
       contents=(BN_ULONG*self.top).from_buffer_copy(memoryMap.readArray(attr_obj_address, BN_ULONG, self.top))
       log.debug('contents acquired %d'%ctypes.sizeof(contents))
       self.d.contents=BN_ULONG.from_address(ctypes.addressof(contents))
