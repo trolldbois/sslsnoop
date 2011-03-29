@@ -62,11 +62,50 @@ sys.exit()
 import re
 fulldata=file('ctypes_linux_generated.c').read()
 
-   #  {     ( [^}]+ }\s* )*?  ) ^(static|typedef|extern|struct)?
+REGEX_STR = r"""  # WORKS NICE.. presque
+^((static\ inline)(\s+\w+\s)*(?P<funcname>\w+)\(.+?\)\s*
+     {     ( [^}]+ }\s* )*?  ) ^(static|typedef|extern|struct)?
+"""
 
-REGEX_STR = r"""
+REGEX_STR = r"""  # works kinda nice
 ^((static\ inline)(\s+\w+\s)*(?P<funcname>\w+)\(.+?\)\s*
      {  [^/]*? ^}$    )      # [^(^}$)]+ ^}$ )
+ """
+
+
+REGEX_STR = r"""  # better func sig parsing
+^((static\ inline)(\s+\w+)*(?P<funcname>\w+)\([^{;]+?\)\s*
+     {  [^/]*? ^}$    )      # [^(^}$)]+ ^}$ )
+ """
+
+
+
+data='''
+static __inline__ int get_count_order(unsigned int count)
+{
+ int order;
+ order = fls(count) - 1;
+ if (count & (count - 1))
+  order++;
+ return order;
+}
+'''
+
+data='''static inline __attribute__((always_inline)) int constant_test_bit(unsigned int nr, const volatile unsigned long *addr)
+{
+ return ((1UL << (nr % 32)) &
+  (((unsigned long *)addr)[nr / 32])) != 0;
+}
+'''
+REGEX_STR = r"""  # better func sig parsing 2
+^((static\ (inline|__inline__)) (\s+__attribute__\(\(always_inline\)\))*   (?P<sig> \s+\w+)*   (?P<funcname> \w+ ) (?P<args> \([^{;]+?\)\s* )
+     {  [^/]*? ^}$    )      # [^(^}$)]+ ^}$ )
+ """
+
+
+REGEX_STR = r"""  # nice
+^((static\ (inline|__inline__)) (\s+__attribute__\(\(always_inline\)\))*  (?P<sig> \s+\w+)* (?P<funcname> \w+ ) (?P<args> \([^{;]+?\)\s* ) 
+     {  .*?  ^}$   )     
  """
 REGEX_OBJ = re.compile(REGEX_STR, re.MULTILINE| re.VERBOSE | re.DOTALL)
 
