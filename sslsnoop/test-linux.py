@@ -104,8 +104,22 @@ REGEX_STR = r"""  # better func sig parsing 2
 
 
 REGEX_STR = r"""  # nice
-^((static\ (inline|__inline__)) (\s+__attribute__\(\(always_inline\)\))*  (?P<sig> \s+\w+)* (?P<funcname> \w+ ) (?P<args> \([^{;]+?\)\s* ) 
+^((static\ (inline|__inline__)) (\s+__attribute__\(\(always_inline\)\))*  (?P<sig> \s+\w+)* (?P<funcname>  (\*)* \w+ ) (?P<args> \([^{;]+?\)\s* ) 
      {  .*?  ^}$   )     
+ """
+ 
+data='''
+static inline const struct cpumask *get_cpu_mask(unsigned int cpu)
+{
+ const unsigned long *p = cpu_bit_bitmap[1 + cpu % 32];
+ p -= cpu / 32;
+ return ((struct cpumask *)(1 ? (p) : (void *)sizeof(__check_is_bitmap(p))));
+}
+'''
+
+REGEX_STR = r"""  # nice - ok for pointers
+^((static\ (inline|__inline__))  (\s+__attribute__\(\(always_inline\)\))*  (?P<sig> \s+\w+)* (\s*[*]\s*)* (?P<funcname>  \w+ ) (?P<args> \([^{;]+?\)\s* ) 
+   {  .*?  ^}$ )     
  """
 REGEX_OBJ = re.compile(REGEX_STR, re.MULTILINE| re.VERBOSE | re.DOTALL)
 
