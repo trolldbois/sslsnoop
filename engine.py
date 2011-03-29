@@ -46,7 +46,7 @@ def myhex(bstr):
 
 
 class StatefulAES_CBC_Engine(Engine):
-  def __init__(self, context , ):
+  def __init__(self, context  ):
     self.sync(context)
     self._AES_cbc=libopenssl.AES_cbc_encrypt
     log.debug('cipher:%s block_size: %d key_len: %d '%(context.name, context.block_size, context.key_len))
@@ -63,7 +63,7 @@ class StatefulAES_CBC_Engine(Engine):
     self._AES_cbc( ctypes.byref(src), ctypes.byref(dest), bLen, ctypes.byref(self.key), 
               ctypes.byref(self.iv), enc ) 
     ##log.debug('AFTER  %s'%( myhex(self.aes_key_ctx.getCounter())) )
-    #print self, repr(model.array2bytes(dest))
+    print self, repr(model.array2bytes(dest))
     return model.array2bytes(dest)
   
   def sync(self, context):
@@ -71,10 +71,11 @@ class StatefulAES_CBC_Engine(Engine):
     self.evp_aes_key = EVP_AES_KEY().fromPyObj(context.evpCtx.cipher_data) # 
     # we need nothing else
     self.key = self.evp_aes_key.ks
+    #print self.key
     # copy counter content
     self.iv = model.bytes2array(context.evpCtx.iv, ctypes.c_ubyte)
     log.info('IV value is %s'%(myhex(context.evpCtx.iv)) )
-
+    # TODO , check si les IV outbound sont les bons.
 
 
 class StatefulAES_Ctr_Engine(Engine):
