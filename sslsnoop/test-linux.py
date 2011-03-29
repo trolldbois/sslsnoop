@@ -60,15 +60,37 @@ sys.exit()
 
 
 import re
-data=file('ctypes_linux_generated.c').read()
+fulldata=file('ctypes_linux_generated.c').read()
 
 REGEX_STR = r"""
 ^((static\ inline)(\s+\w+\s)*(?P<funcname>\w+)\(.+?\)\s*
-      { ([^}]+ }){3}?
- )"""
+      { ([^}]+ 
+            }\s*)*? )  ^(static|typedef|extern|struct)
+ """
 REGEX_OBJ = re.compile(REGEX_STR, re.MULTILINE| re.VERBOSE | re.DOTALL)
 
+for p in REGEX_OBJ.findall(data):
+  print p[0]
+  print '--------'
+
+
+
+
+fout = file('out.c','w')
+for p in REGEX_OBJ.findall(fulldata):
+  fout.write(p[0])
+
+fout.close()
+
+
 print REGEX_OBJ.findall(data)[0][0]
+
+
+
+print REGEX_OBJ.sub('',data)
+
+
+
 
 
 
