@@ -8,10 +8,12 @@ __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
 import os,logging,sys, copy
 
-import ctypes, model
+import ctypes
 from ctypes import cdll
 from ctypes_openssh import AES_BLOCK_SIZE, ssh_aes_ctr_ctx
 from ctypes_openssl import AES_KEY, EVP_AES_KEY
+
+from haystack import model
 
 log=logging.getLogger('engine')
 

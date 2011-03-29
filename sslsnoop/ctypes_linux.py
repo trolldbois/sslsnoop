@@ -8,13 +8,13 @@ __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
 import ctypes
 
-import model
+from haystack import model
+from haystack.model import is_valid_address,getaddress,array2bytes,bytes2array,LoadableMembers,RangeValue,NotNull,CString,EVP_CIPHER_CTX_APP_DATA_PTR
+import ctypes_linux_generated as gen
+
 import logging
 log=logging.getLogger('ctypes_linux')
 
-from model import is_valid_address,getaddress,array2bytes,bytes2array,LoadableMembers,RangeValue,NotNull,CString,EVP_CIPHER_CTX_APP_DATA_PTR
-import model
-import ctypes_linux_generated as gen
 
 class KernelStruct(LoadableMembers):
   ''' defines classRef '''

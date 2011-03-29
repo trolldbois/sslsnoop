@@ -8,9 +8,12 @@ __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
 import argparse, os, logging, sys, time, pickle, struct
 
-import ctypes, ctypes_openssh, ctypes_openssl
-import abouchet, output, socket_scapy
+import ctypes
+import ctypes_openssh, ctypes_openssl
+import output, socket_scapy
+
 from engine import CIPHERS
+import haystack 
 
 #our impl
 from paramiko_packet import Packetizer
@@ -18,7 +21,7 @@ from paramiko_packet import Packetizer
 # todo : replace by one empty shell of ours
 from paramiko.transport import Transport
 
-from abouchet import FileWriter
+from output import FileWriter
 
 log=logging.getLogger('sslsnoop.openssh')
 
@@ -91,7 +94,6 @@ class SessionCiphers():
 
 class OpenSSHKeysFinder():
   ''' wrapper around a fork/exec to abouchet StructFinder '''
-  cmd_line=['python', 'abouchet.py', 'refresh', '2442', 'ctypes_openssh.session_state', '0xb822a268']
 
   def __init__(self, pid, fullScan=False):
     self.pid = pid
@@ -108,7 +110,7 @@ class OpenSSHKeysFinder():
   
   def findActiveSession(self, maxNum=1):
     ''' '''
-    outs=abouchet.findStruct(self.pid, 'ctypes_openssh.session_state')
+    outs=haystack.findStruct(self.pid, 'ctypes_openssh.session_state')
     if outs is None:
       log.error("The session_state has not been found. maybe it's not OpenSSH ?")
       return None,None
@@ -120,7 +122,7 @@ class OpenSSHKeysFinder():
 
   def refreshActiveSession(self, offset):
     ''' '''
-    instance,validated=abouchet.refreshStruct(self.pid, 'ctypes_openssh.session_state', offset)
+    instance,validated=haystack.refreshStruct(self.pid, 'ctypes_openssh.session_state', offset)
     if not validated:
       log.error("The session_state has not been re-validated. You should look for it again.")
       return None,None

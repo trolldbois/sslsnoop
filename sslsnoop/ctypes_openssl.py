@@ -7,13 +7,14 @@
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
 import ctypes
-from ptrace.debugger.memory_mapping import readProcessMappings
 import logging
+
+from ptrace.debugger.memory_mapping import readProcessMappings
+
+from haystack.model import is_valid_address,is_valid_address_value,getaddress,array2bytes,bytes2array
+from haystack.model import LoadableMembers,RangeValue,NotNull,CString,EVP_CIPHER_CTX_APP_DATA_PTR
+
 log=logging.getLogger('openssl.model')
-
-from model import is_valid_address,is_valid_address_value,getaddress,array2bytes,bytes2array
-from model import LoadableMembers,RangeValue,NotNull,CString,EVP_CIPHER_CTX_APP_DATA_PTR
-
 
 ''' hmac.h:69 '''
 HMAC_MAX_MD_CBLOCK=128

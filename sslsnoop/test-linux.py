@@ -1,5 +1,6 @@
 
-import model, ctypes, mmap, os
+from haystack import model
+import ctypes, mmap, os
 from structures import ctypes_linux_generated as kernel
 from memory_mapping import MemoryDumpMemoryMapping
 

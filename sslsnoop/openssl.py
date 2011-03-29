@@ -6,24 +6,22 @@
 
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
-import os,logging,sys, argparse, abouchet
+import os,logging,sys, argparse
 
-import ctypes_openssl,ctypes_openssh
-#from  model import DSA,RSA
 import ctypes
-from ctypes import *
+import ctypes_openssl,ctypes_openssh
+
+from ctypes import * # TODO delete
 from ptrace.ctypes_libc import libc
+from haystack.abouchet import StructFinder
+from output import FileWriter
 
 # linux only
 from ptrace.debugger.debugger import PtraceDebugger
 from ptrace.debugger.memory_mapping import readProcessMappings
 
 log=logging.getLogger('openssl')
-MAX_KEYS=255
 
-verbose = 0
-
-from abouchet import FileWriter,StructFinder
 
 _libssl = ctypes.cdll.LoadLibrary("libssl.so")
 

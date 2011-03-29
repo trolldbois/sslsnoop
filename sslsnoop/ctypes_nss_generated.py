@@ -1,7 +1,6 @@
 from ctypes import *
-#STRING = c_char_p
-from model import CString
-STRING = CString
+
+STRING = c_char_p
 
 def htole16(x): return (x) # macro
 def _G_FSTAT64(fd,buf): return __fxstat64 (_STAT_VER, fd, buf) # macro

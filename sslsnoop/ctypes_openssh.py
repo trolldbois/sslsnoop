@@ -7,14 +7,16 @@
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
 import ctypes
-from ptrace.debugger.memory_mapping import readProcessMappings
-from ptrace import ctypes_stdint
 import logging
+
+from ptrace.debugger.memory_mapping import readProcessMappings
+
+from haystack.model import is_valid_address,is_valid_address_value,pointer2bytes,array2bytes,bytes2array,getaddress
+from haystack.model import LoadableMembers,RangeValue,NotNull,CString,EVP_CIPHER_CTX_APP_DATA_PTR, IgnoreMember
+from ctypes_openssl import EVP_CIPHER_CTX, EVP_MD, HMAC_CTX, EVP_AES_KEY, AES_KEY,rijndael_ctx,EVP_RC4_KEY
+
 log=logging.getLogger('openssh.model')
 
-from model import is_valid_address,is_valid_address_value,pointer2bytes,array2bytes,bytes2array,getaddress
-from model import LoadableMembers,RangeValue,NotNull,CString,EVP_CIPHER_CTX_APP_DATA_PTR, IgnoreMember
-from ctypes_openssl import EVP_CIPHER_CTX, EVP_MD, HMAC_CTX, EVP_AES_KEY, AES_KEY,rijndael_ctx,EVP_RC4_KEY
 
 MODE_MAX=2 #kex.h:62
 AES_BLOCK_LEN=16 #umac.c:168
@@ -28,10 +30,9 @@ HASH_BUF_BYTES=64 # umac.c:315
 SSH_SESSION_KEY_LENGTH=32 # ssh.h:84
 MAXNR = 14
 
-''' typedefs ptrace / ctypes_stdint.py  TODO'''
-UINT64=ctypes_stdint.uint64_t
-UINT32=ctypes_stdint.uint32_t
-UINT8=ctypes_stdint.uint8_t
+UINT64=ctypes.c_uint64
+UINT32=ctypes.c_uint32
+UINT8=ctypes.c_uint8
 
 
 
