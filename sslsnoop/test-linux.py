@@ -66,8 +66,11 @@ fulldata=file('ctypes_linux_generated.c').read()
 
 def stripFunctions(data):
   REGEX_STR = r"""  # nice - ok for pointers
-  ^((static\ (inline|__inline__))  (\s+__attribute__\(\(always_inline\)\))*  (?P<sig> \s+\w+)* (\s*[*]\s*)* (?P<funcname>  \w+ ) (?P<args> \([^{;]+?\)\s* ) 
-     {  .*?  ^}$ )     
+  ^ (__attribute__\(\(no_instrument_function\)\)\s+)* ((static\ (inline|__inline__)) 
+         (\s+__attribute__\(\(always_inline\)\))*  (?P<sig> \s+\w+)* (\s*[*]\s*)* 
+                (?P<funcname>  \w+ ) (?P<args> \([^{;]+?\)\s* ) 
+        ( { . }$ | {  .*?  ^}$  )
+    )     
    """
   REGEX_OBJ = re.compile(REGEX_STR, re.MULTILINE| re.VERBOSE | re.DOTALL)
   data2 = REGEX_OBJ.sub('// supprimed function',data)
@@ -85,7 +88,7 @@ fout.close()
 
 def stripExterns(data):
   REGEX_STR2 = r"""  # 
-^((extern) [^;]* \; $ )     
+^((extern) \s+ (?!struct|enum) .*? ;$  ) 
  """
   REGEX_OBJ2 = re.compile(REGEX_STR2, re.MULTILINE| re.VERBOSE | re.DOTALL)
   '''
@@ -107,23 +110,42 @@ data3 = stripExterns(data2)
 file('out.c','w').write(data3)
 
 
-REGEX_STR = r"""# match any line that begins with a "for" or "while" statement:
-^((static inline)\s+\w*\s*\(.+?\)
-    # Now make a named group 'balanced' which matches
-    # a balanced substring.
-    (?P<balanced>
-        # A balanced substring is either something that is not a {}
-        [^{}]
-        | # …or a parenthesised string:
-        \{ # A parenthesised string begins with an opening parenthesis
-            (?P=balanced)* # …followed by a sequence of balanced substrings
-        \} # …and ends with a closing parenthesis
-    )*  # Look for a sequence of balanced substrings
-# must end with a semi-colon to match:
-\s*;)"""
+
+
+
+data='''
+extern __attribute__((section(".data..percpu" ""))) __typeof__(u16) x86_cpu_to_apicid; extern __typeof__(u16) *x86_cpu_to_apicid_early_ptr; extern __typeof__(u16) x86_cpu_to_apicid_early_map[];
+extern __attribute__((section(".data..percpu" ""))) __typeof__(u16) x86_bios_cpu_apicid; extern __typeof__(u16) *x86_bios_cpu_apicid_early_ptr; extern __typeof__(u16) x86_bios_cpu_apicid_early_map[];
+extern struct {
+ void *sp;
+ unsigned short ss;
+} stack_start;
+extern struct tvec_base boot_tvec_bases;
+'''
+stripExterns(data)
+
+
+REGEX_STR2 = r"""  # 
+^((extern) \s+ (?!struct|enum) .*? ;$  )     
+"""
+REGEX_OBJ2 = re.compile(REGEX_STR2, re.MULTILINE| re.VERBOSE | re.DOTALL)
+for p in REGEX_OBJ2.findall(data):
+  print p[0]
+  print '--------'
+
 
 REGEX_OBJ = re.compile(REGEX_STR, re.MULTILINE| re.VERBOSE | re.DOTALL)
-REGEX_OBJ.findall(data)
+for p in REGEX_OBJ.findall(data):
+  print p[0]
+  print '--------'
+
+
+fout = file('out.c','w')
+for p in REGEX_OBJ.findall(fulldata):
+  fout.write(p[0])
+fout.close()
+
+
 
 
 '''
