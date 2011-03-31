@@ -13,6 +13,7 @@ from ptrace.debugger.memory_mapping import readProcessMappings
 
 from haystack.model import is_valid_address,is_valid_address_value,pointer2bytes,array2bytes,bytes2array,getaddress
 from haystack.model import LoadableMembers,RangeValue,NotNull,CString,EVP_CIPHER_CTX_APP_DATA_PTR, IgnoreMember
+from haystack import model
 from ctypes_openssl import EVP_CIPHER_CTX, EVP_MD, HMAC_CTX, EVP_AES_KEY, AES_KEY,rijndael_ctx,EVP_RC4_KEY
 
 log=logging.getLogger('openssh.model')
@@ -514,10 +515,11 @@ OpenSSHStruct.classRef=dict([ (ctypes.POINTER( klass), klass) for (name,klass) i
 ''' Load all model classes and create a similar non-ctypes Python class  
   thoses will be used to translate non pickable ctypes into POPOs.
 '''
+## model.createPOPO(__name__)
 for klass,typ in inspect.getmembers(sys.modules[__name__], inspect.isclass):
   if typ.__module__ == __name__:
-    setattr(sys.modules[__name__], '%s_py'%(klass), type('%s_py'%(klass),(object,),{}) )
-
+    setattr(sys.modules[__name__], '%s_py'%(klass), type('%s_py'%(klass),(model.pyObj,),{}) )
+    #print sys.modules[__name__], '%s_py'%(klass)
 
 if __name__ == '__main__':
   printSizeof()

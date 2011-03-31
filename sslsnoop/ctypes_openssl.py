@@ -13,6 +13,7 @@ from ptrace.debugger.memory_mapping import readProcessMappings
 
 from haystack.model import is_valid_address,is_valid_address_value,getaddress,array2bytes,bytes2array
 from haystack.model import LoadableMembers,RangeValue,NotNull,CString,EVP_CIPHER_CTX_APP_DATA_PTR
+from haystack import model
 
 log=logging.getLogger('openssl.model')
 
@@ -493,7 +494,7 @@ OpenSSLStruct.classRef=dict([ (ctypes.POINTER( klass), klass) for (name,klass) i
 '''
 for klass,typ in inspect.getmembers(sys.modules[__name__], inspect.isclass):
   if typ.__module__ == __name__:
-    setattr(sys.modules[__name__], '%s_py'%(klass), type('%s_py'%(klass),(object,),{}) )
+    setattr(sys.modules[__name__], '%s_py'%(klass), type('%s_py'%(klass),(model.pyObj,),{}) )
 
 if __name__ == '__main__':
   printSizeof()
