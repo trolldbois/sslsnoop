@@ -11,7 +11,7 @@ import os,logging,sys, copy
 import ctypes
 from ctypes import cdll
 from ctypes_openssh import AES_BLOCK_SIZE, ssh_aes_ctr_ctx
-from ctypes_openssl import AES_KEY, EVP_AES_KEY
+from ctypes_openssl import AES_KEY, EVP_AES_KEY, BF_KEY, EVP_bf_key
 
 from haystack import model
 
@@ -142,6 +142,38 @@ class StatefulAES_Ctr_Engine(Engine):
       if old != 0: # underflow
         return
 
+
+class StatefulBlowfish_CBC_Engine(Engine):
+  def __init__(self, context  ):
+    self.sync(context)
+    self._BF_cbc=libopenssl.BF_cbc_encrypt
+    log.debug('cipher:%s block_size: %d key_len: %d '%(context.name, context.block_size, context.key_len))
+  
+  def _decrypt(self, src, bLen):
+    BF_ROUNDS	= 16
+    BF_BLOCK = 8
+    buf=(ctypes.c_ubyte*BF_BLOCK)()
+    dest=(ctypes.c_ubyte*bLen)()
+    enc=ctypes.c_uint(0)  ## 0 is decrypt for inbound traffic
+
+    #void BF_cbc_encrypt(const unsigned char *in, unsigned char *out, long length,
+    #	const BF_KEY *schedule, unsigned char *ivec, int enc);void AES_cbc_encrypt(
+    self._BF_cbc( ctypes.byref(src), ctypes.byref(dest), bLen, ctypes.byref(self.key), 
+              ctypes.byref(self.iv), enc ) 
+
+    print self, repr(model.array2bytes(dest))
+    return model.array2bytes(dest)
+  
+  def sync(self, context):
+    ''' refresh the crypto state '''
+    self.bf_key = BF_KEY().fromPyObj(context.evpCtx.cipher_data) # 
+    # we need nothing else BF_KEY
+    self.key = self.bf_key
+    #print self.key
+    # copy counter content
+    self.iv = model.bytes2array(context.evpCtx.iv, ctypes.c_ubyte)
+    log.info('IV value is %s'%(myhex(context.evpCtx.iv)) )
+    # TODO , check si les IV outbound sont les bons.
 
 
 
