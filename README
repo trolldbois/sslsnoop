@@ -7,9 +7,9 @@ Attaching a process is quickier with --addr 0xb788aa98 as provided by abouchet.p
     INFO:abouchet:found instance <class 'ctypes_openssh.session_state'> @ 0xb788aa98
 
   $ sudo python finder.py    # try ssh, sshd and ssh-agent...
-  $ sudo python openssh.py `pgrep ssh`
-  $ sudo python openssh.py `pgrep ssh` --server # for sshd
-  $ sudo python openssl.py `pgrep ssh-agent` # dump RSA and DSA keys
+  $ sudo sslsnoop-openssh `pgrep ssh`
+  $ sudo sslsnoop-openssh `pgrep ssh` --server # for sshd
+  $ sudo sslsnoop-openssl `pgrep ssh-agent` # dump RSA and DSA keys
 
 and go and check outputs/ :
 
