@@ -11,7 +11,7 @@ import os,logging,sys, copy
 import ctypes
 from ctypes import cdll
 from ctypes_openssh import AES_BLOCK_SIZE, ssh_aes_ctr_ctx
-from ctypes_openssl import AES_KEY, EVP_AES_KEY, BF_KEY, EVP_bf_key
+from ctypes_openssl import AES_KEY, EVP_AES_KEY #, BF_KEY, EVP_bf_key
 
 from haystack import model
 
