@@ -3,7 +3,7 @@ from setuptools import setup
 from glob import glob
 
 setup(name="sslsnoop",
-    version="0.1",
+    version="0.2",
     description="Dumps the live traffic of an ssl-encrypted stream.",
     long_description=open('README').read(),
 
