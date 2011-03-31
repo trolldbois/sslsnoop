@@ -89,6 +89,7 @@ fout.close()
 def stripExterns(data):
   REGEX_STR2 = r"""  # 
 ^((extern) \s+ (?!struct|enum) .*? ;$  ) 
+#^((extern) \s+ (\s|\w)*? ;$  ) 
  """
   REGEX_OBJ2 = re.compile(REGEX_STR2, re.MULTILINE| re.VERBOSE | re.DOTALL)
   '''
@@ -104,10 +105,19 @@ fout.close()
   data3 = REGEX_OBJ2.sub('// supprimed extern', data)
   return data3
 
+def changeReservedWords(data):
+  data1 = data.replace('*new);','*new1);')
+  mre = re.compile(r'\bprivate;')
+  data2 = mre.sub('private1;',data1)
+  mre = re.compile(r'\bnamespace\b')
+  data3 = mre.sub('namespace1',data2)
+  return data3
+
 data2 = stripFunctions(fulldata)
 data3 = stripExterns(data2)
+data4 = changeReservedWords(data3)
 
-file('out.c','w').write(data3)
+file('out.c','w').write(data4)
 
 
 
