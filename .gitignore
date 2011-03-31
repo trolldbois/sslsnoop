@@ -1,0 +1,5 @@
+biblio
+*~
+*.pyc
+test/*
+*.xml
