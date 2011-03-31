@@ -15,6 +15,8 @@ from haystack.model import is_valid_address,is_valid_address_value,getaddress,ar
 from haystack.model import LoadableMembers,RangeValue,NotNull,CString,EVP_CIPHER_CTX_APP_DATA_PTR
 from haystack import model
 
+import ctypes_openssl_generated as gen
+
 log=logging.getLogger('openssl.model')
 
 ''' hmac.h:69 '''
@@ -34,46 +36,30 @@ class OpenSSLStruct(LoadableMembers):
 
 
 
-
-class rijndael_ctx(OpenSSLStruct):
-  _fields_ = [
-  ('decrypt',ctypes.c_int),
-  ('Nr',ctypes.c_int),
-  ('ek',  (ctypes.c_uint32*(4*RIJNDAEL_MAXNR + 1))  ),
-  ('dk',  (ctypes.c_uint32*(4*RIJNDAEL_MAXNR + 1))  ),
-  ]  
-
-class RC4_KEY(OpenSSLStruct):
-  _fields_ = [
-  ('x',ctypes.c_uint), #RC4_INT opensslconf.h:61
-  ('x',ctypes.c_uint),
-  ('data',ctypes.c_uint*256)
-  ]
-
-class EVP_RC4_KEY(OpenSSLStruct):
+class EVP_RC4_KEY(OpenSSLStruct): # evp/e_rca.c
   _fields_ = [
   ('ks',RC4_KEY)
   ]
 
-class AES_KEY(OpenSSLStruct):
-  ''' aes.h:78 '''
-  _fields_ = [
-  ("rd_key",  ctypes.c_ulong * (4* (AES_MAXNR+1))), 
-  ("rounds",  ctypes.c_int)
-  ] 
-  def getKey(self):
-    #return array2bytes(self.rd_key)
-    return ','.join(["0x%lx"%key for key in self.rd_key])
-  def getRounds(self):
-    return self.rounds
-  def fromPyObj(self,pyobj):
-    #copy rd_key
-    self.rd_key=bytes2array(pyobj.rd_key,ctypes.c_ulong)
-    #copy rounds
-    self.rounds=pyobj.rounds
-    return self
+''' aes.h:78 '''
+####### AES_KEY #######
+def AES_KEY_getKey(self):
+  #return array2bytes(self.rd_key)
+  return ','.join(["0x%lx"%key for key in self.rd_key])
+def AES_KEY_getRounds(self):
+  return self.rounds
+def AES_KEY_fromPyObj(self,pyobj):
+  #copy rd_key
+  self.rd_key=bytes2array(pyobj.rd_key,ctypes.c_ulong)
+  #copy rounds
+  self.rounds=pyobj.rounds
+  return self
+AES_KEY.getKey = AES_KEY_getKey
+AES_KEY.getRounds = AES_KEY_getRounds
+AES_KEY.fromPyObj = AES_KEY_fromPyObj
+#######
 
-#test
+# evp/e_aes.c:66
 class EVP_AES_KEY(OpenSSLStruct):
   _fields_ = [
   ('ks', AES_KEY),
@@ -82,121 +68,67 @@ class EVP_AES_KEY(OpenSSLStruct):
     self.ks = AES_KEY().fromPyObj(pyobj.ks)
     return self
 
-#ok
-class BIGNUM(OpenSSLStruct):
-  _fields_ = [
-  ("d",ctypes.POINTER(BN_ULONG) ),
-  ('top',ctypes.c_int),
-  ('dmax',ctypes.c_int),
-  ('neg',ctypes.c_int),
-  ('flags',ctypes.c_int)
-  ]
-  expectedValues={
+
+# BIGNUM
+BIGNUM.expectedValues={
     "neg": [0,1]
   }
-  def loadMembers(self, mappings, maxDepth):
-    ''' 
-    #self._d = process.readArray(attr_obj_address, ctypes.c_ulong, self.top) 
-    ## or    
-    #ulong_array= (ctypes.c_ulong * self.top)    
-    '''
-    if not self.isValid(mappings):
-      log.debug('BigNUm tries to load members when its not validated')
-      return False
-    if True:
-      # Load and memcopy d / BN_ULONG *
-      attr_obj_address=getaddress(self.d)
-      memoryMap = is_valid_address_value( attr_obj_address, mappings)
-      #print memoryMap, type(memoryMap)
-      contents=(BN_ULONG*self.top).from_buffer_copy(memoryMap.readArray(attr_obj_address, BN_ULONG, self.top))
-      log.debug('contents acquired %d'%ctypes.sizeof(contents))
-      self.d.contents=BN_ULONG.from_address(ctypes.addressof(contents))
-      # TODO ctypes.from_address(address)
-      #self.d=ctypes.cast(ctypes.pointer(contents), ctypes.POINTER(BN_ULONG) ) 
-      self.d=ctypes.cast(contents, ctypes.POINTER(BN_ULONG) ) 
-      return True
-    else:
-      ### we can't cast , so we need to copy ulong by ulong
-      #if (ctypes.sizeof(ctypes.c_ulong)*self.top) >= ctypes.sizeof(self.d.contents):
-      #  log.error('self.top %d is too big for us puny humans'%self.top)
-      #  return False
-      # memory leak surely, but we can't handle 
-      top=self.top
-      contents=BN_ULONG(0)
-      self.d.contents=contents
-      print '7 -> ',self
-      print "self: 0x%lx"%ctypes.addressof(self)
-      log.debug("contents : 0x%lx-0x%lx"%( ctypes.addressof(contents), ctypes.addressof(contents)+ ctypes.sizeof(contents) ))
-      log.debug("contents : 0x%lx-0x%lx"%( ctypes.addressof(contents), ctypes.addressof(contents)+ ctypes.sizeof(contents) ))
-      log.debug("d.contents : 0x%lx-0x%lx"%( ctypes.addressof(self.d.contents), ctypes.addressof(self.d.contents)+ ctypes.sizeof(self.d.contents) ))
-      log.debug("contents : 0x%lx-0x%lx"%( ctypes.addressof(contents), ctypes.addressof(contents)+ ctypes.sizeof(contents) ))
-      #log.debug('new memspace : 0x%lx with size %d '%(ctypes.addressof(self.d.contents), ctypes.sizeof(self.d.contents) )   )
-      log.debug("contents : 0x%lx-0x%lx"%( getaddress(contents), getaddress(contents)+ ctypes.sizeof(contents) ))
-      log.debug("d.contents : 0x%lx-0x%lx"%( getaddress(self.d.contents), getaddress(self.d.contents)+ ctypes.sizeof(self.d.contents) ))
-      print '8 -> ',self
-      log.debug("contents : 0x%lx-0x%lx"%( getaddress(contents), getaddress(contents)+ ctypes.sizeof(contents) ))
-      log.debug("d.contents : 0x%lx-0x%lx"%( getaddress(self.d.contents), getaddress(self.d.contents)+ ctypes.sizeof(self.d.contents) ))
-      print top
-      for i in range(0,top):
-        self.d.contents[i]=contents[i]
-      log.debug('contents copied %d'%(i+1))
-      log.debug('%s loaded at 0x%lx'%(self.__class__.__name__,ctypes.addressof(self)))    
-      return True
-  
-  def isValid(self,mappings):
-    if ( self.dmax < 0 or self.top < 0 or self.dmax < self.top ):
-      return False
-    return LoadableMembers.isValid(self,mappings)
-  
-  def __str__(self):
-    d= getaddress(self.d)
-    return ("BN { d=0x%lx, top=%d, dmax=%d, neg=%d, flags=%d }"%
-                (d, self.top, self.dmax, self.neg, self.flags) )
-#ok
-class STACK(OpenSSLStruct):
-  _fields_ = [
-  ("num",ctypes.c_int),
-  ("data",ctypes.POINTER(ctypes.c_ubyte)), 
-  ("sorted",ctypes.c_int),
-  ("num_alloc",ctypes.c_int),
-  ("comp",ctypes.POINTER(ctypes.c_int) ) ]
+def BIGNUM_loadMembers(self, mappings, maxDepth):
+  ''' 
+  #self._d = process.readArray(attr_obj_address, ctypes.c_ulong, self.top) 
+  ## or    
+  #ulong_array= (ctypes.c_ulong * self.top)    
+  '''
+  if not self.isValid(mappings):
+    log.debug('BigNUm tries to load members when its not validated')
+    return False
+  # Load and memcopy d / BN_ULONG *
+  attr_obj_address=getaddress(self.d)
+  memoryMap = is_valid_address_value( attr_obj_address, mappings)
+  #print memoryMap, type(memoryMap)
+  contents=(BN_ULONG*self.top).from_buffer_copy(memoryMap.readArray(attr_obj_address, BN_ULONG, self.top))
+  log.debug('contents acquired %d'%ctypes.sizeof(contents))
+  self.d.contents=BN_ULONG.from_address(ctypes.addressof(contents))
+  # TODO ctypes.from_address(address)
+  #self.d=ctypes.cast(ctypes.pointer(contents), ctypes.POINTER(BN_ULONG) ) 
+  self.d=ctypes.cast(contents, ctypes.POINTER(BN_ULONG) ) 
+  return True
 
-#ok
-class CRYPTO_EX_DATA(OpenSSLStruct):
-  _fields_ = [
-  ("sk",ctypes.POINTER(STACK) ),
-  ("dummy",ctypes.c_int)]
-  def loadMembers(self, mappings, maxDepth):
-    ''' erase self.sk'''
-    #self.sk=ctypes.POINTER(STACK)()
-    return LoadableMembers.loadMembers(self, mappings, maxDepth)
-  def isValid(self,mappings):
-    ''' erase self.sk'''
-    # TODO why ?
-    #self.sk=ctypes.POINTER(STACK)()
-    return LoadableMembers.isValid(self,mappings)
-  
-#ok
-class BN_MONT_CTX(OpenSSLStruct):
-  _fields_ = [
-  ("ri",ctypes.c_int),
-  ("RR",BIGNUM),
-  ("N",BIGNUM),
-  ("Ni",BIGNUM),
-  ("n0",ctypes.c_ulong),
-  ("flags",ctypes.c_int)]
+def BIGNUM_isValid(self,mappings):
+  if ( self.dmax < 0 or self.top < 0 or self.dmax < self.top ):
+    return False
+  return LoadableMembers.isValid(self,mappings)
 
-class EVP_PKEY(OpenSSLStruct):
-	_fields_ = [
-  ('type',ctypes.c_int),
-  ('save_type',ctypes.c_int),
-  ('references',ctypes.c_int),
-  ('pkey',ctypes.c_void_p), ## union of struct really
-  ('save_parameters',ctypes.c_int),
-  ('attributes',ctypes.c_void_p) ## 	STACK_OF(X509_ATTRIBUTE) *attributes; /* [ 0 ] */
-  ]
+def BIGNUM___str__(self):
+  d= getaddress(self.d)
+  return ("BN { d=0x%lx, top=%d, dmax=%d, neg=%d, flags=%d }"%
+              (d, self.top, self.dmax, self.neg, self.flags) )
+
+BIGNUM.loadMembers = BIGNUM_loadMembers
+BIGNUM.isValid     = BIGNUM_isValid
+BIGNUM.__str__     = BIGNUM___str__
+#################
 
 
+
+# STACK tack/stack.h:74
+
+# CRYPTO_EX_DATA crypto.h:158:
+def CRYPTO_EX_DATA_loadMembers(self, mappings, maxDepth):
+  ''' erase self.sk'''
+  #self.sk=ctypes.POINTER(STACK)()
+  return LoadableMembers.loadMembers(self, mappings, maxDepth)
+def CRYPTO_EX_DATA_isValid(self,mappings):
+  ''' erase self.sk'''
+  # TODO why ?
+  #self.sk=ctypes.POINTER(STACK)()
+  return LoadableMembers.isValid(self,mappings)
+
+CRYPTO_EX_DATA.loadMembers = CRYPTO_EX_DATA_loadMembers 
+CRYPTO_EX_DATA.isValid     = CRYPTO_EX_DATA_isValid 
+#################
+
+#ENGINE_CMD_DEFN engine/engine.h:272
 class ENGINE_CMD_DEFN(OpenSSLStruct):
 	_fields_ = [
   ('cmd_num',ctypes.c_uint),
@@ -464,37 +396,91 @@ class HMAC_CTX(OpenSSLStruct):
   ] 
 
 
-def printSizeof():
-  print 'BIGNUM:',ctypes.sizeof(BIGNUM)
-  print 'STACK:',ctypes.sizeof(STACK)
-  print 'CRYPTO_EX_DATA:',ctypes.sizeof(CRYPTO_EX_DATA)
-  print 'BN_MONT_CTX:',ctypes.sizeof(BN_MONT_CTX)
-  print 'EVP_PKEY:',ctypes.sizeof(EVP_PKEY)
-  print 'ENGINE_CMD_DEFN:',ctypes.sizeof(ENGINE_CMD_DEFN)
-  print 'ENGINE:', ctypes.sizeof(ENGINE)
-  print 'RSA:',ctypes.sizeof(RSA)
-  print 'DSA:',ctypes.sizeof(DSA)
-  print 'EVP_CIPHER:',ctypes.sizeof(EVP_CIPHER)
-  print 'EVP_CIPHER_CTX:',ctypes.sizeof(EVP_CIPHER_CTX)
-  print 'EVP_MD:',ctypes.sizeof(EVP_MD)
-  print 'EVP_MD_CTX:',ctypes.sizeof(EVP_MD_CTX)
-  print 'HMAC_CTX:',ctypes.sizeof(HMAC_CTX)
-  print 'AES_KEY:',ctypes.sizeof(AES_KEY) #AES_KEY: 232 au lieu de 244 .. chiotote..
-  print 'HMAC_MAX_MD_CBLOCK:',HMAC_MAX_MD_CBLOCK
-  print 'EVP_MAX_BLOCK_LENGTH:',EVP_MAX_BLOCK_LENGTH
-  print 'EVP_MAX_IV_LENGTH:',EVP_MAX_IV_LENGTH
-  print 'AES_MAXNR:',AES_MAXNR
+
+
+
+
+
+
+
+
+
+
+logging.basicConfig(level=logging.DEBUG)
+
 
 import inspect,sys
-''' Load all openSSL classes to local classRef '''
-OpenSSLStruct.classRef=dict([ (ctypes.POINTER( klass), klass) for (name,klass) in inspect.getmembers(sys.modules[__name__], inspect.isclass) if klass.__module__ == __name__])
+# auto import gen.* into . ?
 
-''' Load all model classes and create a similar non-ctypes Python class  
-  thoses will be used to translate non pickable ctypes into POPOs.
+def pasteModelMethodsOn(klass, register):
+  model.pasteLoadableMemberMethodsOn(klass)
+  klass.classRef = register.classRef
+  return klass
+
+def copyGeneratedClasses(src, dst, register):
+  ''' 
+  @param me : dst module
+  @param src : src module, generated
+  '''
+  __root_module_name,__dot,__module_name = dst.__name__.rpartition('.')
+  _loaded=0
+  _registered=0
+  for (name, klass) in inspect.getmembers(src, inspect.isclass):
+    if type(klass) == type(ctypes.Structure):
+      if klass.__module__.endswith('%s_generated'%(__module_name) ) :
+        setattr(dst, name, klass)
+        pasteModelMethodsOn(klass, register)
+        #log.debug("painted on %s"%klass)
+        _loaded+=1
+    else:
+      #log.debug("%s - %s"%(name, klass))
+      pass
+    # register structs and basic Types pointers
+    if klass.__module__ == src.__name__ or klass.__module__.endswith('%s_generated'%(src.__name__) ) :
+      register.classRef[ctypes.POINTER( klass)] = klass
+      _registered+=1
+  log.debug('loaded %d C structs from %s structs'%( _loaded, src.__name__))
+  log.debug('registered %d Pointers types'%( _registered))
+  log.debug('There is %d members in %s'%(len(src.__dict__), src.__name__))
+
+copyGeneratedClasses(gen, sys.modules[__name__], OpenSSLStruct )
+
+
+def createPOPOClasses( targetmodule ):
+  ''' Load all model classes and create a similar non-ctypes Python class  
+    thoses will be used to translate non pickable ctypes into POPOs.
+  '''
+  _created=0
+  for klass,typ in inspect.getmembers(targetmodule, inspect.isclass):
+    if typ.__module__.startswith(targetmodule.__name__):
+      kpy = type('%s_py'%(klass),(model.pyObj,),{})
+      setattr(targetmodule, '%s_py'%(klass), kpy )
+      _created+=1
+      if typ.__module__ != targetmodule.__name__: # copy also to generated
+        setattr(sys.modules[typ.__module__], '%s_py'%(klass), kpy )
+        #log.debug("Created %s_py"%klass)
+  log.debug('created %d POPO types'%( _created))
+
+createPOPOClasses( sys.modules[__name__] )
+
+
+# checkks
 '''
-for klass,typ in inspect.getmembers(sys.modules[__name__], inspect.isclass):
-  if typ.__module__ == __name__:
-    setattr(sys.modules[__name__], '%s_py'%(klass), type('%s_py'%(klass),(model.pyObj,),{}) )
+src=sys.modules[__name__]
+for (name, klass) in inspect.getmembers(src, inspect.isclass):
+  if klass.__module__ == src.__name__ or klass.__module__.endswith('%s_generated'%(src.__name__) ) :
+    if not klass.__name__.endswith('_py'):
+      print klass, len(klass.classRef)
+'''
+
+def printSizeof(mini=-1):
+  for (name,klass) in inspect.getmembers(sys.modules[__name__], inspect.isclass):
+    if type(klass) == type(ctypes.Structure) and klass.__module__.endswith('%s_generated'%(__name__) ) :
+      if ctypes.sizeof(klass) > mini:
+        print '%s:'%name,ctypes.sizeof(klass)
+  #print 'SSLCipherSuiteInfo:',ctypes.sizeof(SSLCipherSuiteInfo)
+  #print 'SSLChannelInfo:',ctypes.sizeof(SSLChannelInfo)
+
 
 if __name__ == '__main__':
   printSizeof()
