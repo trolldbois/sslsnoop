@@ -155,7 +155,7 @@ class CipherContext(OpenSSHStruct):
   def loadMembers(self, mappings, maxDepth):
     if not LoadableMembers.loadMembers(self, mappings, maxDepth):
       return False
-    #log.debug('evp    app_data    attr_obj_address=0x%lx'%(self.evp.app_data) )
+    log.debug('evp    app_data    attr_obj_address=0x%lx'%(self.evp.app_data) )
     #log.debug('evp    cipher_data attr_obj_address=0x%lx'%(self.evp.cipher_data) )  ##none
     #log.debug('cipher app_data    attr_obj_address=0x%lx'%(getaddress(self.cipher.contents.cipher_data)) )
     # cast evp.app_data into a valid struct
@@ -165,22 +165,30 @@ class CipherContext(OpenSSHStruct):
         log.warning("Unsupported cipher %s"%(self.cipher.contents.name.string))
         return True
       attr=getattr(self.evp,fieldname)
-      attr_obj_address=getaddress(attr) or attr  # c_void_p is a basic type.
+      #attr_obj_address=getaddress(attr) or attr  # c_void_p is a basic type.
+      attr_obj_address = attr
       #print attr
       memoryMap = is_valid_address_value( attr_obj_address, mappings, struct)
-      log.debug( "CAST %s into : %s "%(fieldname, struct) )
+      log.debug( "CipherContext CAST %s into : %s "%(fieldname, struct) )
       if not memoryMap:
         log.warning('On second toughts, %s seems to be at an invalid address. That should not happen (often).'%(fieldname))
         log.warning('%s addr:0x%lx size:0x%lx addr+size:0x%lx '%(is_valid_address_value( attr_obj_address, mappings), 
                                     attr_obj_address, ctypes.sizeof(struct), attr_obj_address+ctypes.sizeof(struct)))
         log.warning('%s : %s'%(fieldname, attr))
         return False # DEBUG kill it
-      st=struct.from_buffer_copy(memoryMap.readStruct(attr_obj_address, struct ) )
+      #st=struct.from_buffer_copy(memoryMap.readStruct(attr_obj_address, struct ) )
       # XXX CAST do not copy buffer when casting, sinon on perds des bytes
       ## attr.contents=(type(attr.contents)).from_buffer(st)
       ### c_void_p -> allocate local_mem and change value
-      setattr(self.evp, fieldname, ctypes.addressof(st) )
+      ### XXX dangling pointer ?
+      #attr.value = ctypes.addressof(st)
+      #setattr(self.evp, fieldname, ctypes.c_void_p(ctypes.addressof(st)) )
+      st=memoryMap.readStruct(attr_obj_address, struct )
+      model.keepRef(st)
+      setattr(self.evp, fieldname, ctypes.c_void_p(ctypes.addressof(st)) )
       
+      attr=getattr(self.evp,fieldname)      
+      log.debug('Copied 0x%lx into %s (0x%lx)'%(ctypes.addressof(st), fieldname, attr))      
       log.debug('LOADED app_data evp.%s as %s from 0x%lx (%s) into 0x%lx'%(fieldname,struct, 
             attr_obj_address, is_valid_address_value(attr_obj_address,mappings,struct), attr ))
       log.debug('\t\t---------\n%s\t\t---------'%st.toString())
@@ -200,7 +208,8 @@ class CipherContext(OpenSSHStruct):
       attr=getattr(self.evp,fieldname)
       #st=struct.from_address(getaddress(attr))
       st=struct.from_address(attr)
-      #print st.toString()
+      log.debug('%s value is : 0x%lx'%(fieldname,attr))
+      log.debug(st.toString())
       return st
     return None
 
@@ -486,13 +495,11 @@ class session_state(OpenSSHStruct):
     # populate AppData.
     d.receive_context.evp.app_data = self.receive_context.getEvpAppData().toPyObject()
     d.send_context.evp.app_data = self.send_context.getEvpAppData().toPyObject()
-    
-    log.info('self.send_context.evp.app_data: %s'%(self.send_context.getEvpAppData()))
-    log.info('d.send_context.evp.app_data: %s'%(d.send_context.evp.app_data))
-    
+    #log.debug('self.send_context.evp.app_data: %s'%(self.send_context.getEvpAppData()))
+    #log.debug('d.send_context.evp.app_data: %s'%(d.send_context.evp.app_data))
     ## TODO find a better way to pass a void_p for that cipher data
-    #d.receive_context.evp.cipher_data = self.receive_context.getEvpAppData().toPyObject()
-    #d.send_context.evp.cipher_data = self.send_context.getEvpAppData().toPyObject()
+    d.receive_context.evp.cipher_data = self.receive_context.getEvpAppData().toPyObject()
+    d.send_context.evp.cipher_data = self.send_context.getEvpAppData().toPyObject()
     return d
 
 
