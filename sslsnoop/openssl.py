@@ -14,6 +14,7 @@ import ctypes_openssl,ctypes_openssh
 from ctypes import * # TODO delete
 from ptrace.ctypes_libc import libc
 from haystack.abouchet import StructFinder
+from haystack.memory_mapper import MemoryMapper
 from output import FileWriter
 
 # linux only
@@ -108,13 +109,18 @@ def usage(txt):
 def argparser():
   parser = argparse.ArgumentParser(prog='openssl.py', description='Capture of RSA and DSA keys.')
   parser.add_argument('pid', type=int, help='Target PID')
+  parser.add_argument('--nommap', dest='mmap', action='store_const', const=False, default=True, help='disable mmap()-ing')
+  parser.add_argument('--debug', dest='debug', action='store_const', const=True, help='setLevel to DEBUG')
   parser.set_defaults(func=search)
   return parser
 
 
 def search(args):
+  if args.debug:
+    logging.basicConfig(level=logging.DEBUG)    
   log.info("Target has pid %d"%args.pid)
-  finder = OpenSSLStructFinder(args.pid )
+  mappings = MemoryMapper(args).getMappings()
+  finder = OpenSSLStructFinder(mappings )
   outs=finder.findAndSave()
   return
 
