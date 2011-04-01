@@ -60,12 +60,8 @@ class EVP_RC4_KEY(OpenSSLStruct): # evp/e_rca.c
 model.copyGeneratedClasses(gen, sys.modules[__name__])
 
 # register all classes (gen.*, locally defines, and local duplicates) to haystack
-model.registerModule(sys.modules[__name__])
-
 # create plain old python object from ctypes.Structure's, to picke them
-model.createPOPOClasses( sys.modules[__name__] )
-
-#print 'DONE'
+model.registerModule(sys.modules[__name__])
 
 ################ END   copy generated classes ##########################
 
