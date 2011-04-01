@@ -35,11 +35,96 @@ class OpenSSLStruct(LoadableMembers):
   pass
 
 
+# evp/e_aes.c:66
+class EVP_AES_KEY(OpenSSLStruct):
+  _fields_ = [
+  ('ks', gen.AES_KEY),
+	]
+  def fromPyObj(self,pyobj):
+    self.ks = gen.AES_KEY().fromPyObj(pyobj.ks)
+    return self
+
 
 class EVP_RC4_KEY(OpenSSLStruct): # evp/e_rca.c
   _fields_ = [
-  ('ks',RC4_KEY)
+  ('ks', gen.RC4_KEY)
   ]
+
+
+
+
+################ START copy generated classes ##########################
+
+
+
+#logging.basicConfig(level=logging.DEBUG)
+
+
+import inspect,sys
+# auto import gen.* into . ?
+
+def pasteModelMethodsOn(klass, register):
+  model.pasteLoadableMemberMethodsOn(klass)
+  klass.classRef = register.classRef
+  return klass
+
+def copyGeneratedClasses(src, dst, register):
+  ''' 
+  @param me : dst module
+  @param src : src module, generated
+  '''
+  __root_module_name,__dot,__module_name = dst.__name__.rpartition('.')
+  _loaded=0
+  _registered=0
+  for (name, klass) in inspect.getmembers(src, inspect.isclass):
+    if type(klass) == type(ctypes.Structure):
+      if klass.__module__.endswith('%s_generated'%(__module_name) ) :
+        setattr(dst, name, klass)
+        pasteModelMethodsOn(klass, register)
+        #log.debug("painted on %s"%klass)
+        _loaded+=1
+    else:
+      #log.debug("%s - %s"%(name, klass))
+      pass
+    # register structs and basic Types pointers
+    if klass.__module__ == src.__name__ or klass.__module__.endswith('%s_generated'%(src.__name__) ) :
+      register.classRef[ctypes.POINTER( klass)] = klass
+      _registered+=1
+  log.debug('loaded %d C structs from %s structs'%( _loaded, src.__name__))
+  log.debug('registered %d Pointers types'%( _registered))
+  log.debug('There is %d members in %s'%(len(src.__dict__), src.__name__))
+  return 
+
+def createPOPOClasses( targetmodule ):
+  ''' Load all model classes and create a similar non-ctypes Python class  
+    thoses will be used to translate non pickable ctypes into POPOs.
+  '''
+  _created=0
+  for klass,typ in inspect.getmembers(targetmodule, inspect.isclass):
+    if typ.__module__.startswith(targetmodule.__name__):
+      kpy = type('%s_py'%(klass),(model.pyObj,),{})
+      setattr(targetmodule, '%s_py'%(klass), kpy )
+      _created+=1
+      if typ.__module__ != targetmodule.__name__: # copy also to generated
+        setattr(sys.modules[typ.__module__], '%s_py'%(klass), kpy )
+        #log.debug("Created %s_py"%klass)
+  log.debug('created %d POPO types'%( _created))
+  return
+
+
+copyGeneratedClasses(gen, sys.modules[__name__], OpenSSLStruct )
+
+createPOPOClasses( sys.modules[__name__] )
+
+#print 'DONE'
+
+################ END   copy generated classes ##########################
+
+
+
+
+
+
 
 ''' aes.h:78 '''
 ####### AES_KEY #######
@@ -58,15 +143,6 @@ AES_KEY.getKey = AES_KEY_getKey
 AES_KEY.getRounds = AES_KEY_getRounds
 AES_KEY.fromPyObj = AES_KEY_fromPyObj
 #######
-
-# evp/e_aes.c:66
-class EVP_AES_KEY(OpenSSLStruct):
-  _fields_ = [
-  ('ks', AES_KEY),
-	]
-  def fromPyObj(self,pyobj):
-    self.ks = AES_KEY().fromPyObj(pyobj.ks)
-    return self
 
 
 # BIGNUM
@@ -128,6 +204,7 @@ CRYPTO_EX_DATA.loadMembers = CRYPTO_EX_DATA_loadMembers
 CRYPTO_EX_DATA.isValid     = CRYPTO_EX_DATA_isValid 
 #################
 
+'''
 #ENGINE_CMD_DEFN engine/engine.h:272
 class ENGINE_CMD_DEFN(OpenSSLStruct):
 	_fields_ = [
@@ -136,7 +213,9 @@ class ENGINE_CMD_DEFN(OpenSSLStruct):
   ('cmd_desc', CString),
   ('cmd_flags',ctypes.c_uint)
   ]  
+'''
 
+'''
 class ENGINE(OpenSSLStruct):
   pass
 ENGINE._fields_ = [
@@ -166,9 +245,9 @@ ENGINE._fields_ = [
   ('prev',ctypes.POINTER(ENGINE) ),
   ('nex',ctypes.POINTER(ENGINE) )
   ]
+'''
 
-
-#KO
+"""
 class RSA(OpenSSLStruct):
   ''' rsa/rsa.h '''
   loaded=False
@@ -195,7 +274,8 @@ class RSA(OpenSSLStruct):
   ("blinding",ctypes.POINTER(BIGNUM)),#BN_BLINDING *blinding;
   ("mt_blinding",ctypes.POINTER(BIGNUM))#BN_BLINDING *mt_blinding;
   ]
-  expectedValues={
+"""  
+RSA.expectedValues={
     "pad": [0], 
     "version": [0], 
     "references": RangeValue(0,0xfff),
@@ -208,34 +288,39 @@ class RSA(OpenSSLStruct):
     "dmq1": [NotNull],
     "iqmp": [NotNull]
   }
-  def printValid(self,mappings):
-    log.debug( '----------------------- LOADED: %s'%self.loaded)
-    log.debug('pad: %d version %d ref %d'%(self.pad,self.version,self.references) )
-    log.debug(is_valid_address( self.n, mappings)    )
-    log.debug(is_valid_address( self.e, mappings)    )
-    log.debug(is_valid_address( self.d, mappings)    )
-    log.debug(is_valid_address( self.p, mappings)    )
-    log.debug(is_valid_address( self.q, mappings)    )
-    log.debug(is_valid_address( self.dmp1, mappings) ) 
-    log.debug(is_valid_address( self.dmq1, mappings) )
-    log.debug(is_valid_address( self.iqmp, mappings) )
-    return
-  def loadMembers(self, mappings, maxDepth):
-    # XXXX clean other structs
-    self.meth = None
-    #self._method_mod_n = ctypes.POINTER(BN_MONT_CTX)()
-    #self._method_mod_p = ctypes.POINTER(BN_MONT_CTX)()
-    #self._method_mod_q = ctypes.POINTER(BN_MONT_CTX)()
-    self.bignum_data = None
-    self.blinding = None
-    self.mt_blinding = None
+def RSA_printValid(self,mappings):
+  log.debug( '----------------------- LOADED: %s'%self.loaded)
+  log.debug('pad: %d version %d ref %d'%(self.pad,self.version,self.references) )
+  log.debug(is_valid_address( self.n, mappings)    )
+  log.debug(is_valid_address( self.e, mappings)    )
+  log.debug(is_valid_address( self.d, mappings)    )
+  log.debug(is_valid_address( self.p, mappings)    )
+  log.debug(is_valid_address( self.q, mappings)    )
+  log.debug(is_valid_address( self.dmp1, mappings) ) 
+  log.debug(is_valid_address( self.dmq1, mappings) )
+  log.debug(is_valid_address( self.iqmp, mappings) )
+  return
+def RSA_loadMembers(self, mappings, maxDepth):
+  # XXXX clean other structs
+  self.meth = None
+  #self._method_mod_n = ctypes.POINTER(BN_MONT_CTX)()
+  #self._method_mod_p = ctypes.POINTER(BN_MONT_CTX)()
+  #self._method_mod_q = ctypes.POINTER(BN_MONT_CTX)()
+  self.bignum_data = None
+  self.blinding = None
+  self.mt_blinding = None
 
-    if not LoadableMembers.loadMembers(self, mappings, maxDepth):
-      log.debug('RSA not loaded')
-      return False
-    return True
-    
-#KO
+  if not LoadableMembers.loadMembers(self, mappings, maxDepth):
+    log.debug('RSA not loaded')
+    return False
+  return True
+
+RSA.printValid  = RSA_printValid
+RSA.loadMembers = RSA_loadMembers
+
+
+
+"""
 class DSA(OpenSSLStruct):
   _fields_ = [
   ("pad",  ctypes.c_int), 
@@ -255,7 +340,8 @@ class DSA(OpenSSLStruct):
   ("meth",ctypes.POINTER(ctypes.c_int)),#  const DSA_METHOD *meth;
   ("engine",ctypes.POINTER(ENGINE))
   ]
-  expectedValues={
+"""
+DSA.expectedValues={
     "pad": [0], 
     "version": [0], 
     "references": RangeValue(0,0xfff),
@@ -265,32 +351,33 @@ class DSA(OpenSSLStruct):
     "pub_key": [NotNull],
     "priv_key": [NotNull]
   }
-  def printValid(self,mappings):
-    log.debug( '----------------------- \npad: %d version %d ref %d'%(self.pad,self.version,self.write_params) )
-    log.debug(is_valid_address( self.p, mappings)    )
-    log.debug(is_valid_address( self.q, mappings)    )
-    log.debug(is_valid_address( self.g, mappings)    )
-    log.debug(is_valid_address( self.pub_key, mappings)    )
-    log.debug(is_valid_address( self.priv_key, mappings)    )
-    return
-  def internalCheck(self):
-    '''  pub_key = g^privKey mod p '''
-    return
+def DSA_printValid(self,mappings):
+  log.debug( '----------------------- \npad: %d version %d ref %d'%(self.pad,self.version,self.write_params) )
+  log.debug(is_valid_address( self.p, mappings)    )
+  log.debug(is_valid_address( self.q, mappings)    )
+  log.debug(is_valid_address( self.g, mappings)    )
+  log.debug(is_valid_address( self.pub_key, mappings)    )
+  log.debug(is_valid_address( self.priv_key, mappings)    )
+  return
+def DSA_loadMembers(self, mappings, maxDepth):
+  # clean other structs
+  # r and kinv can be null
+  self.meth = None
+  self._method_mod_p = None
+  #self.engine = None
+  
+  if not LoadableMembers.loadMembers(self, mappings, maxDepth):
+    log.debug('DSA not loaded')
+    return False
 
-  def loadMembers(self, mappings, maxDepth):
-    # clean other structs
-    # r and kinv can be null
-    self.meth = None
-    self._method_mod_p = None
-    #self.engine = None
-    
-    if not LoadableMembers.loadMembers(self, mappings, maxDepth):
-      log.debug('DSA not loaded')
-      return False
+  return True
 
-    return True
+DSA.printValid  = DSA_printValid
+DSA.loadMembers = DSA_loadMembers
+
 
 #ok
+"""
 class EVP_CIPHER(OpenSSLStruct):
   ''' evp.h:332 '''	
   _fields_ = [
@@ -308,7 +395,8 @@ class EVP_CIPHER(OpenSSLStruct):
   ("ctrl",  ctypes.POINTER(ctypes.c_int)), # function () 
   ("app_data",  ctypes.POINTER(ctypes.c_ubyte)) 
   ]
-  expectedValues={
+"""  
+EVP_CIPHER.expectedValues={
     "key_len": RangeValue(1,0xff), # key_len *8 bits ..2040 bits for a key is enought ? 
                                    # Default value for variable length ciphers 
     "iv_len": RangeValue(1,0xff), #  
@@ -317,7 +405,7 @@ class EVP_CIPHER(OpenSSLStruct):
     #"cleanup": [NotNull], # aes-cbc ?
     "ctx_size": RangeValue(0,0xffff), #  app_data struct should not be too big
   }
-
+"""
 #mok
 class EVP_CIPHER_CTX(OpenSSLStruct):
   ''' evp.h:332 '''	
@@ -338,7 +426,8 @@ class EVP_CIPHER_CTX(OpenSSLStruct):
   ("block_mask",  ctypes.c_int), 
   ("final",  ctypes.c_ubyte*EVP_MAX_BLOCK_LENGTH) ###unsigned char final[EVP_MAX_BLOCK_LENGTH]
   ]
-  expectedValues={
+"""
+EVP_CIPHER_CTX.expectedValues={
     "cipher": [NotNull], 
     "encrypt": [0,1], 
     "buf_len": RangeValue(0,EVP_MAX_BLOCK_LENGTH), ## number we have left, so must be less than buffer_size
@@ -347,14 +436,21 @@ class EVP_CIPHER_CTX(OpenSSLStruct):
     #"cipher_data": , # can be null if app_data is not
     "key_len": RangeValue(1,0xff), # key_len *8 bits ..2040 bits for a key is enought ? 
   }
-  def getOIV(self):
-    return array2bytes(self.oiv)
-  def getIV(self):
-    return array2bytes(self.iv)
-  def getAppData(self,structType):
-    log.debug('CAST app_data into %s'%(structType))
-    return structType.from_address(getaddress(self.app_data))
+  
+def EVP_CIPHER_CTX_getOIV(self):
+  return array2bytes(self.oiv)
+def EVP_CIPHER_CTX_getIV(self):
+  return array2bytes(self.iv)
+def EVP_CIPHER_CTX_getAppData(self,structType):
+  log.debug('EVP_CIPHER_CTX CAST app_data into %s'%(structType))
+  #return structType.from_address(getaddress(self.app_data))
+  return structType.from_address(self.app_data)
 
+EVP_CIPHER_CTX.getOIV = EVP_CIPHER_CTX_getOIV
+EVP_CIPHER_CTX.getIV  = EVP_CIPHER_CTX_getIV
+EVP_CIPHER_CTX.getAppData = EVP_CIPHER_CTX_getAppData
+
+"""
 #mok
 class EVP_MD(OpenSSLStruct):
   ''' struct env_md_st evp.h:227 '''
@@ -395,6 +491,7 @@ class HMAC_CTX(OpenSSLStruct):
   ("key",  ctypes.c_char * HMAC_MAX_MD_CBLOCK)
   ] 
 
+"""
 
 
 
@@ -403,65 +500,6 @@ class HMAC_CTX(OpenSSLStruct):
 
 
 
-
-
-
-logging.basicConfig(level=logging.DEBUG)
-
-
-import inspect,sys
-# auto import gen.* into . ?
-
-def pasteModelMethodsOn(klass, register):
-  model.pasteLoadableMemberMethodsOn(klass)
-  klass.classRef = register.classRef
-  return klass
-
-def copyGeneratedClasses(src, dst, register):
-  ''' 
-  @param me : dst module
-  @param src : src module, generated
-  '''
-  __root_module_name,__dot,__module_name = dst.__name__.rpartition('.')
-  _loaded=0
-  _registered=0
-  for (name, klass) in inspect.getmembers(src, inspect.isclass):
-    if type(klass) == type(ctypes.Structure):
-      if klass.__module__.endswith('%s_generated'%(__module_name) ) :
-        setattr(dst, name, klass)
-        pasteModelMethodsOn(klass, register)
-        #log.debug("painted on %s"%klass)
-        _loaded+=1
-    else:
-      #log.debug("%s - %s"%(name, klass))
-      pass
-    # register structs and basic Types pointers
-    if klass.__module__ == src.__name__ or klass.__module__.endswith('%s_generated'%(src.__name__) ) :
-      register.classRef[ctypes.POINTER( klass)] = klass
-      _registered+=1
-  log.debug('loaded %d C structs from %s structs'%( _loaded, src.__name__))
-  log.debug('registered %d Pointers types'%( _registered))
-  log.debug('There is %d members in %s'%(len(src.__dict__), src.__name__))
-
-copyGeneratedClasses(gen, sys.modules[__name__], OpenSSLStruct )
-
-
-def createPOPOClasses( targetmodule ):
-  ''' Load all model classes and create a similar non-ctypes Python class  
-    thoses will be used to translate non pickable ctypes into POPOs.
-  '''
-  _created=0
-  for klass,typ in inspect.getmembers(targetmodule, inspect.isclass):
-    if typ.__module__.startswith(targetmodule.__name__):
-      kpy = type('%s_py'%(klass),(model.pyObj,),{})
-      setattr(targetmodule, '%s_py'%(klass), kpy )
-      _created+=1
-      if typ.__module__ != targetmodule.__name__: # copy also to generated
-        setattr(sys.modules[typ.__module__], '%s_py'%(klass), kpy )
-        #log.debug("Created %s_py"%klass)
-  log.debug('created %d POPO types'%( _created))
-
-createPOPOClasses( sys.modules[__name__] )
 
 
 # checkks
