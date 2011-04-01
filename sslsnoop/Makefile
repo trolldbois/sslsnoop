@@ -29,9 +29,10 @@ INCLUDES="$INCLUDES -I$MOZSOURCE/nsprpub/lib/libc/include/ -I$MOZSOURCE/nsprpub/
 #### && xml2py ctypes_nss.xml -o ctypes_nss_generated.py
 
 INCLUDES="-I$PWD -I/usr/include/openssl/"
-h2xml $INCLUDES -c ctypes_openssl.h -o ctypes_openssl.xml \
- && xml2py ctypes_openssl.xml -o ctypes_openssl_generated.py
+#h2xml $INCLUDES -c ctypes_openssl.h -o ctypes_openssl.xml \
+# && xml2py ctypes_openssl.xml -o ctypes_openssl_generated.py
 
-
+clean:
+	rm -f ctypes_openssl_generated.c ctypes_openssl_generated_clean.c ctypes_openssl_generated.py ctypes_openssl_generated.pyc
 
 
