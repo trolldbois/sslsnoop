@@ -111,7 +111,7 @@ class OpenSSHKeysFinder():
   
   def findActiveSession(self, maxNum=1):
     ''' '''
-    outs=haystack.findStruct(self.pid, ctypes_openssh.session_state, debug=True)
+    outs=haystack.findStruct(self.pid, ctypes_openssh.session_state, debug=False)
     if outs is None:
       log.error("The session_state has not been found. maybe it's not OpenSSH ?")
       return None,None
