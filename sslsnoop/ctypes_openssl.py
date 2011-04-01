@@ -441,14 +441,9 @@ def EVP_CIPHER_CTX_getOIV(self):
   return array2bytes(self.oiv)
 def EVP_CIPHER_CTX_getIV(self):
   return array2bytes(self.iv)
-def EVP_CIPHER_CTX_getAppData(self,structType):
-  log.debug('EVP_CIPHER_CTX CAST app_data into %s'%(structType))
-  #return structType.from_address(getaddress(self.app_data))
-  return structType.from_address(self.app_data)
 
 EVP_CIPHER_CTX.getOIV = EVP_CIPHER_CTX_getOIV
 EVP_CIPHER_CTX.getIV  = EVP_CIPHER_CTX_getIV
-EVP_CIPHER_CTX.getAppData = EVP_CIPHER_CTX_getAppData
 
 """
 #mok
