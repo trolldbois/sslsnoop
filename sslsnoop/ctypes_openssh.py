@@ -12,7 +12,7 @@ import logging
 from ptrace.debugger.memory_mapping import readProcessMappings
 
 from haystack.model import is_valid_address,is_valid_address_value,pointer2bytes,array2bytes,bytes2array,getaddress
-from haystack.model import LoadableMembers,RangeValue,NotNull,CString,EVP_CIPHER_CTX_APP_DATA_PTR, IgnoreMember
+from haystack.model import LoadableMembers,RangeValue,NotNull,CString, IgnoreMember
 from haystack import model
 from ctypes_openssl import EVP_CIPHER_CTX, EVP_MD, HMAC_CTX, EVP_AES_KEY, AES_KEY, EVP_RC4_KEY
 
@@ -102,8 +102,6 @@ class ssh_rijndael_ctx(OpenSSHStruct):
     return self
 
 
-#EVP_CIPHER_CTX_APP_DATA_PTR._fields_=[ ('contents', ctypes.POINTER(ctypes.c_ubyte)) ,
-#        ('ssh_aes_ctr_ctx',ctypes.POINTER(ssh_aes_ctr_ctx)) ]
     
 class Cipher(OpenSSHStruct):
   ''' cipher.c:60 '''

@@ -13,7 +13,7 @@ import logging, sys
 from haystack import model
 
 from haystack.model import is_valid_address,is_valid_address_value,getaddress,array2bytes,bytes2array
-from haystack.model import LoadableMembers,RangeValue,NotNull,CString,EVP_CIPHER_CTX_APP_DATA_PTR
+from haystack.model import LoadableMembers,RangeValue,NotNull,CString
 
 import ctypes_openssl_generated as gen
 
