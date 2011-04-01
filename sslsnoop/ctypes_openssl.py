@@ -9,11 +9,11 @@ __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 import ctypes
 import logging
 
-from ptrace.debugger.memory_mapping import readProcessMappings
+''' insure ctypes basic types are subverted '''
+from haystack import model
 
 from haystack.model import is_valid_address,is_valid_address_value,getaddress,array2bytes,bytes2array
 from haystack.model import LoadableMembers,RangeValue,NotNull,CString,EVP_CIPHER_CTX_APP_DATA_PTR
-from haystack import model
 
 import ctypes_openssl_generated as gen
 
@@ -64,7 +64,7 @@ import inspect,sys
 # auto import gen.* into . ?
 
 def pasteModelMethodsOn(klass, register):
-  model.pasteLoadableMemberMethodsOn(klass)
+  #model.pasteLoadableMemberMethodsOn(klass)
   klass.classRef = register.classRef
   return klass
 
@@ -160,13 +160,13 @@ def BIGNUM_loadMembers(self, mappings, maxDepth):
     return False
   # Load and memcopy d / BN_ULONG *
   attr_obj_address=getaddress(self.d)
+  if not bool(self.d):
+    log.debug('BIGNUM has a Null pointer d')
+    return True
   memoryMap = is_valid_address_value( attr_obj_address, mappings)
-  #print memoryMap, type(memoryMap)
   contents=(BN_ULONG*self.top).from_buffer_copy(memoryMap.readArray(attr_obj_address, BN_ULONG, self.top))
   log.debug('contents acquired %d'%ctypes.sizeof(contents))
   self.d.contents=BN_ULONG.from_address(ctypes.addressof(contents))
-  # TODO ctypes.from_address(address)
-  #self.d=ctypes.cast(ctypes.pointer(contents), ctypes.POINTER(BN_ULONG) ) 
   self.d=ctypes.cast(contents, ctypes.POINTER(BN_ULONG) ) 
   return True
 
@@ -301,14 +301,12 @@ def RSA_printValid(self,mappings):
   log.debug(is_valid_address( self.iqmp, mappings) )
   return
 def RSA_loadMembers(self, mappings, maxDepth):
-  # XXXX clean other structs
-  self.meth = None
-  #self._method_mod_n = ctypes.POINTER(BN_MONT_CTX)()
-  #self._method_mod_p = ctypes.POINTER(BN_MONT_CTX)()
-  #self._method_mod_q = ctypes.POINTER(BN_MONT_CTX)()
-  self.bignum_data = None
-  self.blinding = None
-  self.mt_blinding = None
+  #self.meth = 0 # from_address(0)
+  # ignore bignum_data.
+  #self.bignum_data = 0
+  self.bignum_data.ptr.value = 0
+  #self.blinding = 0
+  #self.mt_blinding = 0
 
   if not LoadableMembers.loadMembers(self, mappings, maxDepth):
     log.debug('RSA not loaded')
