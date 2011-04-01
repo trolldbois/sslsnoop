@@ -63,8 +63,7 @@ class EVP_RC4_KEY(OpenSSLStruct): # evp/e_rca.c
 import inspect,sys
 # auto import gen.* into . ?
 
-def pasteModelMethodsOn(klass, register):
-  #model.pasteLoadableMemberMethodsOn(klass)
+def registerKlass(klass, register):
   klass.classRef = register.classRef
   return klass
 
@@ -80,41 +79,32 @@ def copyGeneratedClasses(src, dst, register):
     if type(klass) == type(ctypes.Structure):
       if klass.__module__.endswith('%s_generated'%(__module_name) ) :
         setattr(dst, name, klass)
-        pasteModelMethodsOn(klass, register)
-        #log.debug("painted on %s"%klass)
         _loaded+=1
     else:
       #log.debug("%s - %s"%(name, klass))
       pass
     # register structs and basic Types pointers
-    if klass.__module__ == src.__name__ or klass.__module__.endswith('%s_generated'%(src.__name__) ) :
-      register.classRef[ctypes.POINTER( klass)] = klass
-      _registered+=1
+    #if klass.__module__ == src.__name__ or klass.__module__.endswith('%s_generated'%(src.__name__) ) :
+    #  register.classRef[ctypes.POINTER( klass)] = klass
+    #  _registered+=1
   log.debug('loaded %d C structs from %s structs'%( _loaded, src.__name__))
   log.debug('registered %d Pointers types'%( _registered))
   log.debug('There is %d members in %s'%(len(src.__dict__), src.__name__))
   return 
 
-def createPOPOClasses( targetmodule ):
-  ''' Load all model classes and create a similar non-ctypes Python class  
-    thoses will be used to translate non pickable ctypes into POPOs.
-  '''
-  _created=0
-  for klass,typ in inspect.getmembers(targetmodule, inspect.isclass):
-    if typ.__module__.startswith(targetmodule.__name__):
-      kpy = type('%s_py'%(klass),(model.pyObj,),{})
-      setattr(targetmodule, '%s_py'%(klass), kpy )
-      _created+=1
-      if typ.__module__ != targetmodule.__name__: # copy also to generated
-        setattr(sys.modules[typ.__module__], '%s_py'%(klass), kpy )
-        #log.debug("Created %s_py"%klass)
-  log.debug('created %d POPO types'%( _created))
-  return
-
 
 copyGeneratedClasses(gen, sys.modules[__name__], OpenSSLStruct )
 
-createPOPOClasses( sys.modules[__name__] )
+model.registerModule(sys.modules[__name__])
+
+log.warning('OpenSSLStruct.classRef %d'%len(OpenSSLStruct.classRef) )
+log.warning('LoadableMembers.classRef %d'%len(LoadableMembers.classRef) )
+log.warning('ctypes.Structure.classRef %d'%len(ctypes.Structure.classRef) )
+log.warning('AES_KEY.classRef %d'%len(AES_KEY.classRef) )
+
+log.warning('ctypes.Structure is %s'%ctypes.Structure )
+
+model.createPOPOClasses( sys.modules[__name__] )
 
 #print 'DONE'
 
