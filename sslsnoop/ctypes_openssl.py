@@ -7,7 +7,7 @@
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
 import ctypes
-import logging
+import logging, sys
 
 ''' insure ctypes basic types are subverted '''
 from haystack import model
@@ -56,42 +56,13 @@ class EVP_RC4_KEY(OpenSSLStruct): # evp/e_rca.c
 
 ################ START copy generated classes ##########################
 
+# copy generated classes (gen.*) to this module as wrapper
+model.copyGeneratedClasses(gen, sys.modules[__name__])
 
-import inspect,sys
-
-def copyGeneratedClasses(src, dst, register):
-  ''' 
-  @param me : dst module
-  @param src : src module, generated
-  '''
-  __root_module_name,__dot,__module_name = dst.__name__.rpartition('.')
-  _loaded=0
-  _registered=0
-  for (name, klass) in inspect.getmembers(src, inspect.isclass):
-    if type(klass) == type(ctypes.Structure):
-      if klass.__module__.endswith('%s_generated'%(__module_name) ) :
-        setattr(dst, name, klass)
-        _loaded+=1
-    else:
-      #log.debug("%s - %s"%(name, klass))
-      pass
-  log.debug('loaded %d C structs from %s structs'%( _loaded, src.__name__))
-  log.debug('registered %d Pointers types'%( _registered))
-  log.debug('There is %d members in %s'%(len(src.__dict__), src.__name__))
-  return 
-
-
-copyGeneratedClasses(gen, sys.modules[__name__], OpenSSLStruct )
-
+# register all classes (gen.*, locally defines, and local duplicates) to haystack
 model.registerModule(sys.modules[__name__])
 
-log.warning('OpenSSLStruct.classRef %d'%len(OpenSSLStruct.classRef) )
-log.warning('LoadableMembers.classRef %d'%len(LoadableMembers.classRef) )
-log.warning('ctypes.Structure.classRef %d'%len(ctypes.Structure.classRef) )
-log.warning('AES_KEY.classRef %d'%len(AES_KEY.classRef) )
-
-log.warning('ctypes.Structure is %s'%ctypes.Structure )
-
+# create plain old python object from ctypes.Structure's, to picke them
 model.createPOPOClasses( sys.modules[__name__] )
 
 #print 'DONE'
@@ -101,7 +72,7 @@ model.createPOPOClasses( sys.modules[__name__] )
 
 
 
-############# Start expectedValues and methos override #################
+############# Start expectedValues and methods overrides #################
 
 
 
@@ -124,7 +95,7 @@ AES_KEY.fromPyObj = AES_KEY_fromPyObj
 #######
 
 
-# BIGNUM
+############ BIGNUM
 BIGNUM.expectedValues={
     "neg": [0,1]
   }
