@@ -17,7 +17,9 @@ from haystack import model
 
 log=logging.getLogger('engine')
 
-libopenssl=cdll.LoadLibrary('libssl.so')
+from ctypes.util import find_library
+_libssl = find_library('ssl')
+libopenssl=cdll.LoadLibrary(_libssl)
 
 
 

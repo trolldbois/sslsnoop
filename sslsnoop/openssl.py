@@ -23,8 +23,9 @@ from ptrace.debugger.memory_mapping import readProcessMappings
 
 log=logging.getLogger('openssl')
 
-
-_libssl = ctypes.cdll.LoadLibrary("libssl.so")
+from ctypes.util import find_library
+_libssl = find_library('ssl')
+_libssl = ctypes.cdll.LoadLibrary(_libssl)
 
 
 class RSAFileWriter(FileWriter):
