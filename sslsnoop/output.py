@@ -20,7 +20,7 @@ from ctypes_openssh import AES_BLOCK_SIZE
 
 log=logging.getLogger('output')
 
-
+MAX_KEYS=255
 
 
 class FileWriter:
