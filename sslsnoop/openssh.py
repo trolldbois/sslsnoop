@@ -77,6 +77,7 @@ class SessionCiphers():
       # original key and IV are ctx.getKey() and ctx.getIV()
       # stateful AES_key key is at ctx.app_data.aes_ctx #&c->aes_ctx
       # stateful ctr counter is at ctx.app_data.aes_ctr
+      log.debug("ctx.evpCipher type : %s"%(type(ctx.evpCipher)) )
       ctx.key_len  = ctx.evpCipher.key_len
       ctx.block_size  = ctx.evpCipher.block_size
       MODE+=1
@@ -110,7 +111,7 @@ class OpenSSHKeysFinder():
   
   def findActiveSession(self, maxNum=1):
     ''' '''
-    outs=haystack.findStruct(self.pid, ctypes_openssh.session_state)
+    outs=haystack.findStruct(self.pid, ctypes_openssh.session_state, debug=True)
     if outs is None:
       log.error("The session_state has not been found. maybe it's not OpenSSH ?")
       return None,None
@@ -118,7 +119,7 @@ class OpenSSHKeysFinder():
       log.warning("Mmmh, we found multiple session_state(%d). That is odd. I'll try with the first one."%(len(outs)))
     #
     session_state,addr=outs[0]
-    return session_state,addr
+    return session_state, addr
 
   def refreshActiveSession(self, offset):
     ''' '''
@@ -136,6 +137,7 @@ class OpenSSHKeysFinder():
       session_state,addr=self.refreshActiveSession(offset)
     if session_state is None:
       return None,None # raise Exception ... 
+    log.debug('received session_state %s'%(session_state))
     ciphers=SessionCiphers(session_state)
     log.info('Active state ciphers : %s at 0x%lx'%(ciphers,addr))
     #log.debug(ciphers.receiveCtx.app_data.__dict__)
@@ -317,10 +319,14 @@ def argparser():
   parser.add_argument('pid', type=int, help='Target PID')
   parser.add_argument('--addr', type=str, help='active_context memory address')
   parser.add_argument('--server', dest='isServer', action='store_const', const=True, help='Use sshd server mode')
+  parser.add_argument('--debug', action='store_const', const=True, default=False, help='debug mode')
   parser.set_defaults(func=search)
   return parser
 
 def search(args):
+  if args.debug:
+    logging.basicConfig(level=logging.DEBUG)    
+    log.debug("==================- DEBUG MODE -================== ")
   pid=int(args.pid)
   sessionStateAddr=None
   log.info("Target has pid %d"%pid)
