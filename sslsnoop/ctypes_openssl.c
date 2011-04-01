@@ -1,20 +1,20 @@
 
 
-#include "evp.h"
-#include "aes.h"
-#include "rc4.h"
-#include "blowfish.h"
-#include "des.h"
-#include "cast.h"
+#include <openssl/evp.h>
+#include <openssl/aes.h>
+#include <openssl/rc4.h>
+#include <openssl/blowfish.h>
+#include <openssl/des.h>
+#include <openssl/cast.h>
 
-#include "hmac.h"
+#include <openssl/hmac.h>
 
-#include "dsa.h"
-#include "rsa.h"
+#include <openssl/dsa.h>
+#include <openssl/rsa.h>
 
 // not tested
-#include "engine/engine.h"
-#include "crypto.h"
-#include "ossl_typ.h"
+#include <openssl/engine.h>
+#include <openssl/crypto.h>
+#include <openssl/ossl_typ.h>
 
 
