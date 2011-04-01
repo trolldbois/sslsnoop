@@ -24,8 +24,5 @@ setup(name="sslsnoop",
     author_email="loic.jaquemet+python@gmail.com",
     packages = ['sslsnoop'],
     scripts = ['scripts/sslsnoop-openssh', 'scripts/sslsnoop-openssl'],
-    extras_require = {
-        'haystack':  ["python-haystack"],
-        'ptrace':  ["python-ptrace"],
-    },
+    install_requires = [ "haystack >= 0.4","python-ptrace"],
 )
