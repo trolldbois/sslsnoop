@@ -27,13 +27,15 @@ EVP_MAX_IV_LENGTH=16
 AES_MAXNR=14 # aes.h:66
 RIJNDAEL_MAXNR=14
 
-# we have to alloc a big chunk
-BN_ULONG=ctypes.c_ulong
+
+# ============== Internal type defs ==============
+
 
 class OpenSSLStruct(LoadableMembers):
   ''' defines classRef '''
   pass
 
+BN_ULONG = ctypes.c_ulong
 
 # evp/e_aes.c:66
 class EVP_AES_KEY(OpenSSLStruct):
@@ -43,7 +45,6 @@ class EVP_AES_KEY(OpenSSLStruct):
   def fromPyObj(self,pyobj):
     self.ks = gen.AES_KEY().fromPyObj(pyobj.ks)
     return self
-
 
 class EVP_RC4_KEY(OpenSSLStruct): # evp/e_rca.c
   _fields_ = [
@@ -56,16 +57,7 @@ class EVP_RC4_KEY(OpenSSLStruct): # evp/e_rca.c
 ################ START copy generated classes ##########################
 
 
-
-#logging.basicConfig(level=logging.DEBUG)
-
-
 import inspect,sys
-# auto import gen.* into . ?
-
-def registerKlass(klass, register):
-  klass.classRef = register.classRef
-  return klass
 
 def copyGeneratedClasses(src, dst, register):
   ''' 
@@ -83,10 +75,6 @@ def copyGeneratedClasses(src, dst, register):
     else:
       #log.debug("%s - %s"%(name, klass))
       pass
-    # register structs and basic Types pointers
-    #if klass.__module__ == src.__name__ or klass.__module__.endswith('%s_generated'%(src.__name__) ) :
-    #  register.classRef[ctypes.POINTER( klass)] = klass
-    #  _registered+=1
   log.debug('loaded %d C structs from %s structs'%( _loaded, src.__name__))
   log.debug('registered %d Pointers types'%( _registered))
   log.debug('There is %d members in %s'%(len(src.__dict__), src.__name__))
@@ -113,6 +101,7 @@ model.createPOPOClasses( sys.modules[__name__] )
 
 
 
+############# Start expectedValues and methos override #################
 
 
 
@@ -176,9 +165,6 @@ BIGNUM.__str__     = BIGNUM___str__
 #################
 
 
-
-# STACK tack/stack.h:74
-
 # CRYPTO_EX_DATA crypto.h:158:
 def CRYPTO_EX_DATA_loadMembers(self, mappings, maxDepth):
   ''' erase self.sk'''
@@ -194,77 +180,8 @@ CRYPTO_EX_DATA.loadMembers = CRYPTO_EX_DATA_loadMembers
 CRYPTO_EX_DATA.isValid     = CRYPTO_EX_DATA_isValid 
 #################
 
-'''
-#ENGINE_CMD_DEFN engine/engine.h:272
-class ENGINE_CMD_DEFN(OpenSSLStruct):
-	_fields_ = [
-  ('cmd_num',ctypes.c_uint),
-  ('cmd_name', CString),
-  ('cmd_desc', CString),
-  ('cmd_flags',ctypes.c_uint)
-  ]  
-'''
 
-'''
-class ENGINE(OpenSSLStruct):
-  pass
-ENGINE._fields_ = [
-  ('id', CString),
-  ('name', CString),
-  ('rsa_meth',ctypes.POINTER(ctypes.c_int) ),
-  ('dsa_meth',ctypes.POINTER(ctypes.c_int) ),
-  ('dh_meth',ctypes.POINTER(ctypes.c_int) ),
-  ('ecdh_meth',ctypes.POINTER(ctypes.c_int) ),
-  ('ecdsa_meth',ctypes.POINTER(ctypes.c_int) ),
-  ('rand_meth',ctypes.POINTER(ctypes.c_int) ),
-  ('store_meth',ctypes.POINTER(ctypes.c_int) ),
-  ('ciphers',ctypes.POINTER(ctypes.c_int) ), ## fn typedef int (*ENGINE_CIPHERS_PTR)(ENGINE *, const EVP_CIPHER **, const int **, int);
-  ('digest',ctypes.POINTER(ctypes.c_int) ),  ## fn typedef int (*ENGINE_DIGESTS_PTR)(ENGINE *, const EVP_MD **, const int **, int);
-  ('destroy',ctypes.POINTER(ctypes.c_int) ), ## fn typedef int (*ENGINE_GEN_INT_FUNC_PTR)(ENGINE *);
-  ('init',ctypes.POINTER(ctypes.c_int) ),    ## fn typedef int (*ENGINE_GEN_INT_FUNC_PTR)(ENGINE *);
-  ('finish',ctypes.POINTER(ctypes.c_int) ),  ## fn typedef int (*ENGINE_GEN_INT_FUNC_PTR)(ENGINE *);
-  ('ctrl',ctypes.POINTER(ctypes.c_int) ),    ## fn typedef int (*ENGINE_CTRL_FUNC_PTR)(ENGINE *, int, long, void *, void (*f)(void));
-  ('load_privkey',ctypes.POINTER(EVP_PKEY) ), ## fn EVP_PKEY *
-  ('load_pubkey',ctypes.POINTER(EVP_PKEY) ),  ## fn EVP_PKEY *
-  ('load_ssl_client_cert',ctypes.POINTER(ctypes.c_int) ), ## fn typedef int (*ENGINE_SSL_CLIENT_CERT_PTR)(ENGINE *, SSL *ssl,
-  ('cmd_defns',ctypes.POINTER(ENGINE_CMD_DEFN) ), ##
-  ('flags',ctypes.c_int),
-  ('struct_ref',ctypes.c_int),
-  ('funct_ref',ctypes.c_int),
-  ('ex_data',CRYPTO_EX_DATA),
-  ('prev',ctypes.POINTER(ENGINE) ),
-  ('nex',ctypes.POINTER(ENGINE) )
-  ]
-'''
-
-"""
-class RSA(OpenSSLStruct):
-  ''' rsa/rsa.h '''
-  loaded=False
-  _fields_ = [
-  ("pad",  ctypes.c_int), 
-  ("version",  ctypes.c_long),
-  ("meth",ctypes.POINTER(BIGNUM)),#const RSA_METHOD *meth;
-  ("engine",ctypes.POINTER(ENGINE)),#ENGINE *engine;
-  ('n', ctypes.POINTER(BIGNUM) ), ## still in ssh memap
-  ('e', ctypes.POINTER(BIGNUM) ), ## still in ssh memap
-  ('d', ctypes.POINTER(BIGNUM) ), ## still in ssh memap
-  ('p', ctypes.POINTER(BIGNUM) ), ## still in ssh memap
-  ('q', ctypes.POINTER(BIGNUM) ), ## still in ssh memap
-  ('dmp1', ctypes.POINTER(BIGNUM) ),
-  ('dmq1', ctypes.POINTER(BIGNUM) ),
-  ('iqmp', ctypes.POINTER(BIGNUM) ),
-  ("ex_data", CRYPTO_EX_DATA ),
-  ("references", ctypes.c_int),
-  ("flags", ctypes.c_int),
-  ("_method_mod_n", ctypes.POINTER(BN_MONT_CTX) ),
-  ("_method_mod_p", ctypes.POINTER(BN_MONT_CTX) ),
-  ("_method_mod_q", ctypes.POINTER(BN_MONT_CTX) ),
-  ("bignum_data",ctypes.POINTER(ctypes.c_ubyte)), ## moue c_char_p ou POINTER(c_char) ?
-  ("blinding",ctypes.POINTER(BIGNUM)),#BN_BLINDING *blinding;
-  ("mt_blinding",ctypes.POINTER(BIGNUM))#BN_BLINDING *mt_blinding;
-  ]
-"""  
+######## RSA key
 RSA.expectedValues={
     "pad": [0], 
     "version": [0], 
@@ -308,27 +225,7 @@ RSA.loadMembers = RSA_loadMembers
 
 
 
-"""
-class DSA(OpenSSLStruct):
-  _fields_ = [
-  ("pad",  ctypes.c_int), 
-  ("version",  ctypes.c_long),
-  ("write_params",ctypes.c_int),
-  ('p', ctypes.POINTER(BIGNUM) ),
-  ('q', ctypes.POINTER(BIGNUM) ),
-  ('g', ctypes.POINTER(BIGNUM) ),
-  ('pub_key', ctypes.POINTER(BIGNUM) ),
-  ('priv_key', ctypes.POINTER(BIGNUM) ),
-  ('kinv', ctypes.POINTER(BIGNUM) ),
-  ('r', ctypes.POINTER(BIGNUM) ),
-  ("flags", ctypes.c_int),
-  ("_method_mod_p", ctypes.POINTER(BN_MONT_CTX) ),
-  ("references", ctypes.c_int),
-  ("ex_data", CRYPTO_EX_DATA ),
-  ("meth",ctypes.POINTER(ctypes.c_int)),#  const DSA_METHOD *meth;
-  ("engine",ctypes.POINTER(ENGINE))
-  ]
-"""
+########## DSA Key
 DSA.expectedValues={
     "pad": [0], 
     "version": [0], 
@@ -363,27 +260,7 @@ def DSA_loadMembers(self, mappings, maxDepth):
 DSA.printValid  = DSA_printValid
 DSA.loadMembers = DSA_loadMembers
 
-
-#ok
-"""
-class EVP_CIPHER(OpenSSLStruct):
-  ''' evp.h:332 '''	
-  _fields_ = [
-  ("nid",  ctypes.c_int), 
-  ("block_size",  ctypes.c_int), 
-  ("key_len",  ctypes.c_int), 
-  ("iv_len",  ctypes.c_int), 
-  ("flags",  ctypes.c_ulong), 
-  ("init",  ctypes.POINTER(ctypes.c_int)), # function () 
-  ("do_cipher",  ctypes.POINTER(ctypes.c_int)), # function () ## crypt func.
-  ("cleanup",  ctypes.POINTER(ctypes.c_int)), # function () 
-  ("ctx_size",  ctypes.c_int), 
-  ("set_asn1_parameters",  ctypes.POINTER(ctypes.c_int)), # function () 
-  ("get_asn1_parameters",  ctypes.POINTER(ctypes.c_int)), # function () 
-  ("ctrl",  ctypes.POINTER(ctypes.c_int)), # function () 
-  ("app_data",  ctypes.POINTER(ctypes.c_ubyte)) 
-  ]
-"""  
+######### EP_CIPHER
 EVP_CIPHER.expectedValues={
     "key_len": RangeValue(1,0xff), # key_len *8 bits ..2040 bits for a key is enought ? 
                                    # Default value for variable length ciphers 
@@ -393,28 +270,9 @@ EVP_CIPHER.expectedValues={
     #"cleanup": [NotNull], # aes-cbc ?
     "ctx_size": RangeValue(0,0xffff), #  app_data struct should not be too big
   }
-"""
-#mok
-class EVP_CIPHER_CTX(OpenSSLStruct):
-  ''' evp.h:332 '''	
-  _fields_ = [
-  ("cipher",  ctypes.POINTER(EVP_CIPHER)), 
-  ("engine",  ctypes.POINTER(ctypes.c_int)), ## TODO ENGINE*
-  ("encrypt",  ctypes.c_int), 
-  ("buf_len",  ctypes.c_int), 
-  ("oiv",  ctypes.c_ubyte*EVP_MAX_IV_LENGTH),## unsigned char  oiv[EVP_MAX_IV_LENGTH];
-  ("iv",  ctypes.c_ubyte*EVP_MAX_IV_LENGTH), ##unsigned char  iv[EVP_MAX_IV_LENGTH];
-  ("buf",  ctypes.c_ubyte*EVP_MAX_BLOCK_LENGTH), ##unsigned char buf[EVP_MAX_BLOCK_LENGTH];
-  ("num",  ctypes.c_int), 
-  ("app_data",  EVP_CIPHER_CTX_APP_DATA_PTR), # utilise par ssh_aes/rijndael
-  ("key_len",  ctypes.c_int), 
-  ("flags",  ctypes.c_ulong), 
-  ("cipher_data",  EVP_CIPHER_CTX_APP_DATA_PTR), ## utilise par rc4 ?
-  ("final_used",  ctypes.c_int), 
-  ("block_mask",  ctypes.c_int), 
-  ("final",  ctypes.c_ubyte*EVP_MAX_BLOCK_LENGTH) ###unsigned char final[EVP_MAX_BLOCK_LENGTH]
-  ]
-"""
+
+
+########### EVP_CIPHER_CTX
 EVP_CIPHER_CTX.expectedValues={
     "cipher": [NotNull], 
     "encrypt": [0,1], 
@@ -433,56 +291,7 @@ def EVP_CIPHER_CTX_getIV(self):
 EVP_CIPHER_CTX.getOIV = EVP_CIPHER_CTX_getOIV
 EVP_CIPHER_CTX.getIV  = EVP_CIPHER_CTX_getIV
 
-"""
-#mok
-class EVP_MD(OpenSSLStruct):
-  ''' struct env_md_st evp.h:227 '''
-  _fields_ = [
-  ("type",  ctypes.c_int), 
-  ("pkey_type",  ctypes.c_int), 
-  ("md_size",  ctypes.c_int), 
-  ("flags",  ctypes.c_ulong), 
-  ("init",  ctypes.POINTER(ctypes.c_int)), # function () 
-  ("update",  ctypes.POINTER(ctypes.c_int)), # function () 
-  ("final",  ctypes.POINTER(ctypes.c_int)), # function () 
-  ("copy",  ctypes.POINTER(ctypes.c_int)), # function () 
-  ("cleanup",  ctypes.POINTER(ctypes.c_int)), # function () 
-  ("sign",  ctypes.POINTER(ctypes.c_int)), # function () 
-  ("verify",  ctypes.POINTER(ctypes.c_int)), # function () 
-  ("required_pkey_type",  ctypes.c_int*5), #required_pkey_type[5]
-  ("block_size",  ctypes.c_int), 
-  ("ctx_size",  ctypes.c_int)
-  ]
-
-class EVP_MD_CTX(OpenSSLStruct):
-  ''' evp.h:304 '''
-  _fields_ = [
-  ("digest",  ctypes.POINTER(EVP_MD)),
-  ("engine",  ctypes.POINTER(ENGINE) ), #
-  ("flags",  ctypes.c_ulong),
-  ("md_data",  ctypes.POINTER(ctypes.c_ubyte))
-  ]
-
-class HMAC_CTX(OpenSSLStruct):
-  ''' hmac.h:75 '''
-  _fields_ = [
-  ("md",  ctypes.POINTER(EVP_MD)), 
-  ("md_ctx",  EVP_MD_CTX), 
-  ("i_ctx",  EVP_MD_CTX), 
-  ("o_ctx",  EVP_MD_CTX), 
-  ("key_length",  ctypes.c_uint), 
-  ("key",  ctypes.c_char * HMAC_MAX_MD_CBLOCK)
-  ] 
-
-"""
-
-
-
-
-
-
-
-
+##########
 
 
 # checkks
