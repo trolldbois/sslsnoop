@@ -94,9 +94,6 @@ force one :
 
 ssh -c aes192-ctr log@host
 
-10201
-0xb9425268
-
 
 firefox & NSS
 =============

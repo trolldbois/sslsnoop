@@ -123,6 +123,7 @@ class StatefulAES_Ctr_Engine(Engine):
     # copy counter content
     self.counter = self.aes_key_ctx.aes_counter
     log.info('Counter value is %s'%(myhex(self.aes_key_ctx.getCounter())) )
+    log.debug('Key CTX:%s'%( self.aes_key_ctx.toString() ) )
 
   def getCounter(self):
     return myhex(self.aes_key_ctx.getCounter())
