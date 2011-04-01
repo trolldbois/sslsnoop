@@ -7,13 +7,11 @@
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
 import ctypes
-import logging
+import logging,sys
 
-from ptrace.debugger.memory_mapping import readProcessMappings
-
+from haystack import model
 from haystack.model import is_valid_address,is_valid_address_value,pointer2bytes,array2bytes,bytes2array,getaddress
 from haystack.model import LoadableMembers,RangeValue,NotNull,CString, IgnoreMember
-from haystack import model
 from ctypes_openssl import EVP_CIPHER_CTX, EVP_MD, HMAC_CTX, EVP_AES_KEY, AES_KEY, EVP_RC4_KEY
 
 log=logging.getLogger('openssh.model')
@@ -531,18 +529,11 @@ def printSizeof():
   print 'STREAMS:',STREAMS
 
 
-import inspect,sys
-''' Load all openSSH classes and used OpenSSL classes to local classRef '''
-OpenSSHStruct.classRef=dict([ (ctypes.POINTER( klass), klass) for (name,klass) in inspect.getmembers(sys.modules[__name__], inspect.isclass) if klass.__module__ == __name__ or klass.__module__ == 'ctypes_openssl'])
 
-''' Load all model classes and create a similar non-ctypes Python class  
-  thoses will be used to translate non pickable ctypes into POPOs.
-'''
-## model.createPOPO(__name__)
-for klass,typ in inspect.getmembers(sys.modules[__name__], inspect.isclass):
-  if typ.__module__ == __name__:
-    setattr(sys.modules[__name__], '%s_py'%(klass), type('%s_py'%(klass),(model.pyObj,),{}) )
-    #print sys.modules[__name__], '%s_py'%(klass)
+
+# register all classes to haystack
+# create plain old python object from ctypes.Structure's, to picke them
+model.registerModule(sys.modules[__name__])
 
 if __name__ == '__main__':
   printSizeof()
