@@ -12,8 +12,8 @@ import logging,sys
 from haystack import model
 from haystack.model import is_valid_address,is_valid_address_value,pointer2bytes,array2bytes,bytes2array,getaddress
 from haystack.model import LoadableMembers,RangeValue,NotNull,CString, IgnoreMember
-from ctypes_openssl import EVP_CIPHER_CTX, EVP_MD, HMAC_CTX, EVP_AES_KEY, AES_KEY, EVP_RC4_KEY
-from ctypes_openssl import CAST_KEY, BF_KEY, DES_key_schedule
+from ctypes_openssl import EVP_CIPHER_CTX, EVP_MD, HMAC_CTX
+from ctypes_openssl import AES_KEY, RC4_KEY, CAST_KEY, BF_KEY, DES_key_schedule
 
 log=logging.getLogger('openssh.model')
 
@@ -133,16 +133,16 @@ class CipherContext(OpenSSHStruct):
 	 "none": (None,None),
 	 "des": (DES_key_schedule,'cipher_data'),
 	 "3des": (DES_key_schedule,'cipher_data'),
-	 "blowfish": (None,None),
+	 "blowfish": (BF_KEY,'cipher_data'),  # (BF_KEY,'cipher_data'), blowfish is normally ssh1, and a openssh variant... but it seesm aliases to bf-cbc
 	 "3des-cbc": (DES_key_schedule,'cipher_data'),
 	 "blowfish-cbc": (BF_KEY,'cipher_data'),
 	 "cast128-cbc": (CAST_KEY,'cipher_data'),
-	 "arcfour": (EVP_RC4_KEY,'cipher_data'),
-	 "arcfour128": (EVP_RC4_KEY,'cipher_data'),
-	 "arcfour256": (EVP_RC4_KEY,'cipher_data'),
-	 "aes128-cbc": (EVP_AES_KEY, 'cipher_data'), # aes*cbc == rijndael
-	 "aes192-cbc": (EVP_AES_KEY, 'cipher_data'),
-	 "aes256-cbc": (EVP_AES_KEY, 'cipher_data'),
+	 "arcfour": (RC4_KEY,'cipher_data'),
+	 "arcfour128": (RC4_KEY,'cipher_data'),
+	 "arcfour256": (RC4_KEY,'cipher_data'),
+	 "aes128-cbc": (AES_KEY, 'cipher_data'), # aes*cbc == rijndael
+	 "aes192-cbc": (AES_KEY, 'cipher_data'),
+	 "aes256-cbc": (AES_KEY, 'cipher_data'),
 	 "rijndael-cbc@lysator.liu.se": (ssh_rijndael_ctx, 'cipher_data'),
 	 "aes128-ctr": (ssh_aes_ctr_ctx, 'app_data'),
 	 "aes192-ctr": (ssh_aes_ctr_ctx, 'app_data'),

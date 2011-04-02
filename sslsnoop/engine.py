@@ -11,7 +11,7 @@ import os,logging,sys, copy
 import ctypes
 from ctypes import cdll
 from ctypes_openssh import AES_BLOCK_SIZE, ssh_aes_ctr_ctx
-from ctypes_openssl import AES_KEY, EVP_AES_KEY , BF_KEY
+from ctypes_openssl import AES_KEY, BF_KEY, RC4_KEY, CAST_KEY, DES_key_schedule
 
 from haystack import model
 
@@ -72,7 +72,7 @@ class StatefulAES_CBC_Engine(Engine):
   
   def sync(self, context):
     ''' refresh the crypto state '''
-    self.evp_aes_key = EVP_AES_KEY().fromPyObj(context.evpCtx.cipher_data) # 
+    self.evp_aes_key = AES_KEY().fromPyObj(context.evpCtx.cipher_data) # 
     # we need nothing else
     self.key = self.evp_aes_key.ks
     #print self.key
@@ -158,29 +158,68 @@ class StatefulBlowfish_CBC_Engine(Engine):
   def _decrypt(self, src, bLen):
     BF_ROUNDS	= 16
     BF_BLOCK = 8
-    buf=(ctypes.c_ubyte*BF_BLOCK)()
     dest=(ctypes.c_ubyte*bLen)()
     enc=ctypes.c_uint(0)  ## 0 is decrypt for inbound traffic
-
     #void BF_cbc_encrypt(const unsigned char *in, unsigned char *out, long length,
     #	const BF_KEY *schedule, unsigned char *ivec, int enc);
     self._BF_cbc( ctypes.byref(src), ctypes.byref(dest), bLen, ctypes.byref(self.key), 
               ctypes.byref(self.iv), enc ) 
+    #print self, repr(model.array2bytes(dest))
+    return model.array2bytes(dest)
+  
+  def sync(self, context):
+    ''' refresh the crypto state '''
+    self.key = BF_KEY().fromPyObj(context.evpCtx.cipher_data) # 
+    log.debug('BF Key: %s'%self.key)
+    # copy counter content
+    self.iv = model.bytes2array(context.evpCtx.iv, ctypes.c_ubyte)
+    log.info('IV value is %s'%(myhex(context.evpCtx.iv)) )
+
+class StatefulCAST_CBC_Engine(Engine):
+  def __init__(self, context  ):
+    self.sync(context)
+    self._CAST_cbc=libopenssl.CAST_cbc_encrypt
+    log.debug('cipher:%s block_size: %d key_len: %d '%(context.name, context.block_size, context.key_len))
+  
+  def _decrypt(self, src, bLen):
+    dest=(ctypes.c_ubyte*bLen)()
+    enc=ctypes.c_uint(0)  ## 0 is decrypt for inbound traffic
+    #void CAST_cbc_encrypt(const unsigned char *in, unsigned char *out, long length,
+		#      const CAST_KEY *ks, unsigned char *iv, int enc);
+    self._CAST_cbc( ctypes.byref(src), ctypes.byref(dest), bLen, ctypes.byref(self.key), 
+              ctypes.byref(self.iv), enc ) 
+    #print self, repr(model.array2bytes(dest))
+    return model.array2bytes(dest)
+  
+  def sync(self, context):
+    ''' refresh the crypto state '''
+    self.key = CAST_KEY().fromPyObj(context.evpCtx.cipher_data) # 
+    log.debug('CAST Key: %s'%self.key)
+    # copy counter content
+    self.iv = model.bytes2array(context.evpCtx.iv, ctypes.c_ubyte)
+    log.info('IV value is %s'%(myhex(context.evpCtx.iv)) )
+
+
+class StatefulRC4_Engine(Engine):
+  def __init__(self, context  ):
+    self.sync(context)
+    self._RC4=libopenssl.RC4
+    log.debug('cipher:%s block_size: %d key_len: %d '%(context.name, context.block_size, context.key_len))
+  
+  def _decrypt(self, src, bLen):
+    dest=(ctypes.c_ubyte*bLen)()
+
+    #void RC4(RC4_KEY *key, unsigned long len, const unsigned char *indata,
+		#    unsigned char *outdata);
+    self._RC4( ctypes.byref(self.key), bLen, ctypes.byref(src), ctypes.byref(dest) ) 
 
     #print self, repr(model.array2bytes(dest))
     return model.array2bytes(dest)
   
   def sync(self, context):
     ''' refresh the crypto state '''
-    self.bf_key = BF_KEY().fromPyObj(context.evpCtx.cipher_data) # 
-    # we need nothing else BF_KEY
-    self.key = self.bf_key
-    log.debug('BF Key: %s'%self.key)
-    # copy counter content
-    self.iv = model.bytes2array(context.evpCtx.iv, ctypes.c_ubyte)
-    log.info('IV value is %s'%(myhex(context.evpCtx.iv)) )
-    # TODO , check si les IV outbound sont les bons.
-
+    self.key = RC4_KEY().fromPyObj(context.evpCtx.cipher_data) # 
+    log.debug('RC4 Key: %s'%self.key)
 
 
 CIPHERS = {
@@ -190,10 +229,10 @@ CIPHERS = {
   "blowfish": None, #(		SSH_CIPHER_BLOWFISH, 8, 32, 0, 1, evp_ssh1_bf ),
   "3des-cbc": None, #(		SSH_CIPHER_SSH2, 8, 24, 0, 1, EVP_des_ede3_cbc ),
   "blowfish-cbc": StatefulBlowfish_CBC_Engine, #(	SSH_CIPHER_SSH2, 8, 16, 0, 1, EVP_bf_cbc ),
-  "cast128-cbc": None, #(	SSH_CIPHER_SSH2, 8, 16, 0, 1, EVP_cast5_cbc ),
-  "arcfour": None, #(		SSH_CIPHER_SSH2, 8, 16, 0, 0, EVP_rc4 ),
-  "arcfour128": None, #(		SSH_CIPHER_SSH2, 8, 16, 1536, 0, EVP_rc4 ),
-  "arcfour256": None, #(		SSH_CIPHER_SSH2, 8, 32, 1536, 0, EVP_rc4 ),
+  "cast128-cbc": StatefulCAST_CBC_Engine, #(	SSH_CIPHER_SSH2, 8, 16, 0, 1, EVP_cast5_cbc ),
+  "arcfour": StatefulRC4_Engine, #(		SSH_CIPHER_SSH2, 8, 16, 0, 0, EVP_rc4 ),
+  "arcfour128": StatefulRC4_Engine, #(		SSH_CIPHER_SSH2, 8, 16, 1536, 0, EVP_rc4 ),
+  "arcfour256": StatefulRC4_Engine, #(		SSH_CIPHER_SSH2, 8, 32, 1536, 0, EVP_rc4 ),
   "aes128-cbc": StatefulAES_CBC_Engine, 
   "aes192-cbc": StatefulAES_CBC_Engine, 
   "aes256-cbc": StatefulAES_CBC_Engine, 

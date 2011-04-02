@@ -37,22 +37,6 @@ class OpenSSLStruct(LoadableMembers):
 
 BN_ULONG = ctypes.c_ulong
 
-# evp/e_aes.c:66
-class EVP_AES_KEY(OpenSSLStruct):
-  _fields_ = [
-  ('ks', gen.AES_KEY),
-	]
-  def fromPyObj(self,pyobj):
-    self.ks = gen.AES_KEY().fromPyObj(pyobj.ks)
-    return self
-
-class EVP_RC4_KEY(OpenSSLStruct): # evp/e_rca.c
-  _fields_ = [
-  ('ks', gen.RC4_KEY)
-  ]
-
-
-
 
 ################ START copy generated classes ##########################
 
@@ -69,6 +53,38 @@ model.registerModule(sys.modules[__name__])
 
 
 ############# Start expectedValues and methods overrides #################
+
+
+''' rc4.h:71 '''
+####### RC4_KEY #######
+def RC4_KEY_getData(self):
+  return array2bytes(self.data)
+def RC4_KEY_fromPyObj(self,pyobj):
+  #copy P and S
+  self.data = bytes2array(pyobj.data, ctypes.c_uint)
+  self.x = pyobj.x
+  self.y = pyobj.y
+  return self
+RC4_KEY.getData = RC4_KEY_getData
+RC4_KEY.fromPyObj = RC4_KEY_fromPyObj
+#######
+
+''' cast.h:80 '''
+####### CAST_KEY #######
+def CAST_KEY_getData(self):
+  return array2bytes(self.data)
+def CAST_KEY_getShortKey(self):
+  return self.short_key
+def CAST_KEY_fromPyObj(self,pyobj):
+  #copy P and S
+  self.data = bytes2array(pyobj.data, ctypes.c_uint)
+  self.short_key = pyobj.short_key
+  return self
+CAST_KEY.getData = CAST_KEY_getData
+CAST_KEY.getShortKey = CAST_KEY_getShortKey
+CAST_KEY.fromPyObj = CAST_KEY_fromPyObj
+#######
+
 
 
 ''' blowfish.h:101 '''
@@ -248,7 +264,7 @@ DSA.loadMembers = DSA_loadMembers
 EVP_CIPHER.expectedValues={
     "key_len": RangeValue(1,0xff), # key_len *8 bits ..2040 bits for a key is enought ? 
                                    # Default value for variable length ciphers 
-    "iv_len": RangeValue(1,0xff), #  
+    "iv_len": RangeValue(0,0xff), #  rc4 has no IV ?
     "init": [NotNull], 
     "do_cipher": [NotNull], 
     #"cleanup": [NotNull], # aes-cbc ?
