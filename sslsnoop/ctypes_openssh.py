@@ -13,6 +13,7 @@ from haystack import model
 from haystack.model import is_valid_address,is_valid_address_value,pointer2bytes,array2bytes,bytes2array,getaddress
 from haystack.model import LoadableMembers,RangeValue,NotNull,CString, IgnoreMember
 from ctypes_openssl import EVP_CIPHER_CTX, EVP_MD, HMAC_CTX, EVP_AES_KEY, AES_KEY, EVP_RC4_KEY
+from ctypes_openssl import CAST_KEY, BF_KEY, DES_key_schedule
 
 log=logging.getLogger('openssh.model')
 
@@ -130,12 +131,12 @@ class CipherContext(OpenSSHStruct):
   }
   cipherContexts={ # we could check SSH_CIPHER_XXX in self.cipher.contents.number
 	 "none": (None,None),
-	 "des": (None,None),
-	 "3des": (None,None),
+	 "des": (DES_key_schedule,'cipher_data'),
+	 "3des": (DES_key_schedule,'cipher_data'),
 	 "blowfish": (None,None),
-	 "3des-cbc": (None,None),
-	 "blowfish-cbc": (None,None),
-	 "cast128-cbc": (None,None),
+	 "3des-cbc": (DES_key_schedule,'cipher_data'),
+	 "blowfish-cbc": (BF_KEY,'cipher_data'),
+	 "cast128-cbc": (CAST_KEY,'cipher_data'),
 	 "arcfour": (EVP_RC4_KEY,'cipher_data'),
 	 "arcfour128": (EVP_RC4_KEY,'cipher_data'),
 	 "arcfour256": (EVP_RC4_KEY,'cipher_data'),
@@ -151,7 +152,7 @@ class CipherContext(OpenSSHStruct):
   def loadMembers(self, mappings, maxDepth):
     if not LoadableMembers.loadMembers(self, mappings, maxDepth):
       return False
-    log.debug('evp    app_data    attr_obj_address=0x%lx'%(self.evp.app_data) )
+    #log.debug('evp    app_data    attr_obj_address=0x%lx'%(self.evp.app_data) )
     #log.debug('evp    cipher_data attr_obj_address=0x%lx'%(self.evp.cipher_data) )  ##none
     #log.debug('cipher app_data    attr_obj_address=0x%lx'%(getaddress(self.cipher.contents.cipher_data)) )
     # cast evp.app_data into a valid struct
@@ -486,7 +487,7 @@ class session_state(OpenSSHStruct):
   def toPyObject(self):
     d=OpenSSHStruct.toPyObject(self)
     
-    log.info('self.send_context.evp.app_data: 0x%lx'%(self.send_context.evp.app_data))
+    #log.info('self.send_context.evp.app_data: 0x%lx'%(self.send_context.evp.app_data))
     
     # populate AppData.
     d.receive_context.evp.app_data = self.receive_context.getEvpAppData().toPyObject()

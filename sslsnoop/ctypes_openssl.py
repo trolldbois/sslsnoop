@@ -71,6 +71,23 @@ model.registerModule(sys.modules[__name__])
 ############# Start expectedValues and methods overrides #################
 
 
+''' blowfish.h:101 '''
+####### BF_KEY #######
+def BF_KEY_getP(self):
+  return array2bytes(self.P)
+  #return ','.join(["0x%lx"%key for key in self.rd_key])
+def BF_KEY_getS(self):
+  return array2bytes(self.S)
+def BF_KEY_fromPyObj(self,pyobj):
+  #copy P and S
+  self.P = bytes2array(pyobj.P, ctypes.c_ulong)
+  self.S = bytes2array(pyobj.S, ctypes.c_ulong)
+  return self
+BF_KEY.getP = BF_KEY_getP
+BF_KEY.getS = BF_KEY_getS
+BF_KEY.fromPyObj = BF_KEY_fromPyObj
+#######
+
 
 ''' aes.h:78 '''
 ####### AES_KEY #######

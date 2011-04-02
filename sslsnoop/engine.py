@@ -11,7 +11,7 @@ import os,logging,sys, copy
 import ctypes
 from ctypes import cdll
 from ctypes_openssh import AES_BLOCK_SIZE, ssh_aes_ctr_ctx
-from ctypes_openssl import AES_KEY, EVP_AES_KEY #, BF_KEY, EVP_bf_key
+from ctypes_openssl import AES_KEY, EVP_AES_KEY , BF_KEY
 
 from haystack import model
 
@@ -28,9 +28,6 @@ class Engine:
   def decrypt(self,block):
     ''' decrypts '''
     bLen=len(block)
-    if bLen % AES_BLOCK_SIZE:
-      log.error("Sugar, why do you give me a block the wrong size: %d not modulo of %d"%(bLen, AES_BLOCK_SIZE))
-      return None
     data=(ctypes.c_ubyte*bLen )()
     for i in range(0, bLen ):
       #print i, block[i] 
@@ -56,6 +53,9 @@ class StatefulAES_CBC_Engine(Engine):
     log.debug('cipher:%s block_size: %d key_len: %d '%(context.name, context.block_size, context.key_len))
   
   def _decrypt(self, src, bLen):
+    if bLen % AES_BLOCK_SIZE:
+      log.error("Sugar, why do you give me a block the wrong size: %d not modulo of %d"%(bLen, AES_BLOCK_SIZE))
+      return None
     buf=(ctypes.c_ubyte*AES_BLOCK_SIZE)()
     dest=(ctypes.c_ubyte*bLen)()
     enc=ctypes.c_uint(0)  ## 0 is decrypt for inbound traffic
@@ -93,6 +93,9 @@ class StatefulAES_Ctr_Engine(Engine):
     log.debug('cipher:%s block_size: %d key_len: %d '%(context.name, context.block_size, context.key_len))
   
   def _decrypt(self,block, bLen):
+    if bLen % AES_BLOCK_SIZE:
+      log.error("Sugar, why do you give me a block the wrong size: %d not modulo of %d"%(bLen, AES_BLOCK_SIZE))
+      return None
     buf=(ctypes.c_ubyte*AES_BLOCK_SIZE)()
     dest=(ctypes.c_ubyte*bLen)()
     num=ctypes.c_uint()
@@ -160,11 +163,11 @@ class StatefulBlowfish_CBC_Engine(Engine):
     enc=ctypes.c_uint(0)  ## 0 is decrypt for inbound traffic
 
     #void BF_cbc_encrypt(const unsigned char *in, unsigned char *out, long length,
-    #	const BF_KEY *schedule, unsigned char *ivec, int enc);void AES_cbc_encrypt(
+    #	const BF_KEY *schedule, unsigned char *ivec, int enc);
     self._BF_cbc( ctypes.byref(src), ctypes.byref(dest), bLen, ctypes.byref(self.key), 
               ctypes.byref(self.iv), enc ) 
 
-    print self, repr(model.array2bytes(dest))
+    #print self, repr(model.array2bytes(dest))
     return model.array2bytes(dest)
   
   def sync(self, context):
@@ -172,7 +175,7 @@ class StatefulBlowfish_CBC_Engine(Engine):
     self.bf_key = BF_KEY().fromPyObj(context.evpCtx.cipher_data) # 
     # we need nothing else BF_KEY
     self.key = self.bf_key
-    #print self.key
+    log.debug('BF Key: %s'%self.key)
     # copy counter content
     self.iv = model.bytes2array(context.evpCtx.iv, ctypes.c_ubyte)
     log.info('IV value is %s'%(myhex(context.evpCtx.iv)) )
@@ -186,7 +189,7 @@ CIPHERS = {
   "3des": None, #(		SSH_CIPHER_3DES, 8, 16, 0, 1, evp_ssh1_3des ),
   "blowfish": None, #(		SSH_CIPHER_BLOWFISH, 8, 32, 0, 1, evp_ssh1_bf ),
   "3des-cbc": None, #(		SSH_CIPHER_SSH2, 8, 24, 0, 1, EVP_des_ede3_cbc ),
-  "blowfish-cbc": None, #(	SSH_CIPHER_SSH2, 8, 16, 0, 1, EVP_bf_cbc ),
+  "blowfish-cbc": StatefulBlowfish_CBC_Engine, #(	SSH_CIPHER_SSH2, 8, 16, 0, 1, EVP_bf_cbc ),
   "cast128-cbc": None, #(	SSH_CIPHER_SSH2, 8, 16, 0, 1, EVP_cast5_cbc ),
   "arcfour": None, #(		SSH_CIPHER_SSH2, 8, 16, 0, 0, EVP_rc4 ),
   "arcfour128": None, #(		SSH_CIPHER_SSH2, 8, 16, 1536, 0, EVP_rc4 ),
