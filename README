@@ -19,8 +19,11 @@ not so FAQ :
 
 What does it do, really ?:
 --------------------------
-It dumps live AES keys from an openssh in aes128-ctr , and decrypts the traffic on the fly.
-Working on adding all ciphers quickly. (aes_ctr is ok for all length, aes_cbc only half-duplex. )
+It dumps live session keys from an openssh , and decrypts the traffic on the fly.
+Not all ciphers are implemented. 
+Workings ciphers : aes128-ctr, aes192-ctr, aes256-ctr, blowfish-cbc, cast128-cbc
+Partially workings ciphers (INBOUND only ?!): aes128-cbc,  aes192-cbc, aes256-cbc
+Non workings ciphers : 3des-cbc, 3des, ssh1-blowfish, arcfour, arcfour1280
 
 It can also dump DSA and RSA keys from ssh-agent or sshd ( or others ).
 
