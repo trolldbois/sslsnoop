@@ -8,7 +8,7 @@ Attaching a process is quickier with --addr 0xb788aa98 as provided by abouchet.p
 
   $ sudo python finder.py    # try ssh, sshd and ssh-agent...
   $ sudo sslsnoop-openssh `pgrep ssh`
-  $ sudo sslsnoop-openssh `pgrep ssh` --server # for sshd
+  $ sudo sslsnoop-openssh `pgrep ssh` --server # for ssh server-side
   $ sudo sslsnoop-openssl `pgrep ssh-agent` # dump RSA and DSA keys
 
 and go and check outputs/ :
@@ -108,3 +108,38 @@ ptrace.debugger.process_error.ProcessError: readBytes(0x84d28ae4, 392) error: [E
 ## weird ....
 
 4894720
+
+
+Architecture
+============
+
+
+openssh creates a OpenSSHLiveDecryptatator which inherits a OpenSSHKeysFinder
+OpenSSHLiveDecryptatator :
+ * connects to/launch a scapy_socket.
+ * OpenSSHKeysFinder calls haystack to fetch the session_state
+   - memory capture/ptrace is done in a subprocess
+   - target process is not under ptrace anymore when openssh runs. 
+ * SessionCiphers are created from pickled values from haystack
+   - one for inbound traffic, one for outbound
+ * each SessionCipher is coupled with :
+   - a socket given by from scapy_socket ( Inbound or Outbound)
+   - a paramiko Packetizer which is a ssh protocaol handler.
+ * the Packetizer uses :
+   - the previous socket to read it's data from network.
+   - the cipher to decrypt the data
+ * a SSHStreamToFile is created for each stream and is given the packetizer and the overall context ( cipher, socket )
+   - the SSHStreamToFile try to process the packetizer output into a file.
+ * a Supervisor is created to handle traffic ( select on socket )
+   - both SSHStreamToFile are given to the Supervisor with their respective socket
+
+
+
+
+
+
+
+
+
+
+
