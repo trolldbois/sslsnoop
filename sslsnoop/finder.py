@@ -7,7 +7,7 @@
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
 import os,logging,psutil,sys, time
-import openssh
+import openssh, network
 import subprocess
 
 log=logging.getLogger('finder')
@@ -19,6 +19,7 @@ _targets={
     #'firefox': []
     }
 
+Processes = []
 
 def buildTuples(targets):
   rets=[]
@@ -43,26 +44,42 @@ def makeFilter(conn):
 
 def checkConnections(proc):
   conns=proc.get_connections()
+  conns = [ c for c in conns if c.status == 'ESTABLISHED']
   if len(conns) == 0 :
     return False
   elif len(conns) > 1 :
-    if proc.name == 'sshd':
-      estab = [ c for c in conns if c.status == 'ESTABLISHED'] 
-      log.info('Found %d connections for %s'%(len(estab), proc.name))
-      return ' or '.join(makeFilter(estab))
     log.warning(' %s has more than 1 connection ?'%(proc.name))
     return False
   elif conns[0].status != 'ESTABLISHED' :
-    log.warning(' %s has noESTABLISHED connections (1 %s)'%(conn[0].status))
+    log.warning(' %s has no ESTABLISHED connections (1 %s)'%(conn[0].status))
     return False
-  # else ok for ssh
-  f=makeFilter(conns[0])
   log.info('Found connection %s for %s'%(conns[0], proc.name))
-  return f
+  return conns[0]
 
-def usage(txt):
-  log.error("Usage : %s "% txt)
-  sys.exit(-1)
+
+
+    
+def test(sniffer, pid,proc,conn):
+  s1 = sniffer.makeStream(conn)
+  from multiprocessing import Process
+  # queue embedded
+  p = Process(target=s1.run)
+  # you should get a packetizer bundle to run instead...
+  p.start()
+  Processes.append(p)
+  return 
+    
+def launchScapy():
+  from threading import Thread
+  sshfilter = "tcp "
+  soscapy = network.Sniffer(sshfilter)
+  sniffer = Thread(target=soscapy.run)
+  sniffer.start()
+  return soscapy
+
+
+
+
 
 
 def main(argv):
@@ -81,16 +98,23 @@ def main(argv):
   options=buildTuples(_targets)
   threads=[]
   forked=0
+  # get sniffer up
+  sniffer = launchScapy()  
   for pid,proc in options:
     log.info("Searching in %s/%d memory"%(proc.name,proc.pid))
-    pcap_filter = checkConnections(proc)
-    if not pcap_filter and not 'ssh-agent' == proc.name:
+    conn = checkConnections(proc)
+    if not conn and 'ssh-agent' != proc.name:
+      continue
+    if 'ssh-agent' == proc.name:
       continue
     # call cb
-    if (os.fork() == 0):
-      _targets[proc.name](proc, pcap_filter)
-      sys.exit(0)
-      break
+    #if (os.fork() == 0):
+    #  _targets[proc.name](proc, pcap_filter)
+    #  sys.exit(0)
+    #  break
+    # run it
+    test(sniffer, pid,proc,conn)
+    
     forked+=1
     log.info('Subprocess launched on pid %d'%(proc.pid))
 

@@ -77,6 +77,9 @@ class TCPState(State):
     read, write = socket.socketpair()
     self.read_socket  = socket.socket(_sock=read) ## useless to get a python object we do not override after all?
     self.write_socket = write
+    # ok
+    self.setSearchMode()
+    return 
 
   def _enqueueRaw(self, packet):
     ''' the rawQueue gets all unexpected packets. 
@@ -363,18 +366,7 @@ class TCPStream(Stream):
     return shost == packet.underlayer.src and sport == packet.sport
     
 
-    
-    
-    
-    
-def test():
-  q = multiprocessing.Queue()
-  ct = [connection(fd=9, family=2, type=1, local_address=('192.168.1.100', 41220), remote_address=('74.125.53.125', 5222), status='ESTABLISHED'), connection(fd=8, family=2, type=1, local_address=('192.168.1.100', 33690), remote_address=('69.63.181.105', 5222), status='ESTABLISHED')]
 
-  s = TCPStream(q, )
-    
-    
-    
     
     
     
