@@ -7,7 +7,7 @@
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
 import logging, os, socket, sys, time
-import multiprocessing
+import multiprocessing, Queue
 
 from lrucache import LRUCache
 
@@ -79,6 +79,7 @@ class TCPState(State):
     self.write_socket = write
     # ok
     self.setSearchMode()
+    log.debug('%s: created in search mode'%(self.name))
     return 
 
   def _enqueueRaw(self, packet):
@@ -127,7 +128,7 @@ class TCPState(State):
     ''' search mode '''
     ''' Ordered packet are added here before their contents gets to socket. '''
     self.orderedQueue.append(packet)
-    return cnt
+    return 1
 
   def _addPacketToSocket(self, packet):
     ''' active mode '''
@@ -146,6 +147,7 @@ class TCPState(State):
       self.expected_seq=seq
       # head done. switch to normal behaviour
       self.checkState = self._checkState
+      log.info('%s: Switching to regular checkState'%(self.name))
     return self._checkState( packet )
   
   def _checkState(self, packet):
@@ -156,9 +158,12 @@ class TCPState(State):
     payloadLen = len(packet.payload)
     if payloadLen == 0:
       return False
-
+    seq = packet.seq
+    log.debug('%s: Checking state of packer %s'%(self.name,packet.seq))
+    
     # packet is expected 
     if seq == self.expected_seq: # JIT
+      log.debug('%s: got a good paket, adding..'%(self.name))
       self.max_seq = seq
       self.expected_seq = seq + payloadLen
       ##self.packets[seq] = packet # debug the packets
@@ -169,7 +174,8 @@ class TCPState(State):
       return True
 
     # packet is future
-    elif seq > self.expected_seq: 
+    elif seq > self.expected_seq:
+      log.debug('%s: Future packet, queuing it...'%(self.name)) 
       # seq is in advance, add it to queue
       self.enqueueRaw(packet)
       #log.debug('Queuing packet seq: %d len: %d %s'%(seq, payloadLen, state))
@@ -285,8 +291,8 @@ class TCPState(State):
 class stack:
   ''' A stream is duplex. '''
   def __init__(self):
-    self.inbound=state('inbound')
-    self.outbound=state('outbound')
+    self.inbound=TCPState('inbound')
+    self.outbound=TCPState('outbound')
   def __str__(self):
     return "\n%s\n%s"%(self.inbound,self.outbound)
   
@@ -300,13 +306,13 @@ class Stream:
     
   '''
   worker=None
-  def __init__(self, inQueue, connectionTuple, protocolName):
+  def __init__(self, inQueue, connection, protocolName):
     ''' 
     @param inQueue: packet Queue from socket_scapy   ## from multiprocessing import Process, Queue
     @param connectionTuple: connection Metadata to identify inbound/outbound
     '''
     self.inQueue = inQueue # triage must happen 
-    self.connectionTuple = connectionTuple
+    self.connection = connection
     self.protocolName = protocolName
     # contains TCP state & packets queue before reordering    
     self.stack=stack()  # duplex context
@@ -320,13 +326,18 @@ class Stream:
 
   def _isInbound(self, packet):
     raise NotImplementedError()
+
+  def check(self):
+    return True
    
   def run(self):
     ''' loops on self.inQueue and calls triage '''
-    for p in self.inQueue.get(block=True, timeout=1):
-      if p is not None:
-        self.triage(p)
-      self.checkStop()
+    while self.check():
+      try:
+        for p in self.inQueue.get(block=True, timeout=1):
+          self.triage(p)
+      except Queue.Empty,e:
+        pass
     pass
 
   def triage(self, obj):
@@ -353,16 +364,18 @@ class Stream:
         self.stack.outbound.addPacket(   packet )
     return
 
+  def __str__(self):
+    return "<TCPStream %s>"%repr(self.connection)
 
 
 class TCPStream(Stream):
   ''' Simple subclass for TCP packets '''
   def __init__(self, inQueue, connection ):
-    super(Stream).__init__(self, inQueue, connection, protocolName='TCP')
+    Stream.__init__(self, inQueue, connection, protocolName='TCP')
 
   def _isInbound(self, packet):
     ''' check if the connection metadata corrects '''
-    shost,sport = connection.local_address
+    shost,sport = self.connection.local_address
     return shost == packet.underlayer.src and sport == packet.sport
     
 

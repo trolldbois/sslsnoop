@@ -6,12 +6,13 @@
 
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
-import logging,os,socket,select, sys,threading, time
-
+import logging,os,socket,select, sys,time
+import multiprocessing, Queue
 import scapy.config
 
 from lrucache import LRUCache
-from ctypes_openssh import AES_BLOCK_SIZE
+
+import stream
 
 log=logging.getLogger('network')
 
@@ -62,24 +63,35 @@ class Sniffer():
     log.warning('============ SNIFF Terminated ====================')
     return
 
+  def hasStream(self, packet):
+    ''' checks if the stream has a queue '''
+    (shost,sport,dhost,dport) = getConnectionTuple(packet)
+    return (shost,sport,dhost,dport) in self.streams
+
   def getStream(self, packet):
-    # whataboutipv6 ?
-    shost  = packet['IP'].src
-    sport  = packet['TCP'].sport
-    dhost  = packet['IP'].dst
-    dport  = packet['TCP'].dport
-    if (shost,sport,dhost,dport) in self.streams:
-      return self.streams[(shost,sport,dhost,dport)]
+    ''' returns the queue for that stream '''
+    if self.hasStream(packet):
+      return self.streams[getConnectionTuple(packet)]
     return None
 
+  def addStream(self, connection):
+    ''' forget that stream '''
+    shost,sport = connection.local_address
+    dhost,dport = connection.remote_address
+    #q = multiprocessing.Queue(QUEUE_SIZE)
+    q = Queue.Queue(QUEUE_SIZE)
+    self.streams[(shost,sport,dhost,dport)] = q
+    self.streams[(dhost,dport,shost,sport)] = q
+    return q
+  
   def dropStream(self, packet):
-    # whataboutipv6 ?
-    shost  = packet['IP'].src
-    sport  = packet['TCP'].sport
-    dhost  = packet['IP'].dst
-    dport  = packet['TCP'].dport
-    if (shost,sport,dhost,dport) in self.streams:
-      del self.streams[(shost,sport,dhost,dport)]
+    ''' forget that stream '''
+    if self.hasStream(packet):
+      (shost,sport,dhost,dport) = getConnectionTuple(packet)
+      if (shost,sport,dhost,dport) in self.streams:
+        del self.streams[(shost,sport,dhost,dport)]
+      if (dhost,dport,shost,sport) in self.streams:
+        del self.streams[(dhost,dport,shost,sport)]
       log.info('Dropped %s,%s,%s,%s from valid connections.'%(shost,sport,dhost,dport))
     return None
     
@@ -88,10 +100,13 @@ class Sniffer():
     if q is None:
       return
     try:
+      log.debug('Queuing a packet from %s:%s\t-> %s:%s'%(getConnectionTuple(packet)))
       q.put_nowait(packet)
     except Queue.Full:
       log.warning('a Queue is Full. lost packet.')
       self.dropStream( packet )
+    except Exception,e:
+      log.error(e)
     return
 
   def makeStream(self, connection):
@@ -102,11 +117,22 @@ class Sniffer():
     '''
     shost,sport = connection.local_address
     dhost,dport = connection.remote_address
-    q = multiprocessing.Queue(QUEUE_SIZE)
-    self.streams[(shost,sport,dhost,dport)] = q
+    if (shost,sport,dhost,dport) in self.streams:
+      raise ValueError('Stream already exists')
+    # gets a q
+    q = self.addStream(connection)
+    # add the queue to TCPStream
     tcpstream = stream.TCPStream(q, connection)
+    log.info('Created a TCPStream for %s'%(tcpstream))
     return tcpstream
 
+
+def getConnectionTuple(packet):
+  shost  = packet['IP'].src
+  sport  = packet['TCP'].sport
+  dhost  = packet['IP'].dst
+  dport  = packet['TCP'].dport
+  return (shost,sport,dhost,dport)  
 
 
 

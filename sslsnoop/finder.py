@@ -61,12 +61,16 @@ def checkConnections(proc):
     
 def test(sniffer, pid,proc,conn):
   s1 = sniffer.makeStream(conn)
-  from multiprocessing import Process
+  ##from multiprocessing import Process
+  ##p = Process(target=s1.run)
+  from threading import Thread
+  p = Thread(target=s1.run)
   # queue embedded
-  p = Process(target=s1.run)
   # you should get a packetizer bundle to run instead...
   p.start()
   Processes.append(p)
+  log.info('Stream s1 launched')
+  p.join()
   return 
     
 def launchScapy():
@@ -83,7 +87,7 @@ def launchScapy():
 
 
 def main(argv):
-  logging.basicConfig(level=logging.INFO)
+  logging.basicConfig(level=logging.DEBUG)
   #logging.getLogger('model').setLevel(logging.INFO)
 
 
@@ -113,6 +117,7 @@ def main(argv):
     #  sys.exit(0)
     #  break
     # run it
+    log.info('Adding this pid to watch list')
     test(sniffer, pid,proc,conn)
     
     forked+=1
