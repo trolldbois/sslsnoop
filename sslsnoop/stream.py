@@ -133,9 +133,11 @@ class TCPState(State):
   def _addPacketToSocket(self, packet):
     ''' active mode '''
     self.activeLock.acquire()
-    self.byte_count   += self.write_socket.send( packet.payload.load )
+    cnt = self.write_socket.send( packet.payload.load )
+    self.byte_count   += cnt
     self.packet_count += 1
     self.activeLock.release()
+    log.debug('%s: Adding packet to socket - %d bytes added'%(self.name, cnt))
     return True
 
   def _checkState1(self, packet):
@@ -166,9 +168,10 @@ class TCPState(State):
       log.debug('%s: got a good paket, adding..'%(self.name))
       self.max_seq = seq
       self.expected_seq = seq + payloadLen
-      ##self.packets[seq] = packet # debug the packets
+      self.addPacket(packet)
+      # 
+      self.packets[seq] = packet # debug the packets
       self._resetMissing()
-      
       # check if next is already in self.queue , if expected has changed
       self.checkForExpectedPackets()
       return True
@@ -212,13 +215,14 @@ class TCPState(State):
         # save it
         self.packets[seq]=packet 
         # we can process this (new) one, it's containing only the non-used remains
+        self.addPacket(packet)        
         return True
       # ignore it, it's a retransmission
       return False
     # else, seq < expected_seq and seq >= self.max_seq. That's not possible... it's current packet.
     # it's a dup already dedupped ? partial fragment ?
     log.warning('received a bogus fragment seq: %d for %s'%(seq, self))
-    return True
+    return False
     
   ################ PUBLIC METHODS 
   ''' check the state of the packet.
@@ -232,9 +236,9 @@ class TCPState(State):
   def checkForExpectedPackets(self):
     ''' check for some internal expectation. '''
     ret = False
-    ''' time to check the raw queue for expected packets '''
+    log.debug('time to check the raw queue for expected packets ')
     if self.expected_seq in self.rawQueue : 
-      ''' requeue all expected packets to ordered queue '''
+      log.debug('requeue all expected packets to ordered queue ')
       self._requeue()
       ret = True
     # waiting for too long
@@ -267,6 +271,7 @@ class TCPState(State):
     @param data:  some data can be pre-written to the socket  .
     '''
     # stop any data from behing inserted in socket witouht proper timing
+    log.debug('Activating the active mode. Data will be decrypted')
     self.activeLock.acquire()
     self.searchMode = False
     self.addPacket = self._addPacketToSocket
@@ -280,6 +285,7 @@ class TCPState(State):
     for p in queue:
       self.byte_count   += self.write_socket.send( packet.payload.load )
       self.packet_count += 1
+    log.debug('%d bytes writtent for %d packets'%(self.byte_count, self.packet_count))
     self.activeLock.release()
     # operation can now resume. the socket is active
     return 
@@ -357,11 +363,15 @@ class Stream:
       return None
     # real triage
     if self._isInbound(packet):
+      log.debug('Packet is Inbound')
       if self.stack.inbound.checkState( packet ) and pLen > 0:
-        self.stack.inbound.addPacket(   packet )
-    else:
+        log.debug('packet added')
+    elif self._isOutbound(packet):
+      log.debug('Packet is Outbound')
       if self.stack.outbound.checkState( packet ) and pLen > 0:
-        self.stack.outbound.addPacket(   packet )
+        log.debug('packet added')
+    else:
+      log.warning('This packet is nor outbound, nor inbound by my standards. Your network sniffer queuing system sucks.')
     return
 
   def __str__(self):
@@ -375,8 +385,13 @@ class TCPStream(Stream):
 
   def _isInbound(self, packet):
     ''' check if the connection metadata corrects '''
-    shost,sport = self.connection.local_address
-    return shost == packet.underlayer.src and sport == packet.sport
+    host,port = self.connection.local_address
+    return host == packet.underlayer.dst and port == packet.dport
+
+  def _isOutbound(self, packet):
+    ''' check if the connection metadata corrects '''
+    host,port = self.connection.local_address
+    return host == packet.underlayer.src and port == packet.sport
     
 
 

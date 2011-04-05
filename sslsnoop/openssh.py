@@ -6,7 +6,7 @@
 
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
-import argparse, os, logging, sys, time, pickle, struct
+import argparse, os, logging, sys, time, pickle, struct, threading
 
 import ctypes
 import ctypes_openssh, ctypes_openssl
@@ -150,15 +150,22 @@ class OpenSSHKeysFinder():
 
 
 
+def connectionToString(connection, reverse=False):
+  log.debug('make a string for %s'%(repr(connection)))
+  if reverse:
+    return "%s:%d-%s:%d"%(connection.remote_address[0],connection.remote_address[1], connection.local_address[0],connection.local_address[1]) 
+  else:
+    return "%s:%d-%s:%d"%(connection.local_address[0],connection.local_address[1],connection.remote_address[0],connection.remote_address[1]) 
 
 
 
 class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
   ''' Decrypt SSH traffic in live '''
-  def __init__(self, pid, sessionStateAddr=None, scapySocketThread = None, serverMode=None, fullScan=False, maxNum=1):
+  def __init__(self, pid, sessionStateAddr=None, stream = None, scapyThread = None, serverMode=None, fullScan=False, maxNum=1):
     OpenSSHKeysFinder. __init__(self, pid, fullScan=fullScan)
-    self.soscapy=scapySocketThread
-    self.serverMode=serverMode
+    self.stream = stream
+    self.scapy = scapyThread
+    #self.serverMode=serverMode
     self.maxNum = maxNum
     self.session_state_addr=sessionStateAddr
     self.inbound=dict()
@@ -167,10 +174,11 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
   
   def run(self):
     ''' launch sniffer and decrypter threads '''
-    if self.soscapy is None:
-      self.soscapy=launchScapyThread(self.serverMode)
-    elif not self.soscapy.isAlive():
-      self.soscapy.start()
+    if self.scapy is None:
+      from finder import launchScapy
+      self.scapy=launchScapy()
+    elif not self.scapy.thread.isAlive():
+      self.scapy.thread.start()
     # ptrace ssh
     if self.session_state_addr is None:
       self.ciphers,self.session_state_addr=self.findActiveKeys(maxNum = self.maxNum)
@@ -193,24 +201,31 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     # Inbound
     log.info('activate INBOUND receive')
     self.inbound['context'] = receiveCtx
-    self.inbound['socket'] = self.soscapy.getInboundSocket()
+    self.inbound['socket'] = self.stream.getInbound().getSocket()
     self.inbound['packetizer'] = Packetizer( self.inbound['socket'] )
     self.inbound['packetizer'].set_log(logging.getLogger('inbound.packetizer'))
     self.inbound['engine'] = self.activate_cipher(self.inbound['packetizer'], receiveCtx )
-    self.inbound['filewriter'] =  output.SSHStreamToFile(self.inbound['packetizer'], self.inbound, 'ssh-in')
+    name = 'ssh-%s'%( connectionToString(self.stream.connection) )
+    self.inbound['filewriter'] =  output.SSHStreamToFile(self.inbound['packetizer'], self.inbound, name)
 
     # out bound
     log.info('activate OUTBOUND send')
     self.outbound['context'] = sendCtx
-    self.outbound['socket'] = self.soscapy.getOutboundSocket()
+    self.outbound['socket'] = self.stream.getOutbound().getSocket()
     self.outbound['packetizer'] = Packetizer(self.outbound['socket'])
     self.outbound['packetizer'].set_log(logging.getLogger('outbound.packetizer'))
     self.outbound['engine'] = self.activate_cipher(self.outbound['packetizer'], self.outbound['context'] )
-    self.outbound['filewriter'] =  output.SSHStreamToFile(self.outbound['packetizer'], self.outbound, 'ssh-out')
-
+    name = 'ssh-%s'%( connectionToString(self.stream.connection, reverse=True) )
+    self.outbound['filewriter'] =  output.SSHStreamToFile(self.outbound['packetizer'], self.outbound, name)
+    
+    # worker to watch out for data for decryption
     self.worker = output.Supervisor()
-    self.worker.add( self.inbound['socket'], self.inbound['filewriter'].process )
-    self.worker.add(self.outbound['socket'], self.outbound['filewriter'].process )
+    self.worker.add( self.inbound['socket'],  self.inbound['filewriter'].process  )
+    self.worker.add( self.outbound['socket'], self.outbound['filewriter'].process )
+    ## run streams
+    self.stream.getInbound().setActiveMode()
+    self.stream.getOutbound().setActiveMode()
+    threading.Thread(target=self.stream.run).start()
     return
     
   def loop(self):
@@ -263,8 +278,7 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     pass
 
 
-
-def launchScapyThread(serverMode):
+def launchScapyThreadOld(serverMode):
   from threading import Thread
   # @ at param
   port=22
@@ -286,13 +300,15 @@ def launchScapyThread(serverMode):
   return soscapy
 
 
-def parseSSHClient(proc,pcapfilter): ## TODO replace by search
-  parser=argparser()
-  opts = parser.parse_args([str(proc.pid)])
-  opts.func(opts)
-  #keysFinder=OpenSSHKeysFinder(proc.pid)
-  #ciphers,addr=keysFinder.findActiveKeys()
-  #keysFinder.save(ciphers.session_state)
+def parseSSHClient(proc, tcpstream, sniffer): 
+  
+  pid = proc.pid
+  # sniffer is a running thread
+  # when ready, will have to launch tcpstream as a Thread
+  decryptatator=OpenSSHLiveDecryptatator(pid, scapyThread=sniffer, stream=tcpstream)
+  decryptatator.run()
+  log.info("done for pid %d, struct at 0x%lx"%(pid,decryptatator.session_state_addr))
+
   return 
   
 def parseSSHServer(proc,pcapfilter):  ## TODO replace by search --server
@@ -387,117 +403,4 @@ def main(argv):
 if __name__ == "__main__":
   main(sys.argv[1:])
 
-#logging.basicConfig(level=logging.INFO)
-
-#pid=31833
-#addr=0xb904b268
-#dec=OpenSSHLiveDecryptatator(pid,sessionStateAddr=addr)
-
-
-
-
-def testEncDec(pid):
-  logging.basicConfig(level=logging.INFO)
-  finder=OpenSSHLiveDecryptatator(pid)
-  
-  ciphers,addr=finder.findActiveKeys(offset=finder.session_state_addr)
-  logging.basicConfig(level=logging.DEBUG)
-  engine = StatefulAES_Ctr_Engine(ciphers.receiveCtx)
-  engine2 = StatefulAES_Ctr_Engine(ciphers.receiveCtx)
-  
-  app_data=ciphers.receiveCtx.app_data
-  key,rounds=app_data.getCtx()
-  print "key=",repr(key)
-  print len(key)
-  print "rounds=",rounds
-  print ''
-  
-  print "waiting for packet:"
-  buf=b'1234567890ABCDEF1234567890ABCDEF'
-  
-  print '"aes_counter" : "%s"'%repr(engine.aes_key_ctx.getCounter())
-  #encrypted=engine.decrypt(buf)
-  encrypted=engine.decrypt(buf)
-  print 'Encrypted len', len(encrypted)
-  decrypted=engine2.decrypt(encrypted)
-  print 'engine 1 "aes_counter" : "%s"'%repr(engine.aes_key_ctx.getCounter())
-  print 'engine 2 "aes_counter" : "%s"'%repr(engine2.aes_key_ctx.getCounter())
-  print 'decrypted=',decrypted
-  return engine,key
-
-def test(pid,addr):
-  logging.basicConfig(level=logging.INFO)
-  soscapy=launchScapyThread()
-  finder=OpenSSHLiveDecryptatator(pid,sessionStateAddr=addr)
-
-  ciphers,addr=finder.findActiveKeys(offset=finder.session_state_addr)
-  logging.basicConfig(level=logging.DEBUG)
-  finder.process.cont()
-
-  #readso=soscapy.getInboundSocket()
-  #engine = StatefulAES_Ctr_Engine(ciphers.receiveCtx)
-  #app_data=ciphers.receiveCtx.app_data
-  readso=soscapy.getOutboundSocket()
-  engine = StatefulAES_Ctr_Engine(ciphers.sendCtx)
-  app_data=ciphers.sendCtx.app_data
-  key,rounds=app_data.getCtx()
-  print "key=",repr(key)
-  print len(key)
-  print "rounds=",rounds
-  print ''
-  print "waiting for packet:"
-  import time,select,struct
-  start=time.time()
-  while( True):
-    r,w,o=select.select([readso],[],[],2)
-    if len(r) > 0:
-      if time.time()-start > 20:
-        break
-    else: 
-      encrypted=readso.recv(1024)
-      print engine.aes_key_ctx.__dict__
-      #print '"aes_counter" : "%s"'%repr(engine.aes_key_ctx.getCounter())
-      #print 'Encrypted len', len(encrypted)
-      print '"aes_counter" : "%s"'%repr(engine.aes_key_ctx.getCounter())
-      decrypted=engine.decrypt(encrypted)
-      print '"aes_counter" : "%s"'%repr(engine.aes_key_ctx.getCounter())
-      print 'decrypted=',decrypted
-      packet_size = struct.unpack('>I', decrypted[:4])[0]
-      print 'packet_size BE',packet_size
-      packet_size = struct.unpack('<I', decrypted[:4])[0]
-      print 'packet_size LE',packet_size
-  
-  # find it again
-  ciphers,addr=finder.findActiveKeys(offset=finder.session_state_addr)
-  app_data=ciphers.receiveCtx.app_data
-  print 'our aes_counter : "%s"'%repr(engine.aes_key.getCounter())
-  print 'its aes_counter : "%s"'%repr(app_data.aes_key.getCounter())
-
-  #print "key=",repr(key)
-  #buf=readso.recv(1024)
-  #decrypted=engine.decrypt(encrypted[:AES_BLOCK_SIZE])
-  
-  return engine,key
-
-  
-
-def testSimpleDecrypt(readso,engine_in):
-  block = readso.recv(16)
-  print socket_scapy.hexify(block)
-  header = engine_in.decrypt(block)
-  print 'First 4 char  data=',repr(header[:4])
-  print 'p_size %d or %d'%(struct.unpack('>I', header[:4])[0], struct.unpack('<I', header[:4])[0])
-  #print 'p_size %d or %d'%(struct.unpack('>I', header[:4])[3], struct.unpack('<I', header[:4])[3])
-  packet_size = struct.unpack('>I', header[:4])[0]
-  # leftover contains decrypted bytes from the first block (after the length field)
-  leftover = header[4:]
-  print 'packet_size=%d \nleftoverlen=%d'%(packet_size,len(leftover))
-  if (packet_size - len(leftover)) % 16 != 0:
-    print "SSHException('Invalid packet blocking')"
-  print 'Test descrypt Finished\n\n\n'  
-  return  
-
-
-
-#test(2517,0xb9002268)
 

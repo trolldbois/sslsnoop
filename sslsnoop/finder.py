@@ -59,18 +59,18 @@ def checkConnections(proc):
 
 
     
-def test(sniffer, pid,proc,conn):
+def runthread(callable, sniffer, pid,proc,conn):
   s1 = sniffer.makeStream(conn)
   ##from multiprocessing import Process
   ##p = Process(target=s1.run)
   from threading import Thread
-  p = Thread(target=s1.run)
+  args = (proc, s1, sniffer)
+  p = Thread(target=callable, args=args)
   # queue embedded
   # you should get a packetizer bundle to run instead...
   p.start()
   Processes.append(p)
   log.info('Stream s1 launched')
-  p.join()
   return 
     
 def launchScapy():
@@ -78,6 +78,7 @@ def launchScapy():
   sshfilter = "tcp "
   soscapy = network.Sniffer(sshfilter)
   sniffer = Thread(target=soscapy.run)
+  soscapy.thread = sniffer
   sniffer.start()
   return soscapy
 
@@ -118,11 +119,13 @@ def main(argv):
     #  break
     # run it
     log.info('Adding this pid to watch list')
-    test(sniffer, pid,proc,conn)
+    runthread(_targets[proc.name], sniffer, pid,proc,conn)
     
     forked+=1
     log.info('Subprocess launched on pid %d'%(proc.pid))
 
+  for p in Processes:
+    p.join()
   time.sleep(5)
   log.info(' ============== %d process forked. look into outputs/ for data '%(forked))
   sys.exit(0)
