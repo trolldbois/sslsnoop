@@ -180,7 +180,7 @@ class TCPState(State):
     elif seq > self.expected_seq:
       log.debug('%s: Future packet, queuing it...'%(self.name)) 
       # seq is in advance, add it to queue
-      self.enqueueRaw(packet)
+      self._enqueueRaw(packet)
       #log.debug('Queuing packet seq: %d len: %d %s'%(seq, payloadLen, state))
 
       # we are waiting for something...
