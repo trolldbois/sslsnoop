@@ -175,8 +175,10 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
   def run(self):
     ''' launch sniffer and decrypter threads '''
     if self.scapy is None:
-      from finder import launchScapy
+      from finder import launchScapy, getConnectionForPID
       self.scapy=launchScapy()
+      conn = getConnectionForPID(self.pid)
+      self.stream = self.scapy.makeStream(conn)
     elif not self.scapy.thread.isAlive():
       self.scapy.thread.start()
     # ptrace ssh

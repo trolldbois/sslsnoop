@@ -56,7 +56,9 @@ def checkConnections(proc):
   log.info('Found connection %s for %s'%(conns[0], proc.name))
   return conns[0]
 
-
+def getConnectionForPID(pid):
+  proc = psutil.Process(pid)
+  return checkConnections(proc)
 
     
 def runthread(callable, sniffer, pid,proc,conn):
