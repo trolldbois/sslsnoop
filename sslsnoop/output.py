@@ -14,9 +14,8 @@ from paramiko_packet import NeedRekeyException
 from paramiko.ssh_exception import SSHException
 from paramiko.common import *
 
-from socket_scapy import MissingDataException, MISSING_DATA_MESSAGE
+from stream import MissingDataException
 
-from ctypes_openssh import AES_BLOCK_SIZE
 
 log=logging.getLogger('output')
 

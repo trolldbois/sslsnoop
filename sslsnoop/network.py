@@ -110,7 +110,7 @@ class Sniffer():
     return
 
   def makeStream(self, connection):
-    ''' create a TCP Stream recognized by socket_scapy 
+    ''' create a TCP Stream recognized by sniffer 
       the Stream can be used to read captured data
       
       The Stream should be run is a thread or a subprocess (better because of GIL).

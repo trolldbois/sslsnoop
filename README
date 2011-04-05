@@ -6,12 +6,15 @@ Dumps one file by fd in outputs/
 Attaching a process is quickier with --addr 0xb788aa98 as provided by abouchet.py
     INFO:abouchet:found instance <class 'ctypes_openssh.session_state'> @ 0xb788aa98
 
-  $ sudo python finder.py    # try ssh, sshd and ssh-agent...
-  $ sudo sslsnoop-openssh `pgrep ssh`
-  $ sudo sslsnoop-openssh `pgrep ssh` --server # for ssh server-side
+  $ mkdir outputs
+
+You really have to. Please.
+  
+  $ sudo sslsnoop    # try ssh, sshd and ssh-agent... for various things
+  $ sudo sslsnoop-openssh `pgrep ssh`     # dumps decrypted traffic in outputs/
   $ sudo sslsnoop-openssl `pgrep ssh-agent` # dump RSA and DSA keys
 
-and go and check outputs/ :
+and go and check outputs/.
 
 
 not so FAQ :
@@ -116,24 +119,36 @@ Architecture
 
 openssh creates a OpenSSHLiveDecryptatator which inherits a OpenSSHKeysFinder
 OpenSSHLiveDecryptatator :
- * connects to/launch a scapy_socket.
+ * connects to/launch a network.Sniffer. (scapy)
  * OpenSSHKeysFinder calls haystack to fetch the session_state
    - memory capture/ptrace is done in a subprocess
    - target process is not under ptrace anymore when openssh runs. 
+   - keys are acquired
  * SessionCiphers are created from pickled values from haystack
-   - one for inbound traffic, one for outbound
+   - one for inbound traffic
+   - one for outbound traffic
  * each SessionCipher is coupled with :
-   - a socket given by from scapy_socket ( Inbound or Outbound)
-   - a paramiko Packetizer which is a ssh protocaol handler.
+   - a socket given by a TCPStream ( Inbound and Outbound TCPstate)
+   - a paramiko Packetizer which is a ssh protocol handler.
+ * a cipher engine is used by the paramiko.Packetizer to decrypt data from the TCPStream socket
  * the Packetizer uses :
-   - the previous socket to read it's data from network.
+   - the socket to read it's data from the 'network'.
    - the cipher to decrypt the data
  * a SSHStreamToFile is created for each stream and is given the packetizer and the overall context ( cipher, socket )
-   - the SSHStreamToFile try to process the packetizer output into a file.
+   - the SSHStreamToFile try to process the packetizer's outputs into a file.
  * a Supervisor is created to handle traffic ( select on socket )
    - both SSHStreamToFile are given to the Supervisor with their respective socket
 
 
+TODO:
+
+SSHStream uses the packets is orderedQueue and the cipher, to try to find a SSH packet
+ - algo 1 : copy original cipher state, decrypt first block of packet [0], 
+              if not valid, drop packet and loop to next one (for x packets) 
+              if valid, switch to go-trough mode and queue current + all packets data to socket 
+
+ - algo 2 : try to find a valid packet, block per block/long by long
+              if valid, switch to go-trough mode and queue current + all packets data to socket 
 
 
 

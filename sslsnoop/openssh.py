@@ -10,7 +10,7 @@ import argparse, os, logging, sys, time, pickle, struct, threading
 
 import ctypes
 import ctypes_openssh, ctypes_openssl
-import output, socket_scapy
+import output
 
 from engine import CIPHERS
 import haystack 
@@ -280,26 +280,6 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     pass
 
 
-def launchScapyThreadOld(serverMode):
-  from threading import Thread
-  # @ at param
-  port=22
-  sshfilter="tcp and port %d"%(port)
-  #
-  if serverMode:
-    soscapy=socket_scapy.socket_scapy(sshfilter, isInboundPacketCallback=socket_scapy.isdestport22,
-                                      isOutboundPacketCallback=socket_scapy.isNotdestport22)
-    log.info(' --- SSHD SERVER MODE ---- ')
-  else:
-    soscapy=socket_scapy.socket_scapy(sshfilter)
-    log.info(' --- SSH  CLIENT MODE ---- ')
-  sniffer = Thread(target=soscapy.run)
-  worker  = Thread(target=soscapy.run2)
-  sniffer.worker = worker
-  soscapy.setThread( sniffer )
-  sniffer.start()
-  worker.start()
-  return soscapy
 
 
 def parseSSHClient(proc, tcpstream, sniffer): 
