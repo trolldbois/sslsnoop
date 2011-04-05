@@ -28,7 +28,7 @@ def parseSSL(proc, tcpstream, sniffer):
 
 
 _targets={
-#    'ssh': openssh.parseSSHClient,
+    'ssh': openssh.parseSSHClient,
     'ssh-agent': parseSSL,
     'sshd': parseSSL, # sshd a SSL keys too
     #'firefox': []
