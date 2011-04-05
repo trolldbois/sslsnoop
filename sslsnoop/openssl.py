@@ -126,7 +126,6 @@ def search(args):
   return
 
 
-
 def main(argv):
   logging.basicConfig(level=logging.INFO)
 

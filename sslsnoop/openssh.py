@@ -313,23 +313,7 @@ def parseSSHClient(proc, tcpstream, sniffer):
 
   return 
   
-def parseSSHServer(proc,pcapfilter):  ## TODO replace by search --server
-  parser=argparser()
-  opts = parser.parse_args([str(proc.pid),'--server'])
-  opts.func(opts)
-  #keysFinder=OpenSSHKeysFinder(proc.pid)
-  #ciphers,addr=keysFinder.findActiveKeys()
-  #keysFinder.save(ciphers.session_state)
-  return 
   
-def parseSSHAgent(proc,ignore):
-  from openssl import OpenSSLStructFinder
-  keysFinder=OpenSSLStructFinder(proc.pid)
-  return keysFinder.findAndSave()
-
-def usage(parser):
-  parser.print_help()
-  sys.exit(-1)
 
 
 def argparser():

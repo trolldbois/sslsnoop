@@ -7,15 +7,30 @@
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
 import os,logging,psutil,sys, time
-import openssh, network
+import openssh, openssl, network
 import subprocess
 
 log=logging.getLogger('finder')
 
+
+class Args:
+  pid=None
+  memfile=None
+  memdump=None
+  debug=None
+
+def parseSSL(proc, tcpstream, sniffer):
+  args=Args()
+  args.pid = proc.pid
+  return openssl.search(args)
+  
+
+
+
 _targets={
-    'ssh': openssh.parseSSHClient,
-    'sshd': openssh.parseSSHServer,
-    'ssh-agent': openssh.parseSSHAgent,
+#    'ssh': openssh.parseSSHClient,
+    'ssh-agent': parseSSL,
+    'sshd': parseSSL, # sshd a SSL keys too
     #'firefox': []
     }
 
@@ -61,18 +76,21 @@ def getConnectionForPID(pid):
   return checkConnections(proc)
 
     
-def runthread(callable, sniffer, pid,proc,conn):
-  s1 = sniffer.makeStream(conn)
+def runthread(callable, sniffer, proc,conn):
+  if not conn : # ssh-agent
+    s1 = None
+  else:
+    s1 = sniffer.makeStream(conn)
+  
   ##from multiprocessing import Process
   ##p = Process(target=s1.run)
   from threading import Thread
   args = (proc, s1, sniffer)
   p = Thread(target=callable, args=args)
-  # queue embedded
-  # you should get a packetizer bundle to run instead...
+  
   p.start()
   Processes.append(p)
-  log.info('Stream s1 launched')
+  log.info('Thread launched')
   return 
     
 def launchScapy():
@@ -90,7 +108,7 @@ def launchScapy():
 
 
 def main(argv):
-  logging.basicConfig(level=logging.DEBUG)
+  logging.basicConfig(level=logging.INFO)
   #logging.getLogger('model').setLevel(logging.INFO)
 
 
@@ -112,16 +130,8 @@ def main(argv):
     conn = checkConnections(proc)
     if not conn and 'ssh-agent' != proc.name:
       continue
-    if 'ssh-agent' == proc.name:
-      continue
-    # call cb
-    #if (os.fork() == 0):
-    #  _targets[proc.name](proc, pcap_filter)
-    #  sys.exit(0)
-    #  break
-    # run it
     log.info('Adding this pid to watch list')
-    runthread(_targets[proc.name], sniffer, pid,proc,conn)
+    runthread(_targets[proc.name], sniffer, proc,conn)
     
     forked+=1
     log.info('Subprocess launched on pid %d'%(proc.pid))
