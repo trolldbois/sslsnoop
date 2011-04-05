@@ -11,6 +11,8 @@ import multiprocessing, Queue
 
 from lrucache import LRUCache
 
+WAIT_RETRANSMIT=10
+
 log=logging.getLogger('stream')
 
 
