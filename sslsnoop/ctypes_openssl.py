@@ -54,6 +54,12 @@ model.registerModule(sys.modules[__name__])
 
 ############# Start expectedValues and methods overrides #################
 
+NIDs = dict( [(getattr(gen, s), s) for s in gen.__dict__ if s.startswith('NID_') ])
+def getCipherName(nid):
+  nidname = NIDs[nid]
+  LNattr = 'LN'+nidname[3:] # del prefix 'NID'
+  return getattr(gen, LNattr)
+
 
 ''' rc4.h:71 '''
 ####### RC4_KEY #######
@@ -262,6 +268,11 @@ DSA.loadMembers = DSA_loadMembers
 
 ######### EP_CIPHER
 EVP_CIPHER.expectedValues={
+    #crypto/objects/objects.h 0 is undef .. crypto cipher is a smaller subset :
+    # 1-10 19 29-46 60-70 91-98 104 108-123 166
+    # but for argument sake, we have to keep an open mind
+    "nid": RangeValue(0,180) , 
+    "block_size": [1,2,4,6,8,16,24,32,48,64,128], # more or less
     "key_len": RangeValue(1,0xff), # key_len *8 bits ..2040 bits for a key is enought ? 
                                    # Default value for variable length ciphers 
     "iv_len": RangeValue(0,0xff), #  rc4 has no IV ?
@@ -270,7 +281,6 @@ EVP_CIPHER.expectedValues={
     #"cleanup": [NotNull], # aes-cbc ?
     "ctx_size": RangeValue(0,0xffff), #  app_data struct should not be too big
   }
-
 
 ########### EVP_CIPHER_CTX
 EVP_CIPHER_CTX.expectedValues={
@@ -282,12 +292,20 @@ EVP_CIPHER_CTX.expectedValues={
     #"cipher_data": , # can be null if app_data is not
     "key_len": RangeValue(1,0xff), # key_len *8 bits ..2040 bits for a key is enought ? 
   }
-  
+
+# loadMembers, if nid & cipher_data-> we can assess cipher_data format to be a XX_KEY
+def EVP_CIPHER_CTX_loadMembers(self, mappings, maxDepth):
+  if not LoadableMembers.loadMembers(self, mappings, maxDepth):
+    return False
+  log.debug('trying to load cipher_data Structs.')
+  return True
+
 def EVP_CIPHER_CTX_getOIV(self):
   return array2bytes(self.oiv)
 def EVP_CIPHER_CTX_getIV(self):
   return array2bytes(self.iv)
 
+##EVP_CIPHER_CTX.loadMembers = EVP_CIPHER_CTX_loadMembers
 EVP_CIPHER_CTX.getOIV = EVP_CIPHER_CTX_getOIV
 EVP_CIPHER_CTX.getIV  = EVP_CIPHER_CTX_getIV
 
@@ -296,11 +314,12 @@ EVP_CIPHER_CTX.getIV  = EVP_CIPHER_CTX_getIV
 
 # checkks
 '''
+import sys,inspect
 src=sys.modules[__name__]
 for (name, klass) in inspect.getmembers(src, inspect.isclass):
-  if klass.__module__ == src.__name__ or klass.__module__.endswith('%s_generated'%(src.__name__) ) :
-    if not klass.__name__.endswith('_py'):
-      print klass, len(klass.classRef)
+  #if klass.__module__ == src.__name__ or klass.__module__.endswith('%s_generated'%(src.__name__) ) :
+  #  #if not klass.__name__.endswith('_py'):
+  print klass, type(klass) #, len(klass.classRef)
 '''
 
 def printSizeof(mini=-1):
