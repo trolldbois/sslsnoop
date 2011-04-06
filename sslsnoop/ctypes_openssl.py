@@ -57,8 +57,15 @@ model.registerModule(sys.modules[__name__])
 NIDs = dict( [(getattr(gen, s), s) for s in gen.__dict__ if s.startswith('NID_') ])
 def getCipherName(nid):
   nidname = NIDs[nid]
-  LNattr = 'LN'+nidname[3:] # del prefix 'NID'
+  LNattr = 'SN'+nidname[3:] # del prefix 'NID'
   return getattr(gen, LNattr)
+
+def getCipherDataType(nid):
+  name = getCipherName(nid)
+  for t in EVP_CIPHER.CIPHER_DATA:
+    if name.startswith( t ):
+      return EVP_CIPHER.CIPHER_DATA[t]
+  return None
 
 
 ''' rc4.h:71 '''
@@ -271,7 +278,7 @@ EVP_CIPHER.expectedValues={
     #crypto/objects/objects.h 0 is undef .. crypto cipher is a smaller subset :
     # 1-10 19 29-46 60-70 91-98 104 108-123 166
     # but for argument sake, we have to keep an open mind
-    "nid": RangeValue(0,180) , 
+    "nid": [RangeValue(0,180),RangeValue(420,425)] , 
     "block_size": [1,2,4,6,8,16,24,32,48,64,128], # more or less
     "key_len": RangeValue(1,0xff), # key_len *8 bits ..2040 bits for a key is enought ? 
                                    # Default value for variable length ciphers 
@@ -281,6 +288,16 @@ EVP_CIPHER.expectedValues={
     #"cleanup": [NotNull], # aes-cbc ?
     "ctx_size": RangeValue(0,0xffff), #  app_data struct should not be too big
   }
+EVP_CIPHER.CIPHER_DATA = { 
+	 "DES": DES_key_schedule,
+	 "3DES": DES_key_schedule,
+	 "BF": BF_KEY,
+	 "CAST": CAST_KEY,
+	 "RC4": RC4_KEY,
+	 "ARCFOUR": RC4_KEY,
+	 "AES": AES_KEY,
+  }
+
 
 ########### EVP_CIPHER_CTX
 EVP_CIPHER_CTX.expectedValues={
@@ -295,17 +312,63 @@ EVP_CIPHER_CTX.expectedValues={
 
 # loadMembers, if nid & cipher_data-> we can assess cipher_data format to be a XX_KEY
 def EVP_CIPHER_CTX_loadMembers(self, mappings, maxDepth):
-  if not LoadableMembers.loadMembers(self, mappings, maxDepth):
+  if not super(EVP_CIPHER_CTX,self).loadMembers(mappings, maxDepth):
     return False
-  log.debug('trying to load cipher_data Structs.')
+  log.info('trying to load cipher_data Structs.')
+  '''
+  if bool(cipher) and bool(self.cipher.nid) and is_valid_address(cipher_data):
+    memcopy( self.cipher_data, cipher_data_addr, self.cipher.ctx_size)
+    # cast possible on cipher.nid -> cipherType
+  '''
+  if self.cipher.contents.nid == 0: # NID_undef, not openssl doing
+    log.info('The cipher is home made - the cipher context data should be application dependant (app_data)')
+    return True
+    
+  struct = getCipherDataType( self.cipher.contents.nid) 
+  log.info('cipher type is %s - loading %s'%( getCipherName(self.cipher.contents.nid), struct ))
+  if(struct is None):
+    log.warning("Unsupported cipher %s"%(self.cipher.contents.nid))
+    return True
+  
+  # c_void_p is a basic type.
+  attr_obj_address = self.cipher_data
+  memoryMap = is_valid_address_value( attr_obj_address, mappings, struct)
+  log.debug( "cipher_data CAST into : %s "%(struct) )
+  if not memoryMap:
+    log.warning('On second toughts, cipher_data seems to be at an invalid address. That should not happen (often).')
+    log.warning('%s addr:0x%lx size:0x%lx addr+size:0x%lx '%(is_valid_address_value( attr_obj_address, mappings), 
+                                attr_obj_address, ctypes.sizeof(struct), attr_obj_address+ctypes.sizeof(struct)))
+    return True
+  #ok
+  st = memoryMap.readStruct(attr_obj_address, struct )
+  model.keepRef(st)
+  self.cipher_data = ctypes.c_void_p(ctypes.addressof(st)) 
+  # check debug
+  attr=getattr(self, 'cipher_data')      
+  log.debug('Copied 0x%lx into %s (0x%lx)'%(ctypes.addressof(st), 'cipher_data', attr))      
+  log.debug('LOADED cipher_data as %s from 0x%lx (%s) into 0x%lx'%(struct, 
+        attr_obj_address, is_valid_address_value(attr_obj_address, mappings, struct), attr ))
+  log.debug('\t\t---------\n%s\t\t---------'%st.toString())
   return True
+
+def EVP_CIPHER_CTX_toPyObject(self):
+    d=super(EVP_CIPHER_CTX,self).toPyObject()
+    log.info('Cast a EVP_CIPHER_CTX into PyObj')
+    # cast app_data or cipher_data to right struct
+    if bool(self.cipher_data):
+      struct = getCipherDataType( self.cipher.contents.nid)
+      if struct is not None:
+        # CAST c_void_p to struct
+        d.cipher_data = struct.from_address(self.cipher_data).toPyObject()
+    return d
 
 def EVP_CIPHER_CTX_getOIV(self):
   return array2bytes(self.oiv)
 def EVP_CIPHER_CTX_getIV(self):
   return array2bytes(self.iv)
 
-##EVP_CIPHER_CTX.loadMembers = EVP_CIPHER_CTX_loadMembers
+EVP_CIPHER_CTX.loadMembers = EVP_CIPHER_CTX_loadMembers
+EVP_CIPHER_CTX.toPyObject = EVP_CIPHER_CTX_toPyObject
 EVP_CIPHER_CTX.getOIV = EVP_CIPHER_CTX_getOIV
 EVP_CIPHER_CTX.getIV  = EVP_CIPHER_CTX_getIV
 
