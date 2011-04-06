@@ -10,9 +10,17 @@ import logging, os, subprocess
 
 log=logging.getLogger('preprocess')
 
+'''
 OPENSSL_ARGS= ['-DOPENSSL_THREADS', '-D_REENTRANT', '-DDSO_DLFCN', '-DHAVE_DLFCN_H', 
     '-DL_ENDIAN', '-DTERMIO', '-O3', '-fomit-frame-pointer', '-Wall', '-DOPENSSL_BN_ASM_PART_WORDS',
     '-DOPENSSL_IA32_SSE2', '-DSHA1_ASM', '-DMD5_ASM', '-nostdinc++', '-DRMD160_ASM', '-DAES_ASM' ]
+'''
+OPENSSL_ARGS= [
+  '-I.', 
+  '-I/usr/include/', 
+  '-I/usr/include/openssl', 
+#  '-I/home/jal/Compil/sslsnoop/biblio//include', 
+]
 
 '''
 NSS_ARGS= ['-Wall', '-pipe', '-O2', '-fno-strict-aliasing', '-g', '-ansi', '-D_POSIX_SOURCE', 

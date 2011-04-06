@@ -134,7 +134,7 @@ logging.basicConfig(level=logging.INFO)
 #generate.gen('ctypes_linux_generated_clean.c','ctypes_linux_generated')
 
 # generate.make('ctypes_linux.c','ctypes_linux_generated')
-#make('ctypes_openssl.c','ctypes_openssl_generated')
+make('ctypes_openssl.c','ctypes_openssl_generated', preprocess.OPENSSL_ARGS)
 
-make('ctypes_nss.c','ctypes_nss_generated', preprocess.NSS_ARGS)
+#make('ctypes_nss.c','ctypes_nss_generated', preprocess.NSS_ARGS)
 
