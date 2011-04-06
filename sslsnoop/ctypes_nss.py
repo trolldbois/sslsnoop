@@ -13,7 +13,7 @@ import logging, sys
 from haystack import model
 
 from haystack.model import is_valid_address,is_valid_address_value,getaddress,array2bytes,bytes2array
-from haystack.model import LoadableMembers,RangeValue,NotNull,CString
+from haystack.model import LoadableMembers,RangeValue,NotNull,CString, IgnoreMember
 
 import ctypes_nss_generated as gen
 
@@ -60,11 +60,45 @@ model.registerModule(sys.modules[__name__])
 ############# Start expectedValues and methods overrides #################
 
 
+
 sslSocket.expectedValues = {
-  "fd": RangeValue(1,0x0fff), 
+ "fd": RangeValue(1,0xffff), 
+  #"version": [0x0002, 0x0300, 0x0301 ], #sslproto.h
+  "version": RangeValue(1,0x0301), 
+  "clientAuthRequested": [0,1], # 
+  "delayDisabled": [0,1], # 
+  "firstHsDone": [0,1], # 
+  "handshakeBegun": [0,1], # 
+  "TCPconnected": [0,1], # 
+  "lastWriteBlocked": [0,1], # 
+  "url": NotNull,
   }
 
 
+
+sslOptions.expectedValues = {
+#  "useSecurity": [0,1], # doh... 
+  "handshakeAsClient" : [1],
+  "handshakeAsServer" : [0],
+}
+
+sslSecurityInfo.expectedValues = {
+  "cipherType": RangeValue(1,0xffffffff),
+  #"writeBuf" : IgnoreMember,
+}
+
+
+ssl3State.expectedValues = {
+}
+
+
+ssl3CipherSpec.expectedValues = {
+  "cipher_def" : NotNull,
+  "mac_def" : NotNull,
+}
+
+
+'''
 # set expected values 
 SSLCipherSuiteInfo.expectedValues={
   "cipherSuite": RangeValue(0,0x0100), # sslproto.h , ECC is 0xc00
@@ -128,6 +162,8 @@ CERTCertTrustStr.expectedValues = {
   'emailFlags': RangeValue(0, 1<<12) , # simpler
   'objectSigningFlags': RangeValue(0, 1<<12) , # simpler
 }
+
+'''
 
 ##########
 
