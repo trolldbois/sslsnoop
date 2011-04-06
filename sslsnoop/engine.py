@@ -156,7 +156,7 @@ class StatefulBlowfish_CBC_Engine(Engine):
     BF_ROUNDS	= 16
     BF_BLOCK = 8
     dest=(ctypes.c_ubyte*bLen)()
-    enc=ctypes.c_uint(0)  ## 0 is decrypt for inbound traffic
+    enc=ctypes.c_uint(0)  ## 0 is decrypt for inbound traffic ## ctx.evpCipherCtx.encrypt [0,1]
     #void BF_cbc_encrypt(const unsigned char *in, unsigned char *out, long length,
     #	const BF_KEY *schedule, unsigned char *ivec, int enc);
     self._BF_cbc( ctypes.byref(src), ctypes.byref(dest), bLen, ctypes.byref(self.key), 
