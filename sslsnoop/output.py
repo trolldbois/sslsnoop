@@ -6,7 +6,7 @@
 
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
-import os,logging,sys,time,io,select,socket
+import os,logging,sys,time,io,select,socket, pickle
 import threading
 from threading import Thread
 
@@ -38,7 +38,10 @@ class FileWriter:
     log.error("Too many file keys extracted in %s directory"%(self.folder))
     return None    
   def writeToFile(self,instance):
-    raise NotImplementedError
+    fname = self.get_valid_filename()
+    p = Pickler(fname)
+    pickle.dump(instance)
+    return fname
 
 class SSHStreamToFile():
   ''' Pipes the data from a (ssh) socket into a different file for each packet type. 
