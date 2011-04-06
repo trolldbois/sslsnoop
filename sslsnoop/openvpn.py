@@ -58,7 +58,7 @@ class OpenvpnKeysFinder():
 
   def printCiphers(self, cipherContexts):
     for ctx, addr in cipherContexts:
-      print 'Cipher : %d-%d'%(ctx.cipher.nid, 8*ctx.cipher.key_len)
+      print 'Cipher : %s-%d'%(ctypes_openssl.getCipherName(ctx.cipher.nid), 8*ctx.cipher.key_len)
     return 
     
   def save(self, instance):
