@@ -278,7 +278,7 @@ EVP_CIPHER.expectedValues={
     #crypto/objects/objects.h 0 is undef .. crypto cipher is a smaller subset :
     # 1-10 19 29-46 60-70 91-98 104 108-123 166
     # but for argument sake, we have to keep an open mind
-    "nid": [RangeValue(0,180),RangeValue(420,425)] , 
+    "nid": RangeValue( min(NIDs.keys()), max(NIDs.keys()) ), 
     "block_size": [1,2,4,6,8,16,24,32,48,64,128], # more or less
     "key_len": RangeValue(1,0xff), # key_len *8 bits ..2040 bits for a key is enought ? 
                                    # Default value for variable length ciphers 
@@ -335,7 +335,7 @@ def EVP_CIPHER_CTX_loadMembers(self, mappings, maxDepth):
   memoryMap = is_valid_address_value( attr_obj_address, mappings, struct)
   log.debug( "cipher_data CAST into : %s "%(struct) )
   if not memoryMap:
-    log.warning('On second toughts, cipher_data seems to be at an invalid address. That should not happen (often).')
+    log.warning('in CTX On second toughts, cipher_data seems to be at an invalid address. That should not happen (often).')
     log.warning('%s addr:0x%lx size:0x%lx addr+size:0x%lx '%(is_valid_address_value( attr_obj_address, mappings), 
                                 attr_obj_address, ctypes.sizeof(struct), attr_obj_address+ctypes.sizeof(struct)))
     return True
@@ -367,8 +367,8 @@ def EVP_CIPHER_CTX_getOIV(self):
 def EVP_CIPHER_CTX_getIV(self):
   return array2bytes(self.iv)
 
-EVP_CIPHER_CTX.loadMembers = EVP_CIPHER_CTX_loadMembers
-EVP_CIPHER_CTX.toPyObject = EVP_CIPHER_CTX_toPyObject
+#EVP_CIPHER_CTX.loadMembers = EVP_CIPHER_CTX_loadMembers
+#EVP_CIPHER_CTX.toPyObject = EVP_CIPHER_CTX_toPyObject
 EVP_CIPHER_CTX.getOIV = EVP_CIPHER_CTX_getOIV
 EVP_CIPHER_CTX.getIV  = EVP_CIPHER_CTX_getIV
 
