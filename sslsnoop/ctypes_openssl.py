@@ -367,8 +367,8 @@ def EVP_CIPHER_CTX_getOIV(self):
 def EVP_CIPHER_CTX_getIV(self):
   return array2bytes(self.iv)
 
-#EVP_CIPHER_CTX.loadMembers = EVP_CIPHER_CTX_loadMembers
-#EVP_CIPHER_CTX.toPyObject = EVP_CIPHER_CTX_toPyObject
+EVP_CIPHER_CTX.loadMembers = EVP_CIPHER_CTX_loadMembers
+EVP_CIPHER_CTX.toPyObject = EVP_CIPHER_CTX_toPyObject
 EVP_CIPHER_CTX.getOIV = EVP_CIPHER_CTX_getOIV
 EVP_CIPHER_CTX.getIV  = EVP_CIPHER_CTX_getIV
 

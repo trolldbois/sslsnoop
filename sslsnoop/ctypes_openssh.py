@@ -130,6 +130,7 @@ class CipherContext(OpenSSHStruct):
   'cipher': NotNull
   }
   cipherContexts={ # we could check SSH_CIPHER_XXX in self.cipher.contents.number
+'''
 	 "none": (None,None),
 	 "des": (DES_key_schedule,'cipher_data'),
 	 "3des": (DES_key_schedule,'cipher_data'),
@@ -143,6 +144,7 @@ class CipherContext(OpenSSHStruct):
 	 "aes128-cbc": (AES_KEY, 'cipher_data'), # aes*cbc == rijndael
 	 "aes192-cbc": (AES_KEY, 'cipher_data'),
 	 "aes256-cbc": (AES_KEY, 'cipher_data'),
+	 '''
 	 "rijndael-cbc@lysator.liu.se": (ssh_rijndael_ctx, 'cipher_data'),
 	 "aes128-ctr": (ssh_aes_ctr_ctx, 'app_data'),
 	 "aes192-ctr": (ssh_aes_ctr_ctx, 'app_data'),
@@ -490,13 +492,17 @@ class session_state(OpenSSHStruct):
     #log.info('self.send_context.evp.app_data: 0x%lx'%(self.send_context.evp.app_data))
     
     # populate AppData.
-    d.receive_context.evp.app_data = self.receive_context.getEvpAppData().toPyObject()
-    d.send_context.evp.app_data = self.send_context.getEvpAppData().toPyObject()
+    if d.receive_context.evp.cipher.nid == 0:
+      d.receive_context.evp.app_data = self.receive_context.getEvpAppData().toPyObject()
+      d.send_context.evp.app_data = self.send_context.getEvpAppData().toPyObject()
+    
+    
     #log.debug('self.send_context.evp.app_data: %s'%(self.send_context.getEvpAppData()))
     #log.debug('d.send_context.evp.app_data: %s'%(d.send_context.evp.app_data))
     ## TODO find a better way to pass a void_p for that cipher data
-    d.receive_context.evp.cipher_data = self.receive_context.getEvpAppData().toPyObject()
-    d.send_context.evp.cipher_data = self.send_context.getEvpAppData().toPyObject()
+    #d.receive_context.evp.cipher_data = self.receive_context.getEvpAppData().toPyObject()
+    #d.send_context.evp.cipher_data = self.send_context.getEvpAppData().toPyObject()
+    log.debug("cipher_data has %s"%(d.send_context.evp.cipher_data.toString()) )
     return d
 
 
