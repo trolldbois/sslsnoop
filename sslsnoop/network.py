@@ -128,11 +128,17 @@ class Sniffer():
 
 
 def getConnectionTuple(packet):
-  shost  = packet['IP'].src
-  sport  = packet['TCP'].sport
-  dhost  = packet['IP'].dst
-  dport  = packet['TCP'].dport
+  ''' Supposedly an IP/IPv6 model'''
+  try:
+    shost  = packet.payload.src
+    sport  = packet.payload.payload.sport
+    dhost  = packet.payload.dst
+    dport  = packet.payload.payload.dport
+  except Exception, e:
+    log.debug("%s - %s"% (type(packet), packet.show2()))
+    raise e
   return (shost,sport,dhost,dport)  
+ 
 
 
 
