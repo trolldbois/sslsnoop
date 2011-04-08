@@ -1,20 +1,23 @@
 HOWTO:
 ------
-works if scapy doesn't drop packets. using pcap instead of SOCK_RAW  helps a lot now.
-works better on interactive traffic with slow traffic.
-Dumps one file by fd in outputs/
-Attaching a process is quickier with --addr 0xb788aa98 as provided by abouchet.py
-    INFO:abouchet:found instance <class 'ctypes_openssh.session_state'> @ 0xb788aa98
 
   $ mkdir outputs
 
 You really have to. Please.
   
   $ sudo sslsnoop    # try ssh, sshd and ssh-agent... for various things
-  $ sudo sslsnoop-openssh `pgrep ssh`     # dumps decrypted traffic in outputs/
-  $ sudo sslsnoop-openssl `pgrep ssh-agent` # dump RSA and DSA keys
+  $ sudo sslsnoop-openssh `pgrep ssh`       # dumps SSH decrypted traffic in outputs/
+  $ sudo sslsnoop-openssl `pgrep ssh-agent` # dumps RSA and DSA keys
 
 and go and check outputs/.
+
+hints :
+-------
+a) works if scapy doesn't drop packets. using pcap instead of SOCK_RAW  helps a lot now.
+b) works better on interactive traffic with no traffic at the time of the ptrace. It follows the flow, after that.
+c) Dumps one file by fd in outputs/
+d) Attaching a process is quickier with --addr 0xb788aa98 as provided by haystack
+    INFO:abouchet:found instance <class 'ctypes_openssh.session_state'> @ 0xb788aa98
 
 
 not so FAQ :
@@ -24,6 +27,7 @@ What does it do, really ?:
 --------------------------
 It dumps live session keys from an openssh , and decrypts the traffic on the fly.
 Not all ciphers are implemented. 
+
 Workings ciphers : aes128-ctr, aes192-ctr, aes256-ctr, blowfish-cbc, cast128-cbc
 Partially workings ciphers (INBOUND only ?!): aes128-cbc,  aes192-cbc, aes256-cbc
 Non workings ciphers : 3des-cbc, 3des, ssh1-blowfish, arcfour, arcfour1280
