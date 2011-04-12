@@ -59,12 +59,11 @@ class SSHStreamToFile():
   BUFSIZE=4096
   def __init__(self, packetizer, ctx, basename, folder='outputs', fmt="%Y%m%d-%H%M%S"):
     self.packetizer = packetizer
-    #self.refresher = refresher
     self.datename = "%s"%time.strftime(fmt,time.gmtime())
-    self.fname=os.path.sep.join([folder,basename])
-    self.outs=dict()
-    self.engine=ctx['engine']
-    self.socket=ctx['socket']
+    self.fname = os.path.sep.join([folder,basename])
+    self.outs = dict()
+    self.engine = ctx.engine
+    self.socket = ctx.socket
     ##
     self.lastMessage=None
     self.decrypt_errors=0

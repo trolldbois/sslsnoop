@@ -122,7 +122,7 @@ class Sniffer():
     if (shost,sport,dhost,dport) in self.streams:
       raise ValueError('Stream already exists')
     tcpstream = self.addStream(connection)
-    log.info('Created a TCPStream for %s'%(tcpstream))
+    log.debug('Created a TCPStream for %s'%(tcpstream))
     return tcpstream
 
 

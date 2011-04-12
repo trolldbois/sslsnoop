@@ -314,7 +314,7 @@ EVP_CIPHER_CTX.expectedValues={
 def EVP_CIPHER_CTX_loadMembers(self, mappings, maxDepth):
   if not super(EVP_CIPHER_CTX,self).loadMembers(mappings, maxDepth):
     return False
-  log.info('trying to load cipher_data Structs.')
+  log.debug('trying to load cipher_data Structs.')
   '''
   if bool(cipher) and bool(self.cipher.nid) and is_valid_address(cipher_data):
     memcopy( self.cipher_data, cipher_data_addr, self.cipher.ctx_size)
@@ -325,7 +325,7 @@ def EVP_CIPHER_CTX_loadMembers(self, mappings, maxDepth):
     return True
     
   struct = getCipherDataType( self.cipher.contents.nid) 
-  log.info('cipher type is %s - loading %s'%( getCipherName(self.cipher.contents.nid), struct ))
+  log.debug('cipher type is %s - loading %s'%( getCipherName(self.cipher.contents.nid), struct ))
   if(struct is None):
     log.warning("Unsupported cipher %s"%(self.cipher.contents.nid))
     return True
@@ -353,7 +353,7 @@ def EVP_CIPHER_CTX_loadMembers(self, mappings, maxDepth):
 
 def EVP_CIPHER_CTX_toPyObject(self):
     d=super(EVP_CIPHER_CTX,self).toPyObject()
-    log.info('Cast a EVP_CIPHER_CTX into PyObj')
+    log.debug('Cast a EVP_CIPHER_CTX into PyObj')
     # cast app_data or cipher_data to right struct
     if bool(self.cipher_data):
       struct = getCipherDataType( self.cipher.contents.nid)

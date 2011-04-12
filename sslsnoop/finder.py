@@ -28,7 +28,7 @@ def parseSSL(proc, tcpstream, sniffer):
 
 
 _targets={
-    'ssh': openssh.parseSSHClient,
+    'ssh': openssh.launchLiveDecryption,
     'ssh-agent': parseSSL,
     'sshd': parseSSL, # sshd a SSL keys too
     #'firefox': []
@@ -77,17 +77,11 @@ def getConnectionForPID(pid):
 
     
 def runthread(callable, sniffer, proc,conn):
-  if not conn : # ssh-agent
-    s1 = None
-  else:
-    s1 = sniffer.makeStream(conn)
-  
   ##from multiprocessing import Process
   ##p = Process(target=s1.run)
   from threading import Thread
-  args = (proc, s1, sniffer)
+  args = (proc.pid, sniffer)
   p = Thread(target=callable, args=args)
-  
   p.start()
   Processes.append(p)
   log.info('Thread launched')
@@ -101,10 +95,6 @@ def launchScapy():
   soscapy.thread = sniffer
   sniffer.start()
   return soscapy
-
-
-
-
 
 
 def main(argv):
