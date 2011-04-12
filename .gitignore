@@ -5,3 +5,4 @@ test/*
 *.xml
 log.*
 log
+.scapy_prestart.py
