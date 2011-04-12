@@ -287,10 +287,13 @@ class TCPState(State):
     for p in queue:
       self.byte_count   += self.write_socket.send( packet.payload.load )
       self.packet_count += 1
-    log.debug('%d bytes writtent for %d packets'%(self.byte_count, self.packet_count))
+    log.debug('%d bytes written for %d packets'%(self.byte_count, self.packet_count))
     self.activeLock.release()
     # operation can now resume. the socket is active
     return 
+  
+  def finish(self):
+    self.write_socket.close()
     
   def __str__(self):
     return "%s: %d bytes/%d packets max_seq:%d expected_seq:%d q:%d"%(self.name, self.byte_count,self.packet_count,
@@ -323,8 +326,8 @@ class Stream:
     self.connection = connection
     self.protocolName = protocolName
     # contains TCP state & packets queue before reordering    
-    self.stack=stack()  # duplex context
-
+    self.stack = stack()  # duplex context
+    self.running = True
 
   def getInbound(self):
     return self.stack.inbound
@@ -336,7 +339,10 @@ class Stream:
     raise NotImplementedError()
 
   def check(self):
-    return True
+    return self.running
+
+  def pleaseStop(self):
+    self.running = False
    
   def run(self):
     ''' loops on self.inQueue and calls triage '''
@@ -344,8 +350,11 @@ class Stream:
       try:
         for p in self.inQueue.get(block=True, timeout=1):
           self.triage(p)
+          self.inQueue.task_done()
       except Queue.Empty,e:
+        log.debug('Empty queue')
         pass
+    self.finish()
     pass
 
   def triage(self, obj):
@@ -375,6 +384,11 @@ class Stream:
     else:
       log.warning('This packet is nor outbound, nor inbound by my standards. Your network sniffer queuing system sucks.')
     return
+
+  def finish(self):
+    self.getInbound().finish()
+    self.getOutbound().finish()
+    log.info('Closing Stream - closing both sockets')
 
   def __str__(self):
     return "<TCPStream %s>"%repr(self.connection)
