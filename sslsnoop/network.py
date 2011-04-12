@@ -14,7 +14,7 @@ from lrucache import LRUCache
 
 import stream
 
-log=logging.getLogger('network')
+log = logging.getLogger('network')
 
 QUEUE_SIZE = 1500
 
@@ -31,7 +31,7 @@ def hexify(data):
 
 class Sniffer():
   worker=None
-  def __init__(self,filterRules, packetCount=0, timeout=None, pcapFile=None):
+  def __init__(self,filterRules='tcp', packetCount=0, timeout=None):
     ''' 
     This sniffer can run in a thread. But it should be one of the few thread running (BPL) 
     
@@ -40,16 +40,16 @@ class Sniffer():
     @param timeout: None/Unlimited or stop after
     '''
     # set scapy to use native pcap instead of SOCK_RAW
-    scapy.config.conf.use_pcap=True
+    scapy.config.conf.use_pcap = True
     ## if using SOCK_RAW, we need to mess with filter to up the capture size higher than 1514/1600 bytes
     #maxSize="\' -s \'0xffff" # abusing scapy-to-tcpdump string format 
     #self.filterRules=filterRules + maxSize
-    self.filterRules=filterRules
-    self.packetCount=packetCount
-    self.timeout=timeout
+    self.filterRules = filterRules
+    self.packetCount = packetCount
+    self.timeout = timeout
     #
-    self.streams={}
-    self._running_thread=None
+    self.streams = {}
+    self._running_thread = None
     return
   
 
@@ -72,7 +72,7 @@ class Sniffer():
     ''' returns the queue for that stream '''
     if self.hasStream(packet):
       return self.streams[getConnectionTuple(packet)]
-    return None
+    return None,None
 
   def addStream(self, connection):
     ''' forget that stream '''
@@ -80,9 +80,11 @@ class Sniffer():
     dhost,dport = connection.remote_address
     #q = multiprocessing.Queue(QUEUE_SIZE)
     q = Queue.Queue(QUEUE_SIZE)
-    self.streams[(shost,sport,dhost,dport)] = q
-    self.streams[(dhost,dport,shost,sport)] = q
-    return q
+    st = stream.TCPStream(q, connection)
+    #save in both directions
+    self.streams[(shost,sport,dhost,dport)] = (st,q)
+    self.streams[(dhost,dport,shost,sport)] = (st,q)
+    return st
   
   def dropStream(self, packet):
     ''' forget that stream '''
@@ -96,7 +98,7 @@ class Sniffer():
     return None
     
   def enqueue(self, packet):
-    q = self.getStream(packet)
+    st,q = self.getStream(packet)
     if q is None:
       return
     try:
@@ -119,10 +121,7 @@ class Sniffer():
     dhost,dport = connection.remote_address
     if (shost,sport,dhost,dport) in self.streams:
       raise ValueError('Stream already exists')
-    # gets a q
-    q = self.addStream(connection)
-    # add the queue to TCPStream
-    tcpstream = stream.TCPStream(q, connection)
+    tcpstream = self.addStream(connection)
     log.info('Created a TCPStream for %s'%(tcpstream))
     return tcpstream
 
@@ -141,6 +140,28 @@ def getConnectionTuple(packet):
  
 
 
+class PcapFileSniffer(Sniffer):
+  ''' Use scapy's offline mode to simulate network by reading a pcap file.
+  '''
+  def __init__(self, pcapfile, filterRules='tcp', packetCount=0):
+    Sniffer.__init__(self, filterRules=filterRules, packetCount=packetCount)
+    self.pcapfile = pcapfile
+  def run(self):
+    from scapy.all import sniff
+    sniff(store=0, prn=self.enqueue, offline=self.pcapfile)
+    log.info('Finishing the pcap reading')
+    for v, k in list(self.streams.items()):
+      st,q = k
+      if not q.empty():
+        log.debug('waiting on %s'%(repr(v)))
+        q.join()
+      del self.streams[v]
+      del q
+      st.pleaseStop()
+
+    log.info('============ SNIFF Terminated ====================')
+
+    return
 
 
     
