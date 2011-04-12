@@ -6,7 +6,14 @@
 
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
-import os,logging,sys,time,io,select,socket, pickle
+import os
+import logging
+import sys
+import time
+import io
+import select
+import socket
+import pickle
 import threading
 from threading import Thread
 
@@ -188,5 +195,40 @@ class Supervisor(threading.Thread):
       #loop
     log.info('Supervisor finished running') 
     return
+
+
+class RawPacketsToFile:
+  ''' Dumps a simplex stream to a raw data file.
+  '''
+  def __init__(self, socket_, fname):
+    self.socket = socket_
+    self.file = file(fname,'w')
+    
+  def run(self):
+    try:
+      while True:
+        data = self.socket.recv(4096)
+        if len(data) == 0:
+          break
+        self.file.write(data)
+        log.debug('Written %d bytes'%(len(data)))
+    except socket.error, e:
+      pass # bad file descriptor  
+    self.file.close()
+    log.info('RawPacketsToFile finished - %s'%(self.file.name))
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
 
 
