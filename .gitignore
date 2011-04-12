@@ -3,3 +3,5 @@ biblio
 *.pyc
 test/*
 *.xml
+log.*
+log
