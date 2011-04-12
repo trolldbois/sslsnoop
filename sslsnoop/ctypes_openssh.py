@@ -502,7 +502,8 @@ class session_state(OpenSSHStruct):
     ## TODO find a better way to pass a void_p for that cipher data
     #d.receive_context.evp.cipher_data = self.receive_context.getEvpAppData().toPyObject()
     #d.send_context.evp.cipher_data = self.send_context.getEvpAppData().toPyObject()
-    log.debug("cipher_data has %s"%(d.send_context.evp.cipher_data.toString()) )
+    if d.send_context.evp.cipher_data:
+      log.debug("cipher_data has %s"%(d.send_context.evp.cipher_data.toString()) )
     return d
 
 
