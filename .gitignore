@@ -1,4 +1,10 @@
-biblio
+biblio/
+build/
+dist/
+memdiff/
+outputs/
+sslsnoop.egg-info/
+structures/
 *~
 *.pyc
 test/*
@@ -6,3 +12,4 @@ test/*
 log.*
 log
 .scapy_prestart.py
+
