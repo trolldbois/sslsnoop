@@ -6,7 +6,7 @@ HOWTO:
 You really have to. Please.
   
   $ sudo sslsnoop    # try ssh, sshd and ssh-agent... for various things
-  $ sudo sslsnoop-openssh `pgrep ssh`       # dumps SSH decrypted traffic in outputs/
+  $ sudo sslsnoop-openssh live `pgrep ssh`       # dumps SSH decrypted traffic in outputs/
   $ sudo sslsnoop-openssl `pgrep ssh-agent` # dumps RSA and DSA keys
 
 and go and check outputs/.
