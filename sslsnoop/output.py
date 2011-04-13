@@ -63,7 +63,7 @@ class SSHStreamToFile():
     self.fname = os.path.sep.join([folder,basename])
     self.outs = dict()
     self.engine = ctx.engine
-    self.socket = ctx.socket
+    self.socket = ctx.state.getSocket()
     ##
     self.lastMessage=None
     self.decrypt_errors=0

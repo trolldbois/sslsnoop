@@ -8,6 +8,7 @@ __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
 import argparse
 import ctypes
+import copy
 import os
 import logging
 import pickle
@@ -28,7 +29,7 @@ import utils
 
 from engine import CIPHERS
 #our impl
-from paramiko_packet import Packetizer
+from paramiko_packet import Packetizer, PACKET_MAX_SIZE
 
 log=logging.getLogger('sslsnoop-openssh')
 
@@ -172,11 +173,8 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
   def _initStream(self):
     ''' create a stream from scapy thread '''
     self.stream = self.scapy.makeStream(self.connection)
-    return
-  
-  def _initSockets(self):
-    self.inbound.socket = self.stream.getInbound().getSocket()
-    self.outbound.socket = self.stream.getOutbound().getSocket()
+    self.inbound.state = self.stream.getInbound()
+    self.outbound.state = self.stream.getOutbound()
     return
     
   def _initSSH(self):
@@ -185,61 +183,18 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     # Inbound
     log.debug('activate INBOUND packetizer')
     self.inbound.context = receiveCtx
-    self.inbound.packetizer = Packetizer( self.inbound.socket )
+    self.inbound.packetizer = Packetizer( self.inbound.state.getSocket() )
     self.inbound.packetizer.set_log(logging.getLogger('inbound.packetizer'))
-    self.inbound.engine = self.activate_cipher(self.inbound.packetizer, receiveCtx )
+    self.inbound.engine = self._attachEngine(self.inbound.packetizer, receiveCtx )
     # Outbound
     log.debug('activate OUTBOUND packetizer')
     self.outbound.context = sendCtx
-    self.outbound.packetizer = Packetizer(self.outbound.socket)
+    self.outbound.packetizer = Packetizer(self.outbound.state.getSocket() )
     self.outbound.packetizer.set_log(logging.getLogger('outbound.packetizer'))
-    self.outbound.engine = self.activate_cipher(self.outbound.packetizer, self.outbound.context )
+    self.outbound.engine = self._attachEngine(self.outbound.packetizer, self.outbound.context )
     return 
-  
-  def _initOutputs(self):
-    ''' init output engine. File Writers.'''
-    name = 'ssh-%s'%( utils.connectionToString(self.stream.connection) )
-    self.inbound.filewriter = output.SSHStreamToFile(self.inbound.packetizer, self.inbound, name)
 
-    name = 'ssh-%s'%( utils.connectionToString(self.stream.connection, reverse=True) )
-    self.outbound.filewriter =  output.SSHStreamToFile(self.outbound.packetizer, self.outbound, name)
-    return 
-  
-  def _initWorker(self):
-    ''' worker to poll on data for decryption '''
-    self.worker = output.Supervisor()
-    self.worker.add( self.inbound.socket,  self.inbound.filewriter.process  )
-    self.worker.add( self.outbound.socket, self.outbound.filewriter.process )
-    return
-        
-  def _launchStreamProcessing(self):
-    ''' run streams '''
-    self.stream.getInbound().setActiveMode()
-    self.stream.getOutbound().setActiveMode()
-    self.stream_t = threading.Thread(target=self.stream.run,name='stream' )
-    self.stream_t.start()    
-    return
-    
-  def run(self):
-    ''' launch sniffer and decrypter threads '''
-    self._initSniffer()
-    self._initCiphers()
-    self._initStream()
-    self._initSockets()
-    self._initSSH()
-    self._initOutputs()
-    self._initWorker()
-    log.info('Ready to catch some ssh traffic - please try `ls -l` in ssh if your just playing around...')  
-    self._launchStreamProcessing()
-    self.loop()
-    log.info("done %s"%(self))
-    return
-    
-  def loop(self):
-    self.worker.run()
-    return
-
-  def activate_cipher(self, packetizer, context):
+  def _attachEngine(self, packetizer, context):
     ''' activate the packetizer with a cipher engine '''
     # find Engine from engine.ciphers
     engine = CIPHERS[context.name](context) 
@@ -249,10 +204,8 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
       mac_key    = mac.key 
       mac_engine = Transport._mac_info[mac.name]['class']
       mac_len = mac.mac_len
-    # again , we need a stateful HMAC engine. 
-    # we disable HMAC checking to get around.
-    # fix our engines in packetizer
-    ## packetizer.set_hexdump(True)
+    # TODO : again , we need a stateful HMAC engine. 
+    # we have disabled HMAC checking to get around.
     packetizer.set_inbound_cipher(engine, context.block_size, mac_engine, mac_len , mac_key)
     if context.comp.enabled != 0:
       name = context.comp.name
@@ -260,6 +213,52 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
       log.debug('Switching on inbound compression ...')
       packetizer.set_inbound_compressor(compress_in())
     return engine
+    
+  def _initOutputs(self):
+    ''' init output engine. File Writers.'''
+    name = 'ssh-%s'%( utils.connectionToString(self.stream.connection) )
+    self.inbound.filewriter = output.SSHStreamToFile(self.inbound.packetizer, self.inbound, name)
+
+    name = 'ssh-%s'%( utils.connectionToString(self.stream.connection, reverse=True) )
+    self.outbound.filewriter =  output.SSHStreamToFile(self.outbound.packetizer, self.outbound, name)
+    return 
+
+  def _initWorker(self):
+    ''' worker to poll on data for decryption '''
+    self.worker = output.Supervisor()
+    self.worker.add( self.inbound.state.getSocket() ,  self.inbound.filewriter.process  )
+    self.worker.add( self.outbound.state.getSocket(), self.outbound.filewriter.process )
+    return
+        
+  def _launchStreamProcessing(self):
+    ''' run streams '''
+    #self.stream.getInbound().setActiveMode()
+    #self.stream.getOutbound().setActiveMode()
+    self.stream_t = threading.Thread(target=self.stream.run,name='stream' )
+    self.stream_t.start()    
+    return
+    
+  def run(self):
+    ''' launch sniffer and decrypter threads '''
+    self._initSniffer()
+    self._initCiphers()
+    self._initStream()
+    self._initSSH()
+    self._initOutputs()
+    self._initWorker()
+    log.info('Ready to catch some ssh traffic - please try `ls -l` in ssh if your just playing around...')
+    self._launchStreamProcessing()
+    if True:
+      self._alignEncryption(self.inbound)
+      self._alignEncryption(self.outbound)
+    self.loop()
+    log.info("done %s"%(self))
+    return
+    
+  def loop(self):
+    self.worker.run()
+    return
+
   
   def refresh(self):
     log.warning('Refreshing Engine states')
@@ -274,8 +273,34 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     self.outbound.engine.sync(self.outbound.context)
     pass
 
+  def _alignEncryption(self, way):
+    ''' 
+      try to align the engine on the stream before activating it. 
+    '''
+    # way.engine way.state
+    log.info('trying to align on data')
+    data = b''
+    while True:
+      #blocking call
+      data += way.state.getFirstPacketData()
+      #blockSize = way.engine.block_size
+      blockSize = 16 
+      # try to find a packetlen
+      for i in range(0, len(data)-blockSize, 4):
+        log.debug('trying index %d'%(i))
+        header = way.engine.decrypt( data[i:i+blockSize] )
+        packet_size = struct.unpack('>I', header[:4])[0]
+        # reset engine to initial state
+        way.engine.sync(way.context)
+        if 0 < packet_size <= PACKET_MAX_SIZE:
+          log.info('We found a acceptable packet size at %d'%(i))
+          way.state.setActiveMode(data[i:])
+          return
+
   def __str__(self):
     return "Decryption for pid %d, struct at 0x%lx"%(self.process.pid, self.session_state_addr)
+
+
 
 class OpenSSHPcapDecrypt(OpenSSHLiveDecryptatator):
   ''' 
@@ -340,12 +365,12 @@ def launchPcapDecryption(pcap, connection, ssfile):
 
 def argparser():
   parser = argparse.ArgumentParser(prog='sshsnoop', description='Live decription of Openssh traffic.')
-  parser.add_argument('--debug', action='store_const', const=True, default=False, help='debug mode')
 
   subparsers = parser.add_subparsers(help='sub-command help')
   live_parser = subparsers.add_parser('live', help='Decrypts traffic from a live PID.')
   live_parser.add_argument('pid', type=int, help='Target PID')
   live_parser.add_argument('--addr', type=str, help='active_context memory address')
+  live_parser.add_argument('--debug', action='store_const', const=True, default=False, help='debug mode')
   live_parser.set_defaults(func=search)
 
   offline_parser = subparsers.add_parser('offline', help='Decrypts traffic from a pcap file, given a pickled session state.')
@@ -355,6 +380,7 @@ def argparser():
   offline_parser.add_argument('sport', type=int, help='SSH source port.')
   offline_parser.add_argument('dst', type=str, help='SSH remote host ip.')
   offline_parser.add_argument('dport', type=int, help='SSH destination port.')
+  offline_parser.add_argument('--debug', action='store_const', const=True, default=False, help='debug mode')
   offline_parser.set_defaults(func=searchOffline)
   return parser
 

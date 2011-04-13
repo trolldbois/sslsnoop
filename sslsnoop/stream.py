@@ -72,7 +72,7 @@ class TCPState(State):
   def __init__(self,name):
     self.name=name
     self.rawQueue = {}
-    self.orderedQueue = []
+    self.orderedQueue = Queue.Queue()
     self.packets = LRUCache(1000)
     self.activeLock   = multiprocessing.Lock()
     # make socket UNIX way. non existent in Windows
@@ -129,7 +129,8 @@ class TCPState(State):
   def _addPacketToOrderedQueue(self, packet ):
     ''' search mode '''
     ''' Ordered packet are added here before their contents gets to socket. '''
-    self.orderedQueue.append(packet)
+    log.debug('_addPacketToOrderedQueue')
+    self.orderedQueue.put(packet)
     return 1
 
   def _addPacketToSocket(self, packet):
@@ -151,7 +152,7 @@ class TCPState(State):
       self.expected_seq=seq
       # head done. switch to normal behaviour
       self.checkState = self._checkState
-      log.info('%s: Switching to regular checkState'%(self.name))
+      log.debug('%s: Switching to regular checkState'%(self.name))
     return self._checkState( packet )
   
   def _checkState(self, packet):
@@ -251,13 +252,14 @@ class TCPState(State):
   def getSocket(self):
     return self.read_socket
 
-  def getFirstPacket(self):
+  def getFirstPacketData(self):
     ''' pop the first packet '''
     if not self.searchMode:
       raise BadStateError('State %s is in Active Mode. Not poping allowed')
-    if len(self.orderedQueue) == 0:
-      return None
-    return self.orderedQueue.pop(0)
+    # wait for it     if self.orderedQueue.qsize() == 0:
+    d = self.orderedQueue.get().payload.load
+    self.orderedQueue.task_done()
+    return d
   
   def setSearchMode(self):
     self.addPacket = self._addPacketToOrderedQueue
@@ -283,8 +285,9 @@ class TCPState(State):
       self.packet_count += 1
     # push data
     queue = self.orderedQueue
-    self.orderedQueue = []
-    for p in queue:
+    self.orderedQueue = Queue.Queue()
+    while not queue.empty():
+      packet = queue.get()
       self.byte_count   += self.write_socket.send( packet.payload.load )
       self.packet_count += 1
     log.debug('%d bytes written for %d packets'%(self.byte_count, self.packet_count))
