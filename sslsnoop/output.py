@@ -117,6 +117,7 @@ class SSHStreamToFile():
     except MissingDataException, e:
       log.warning('=============================== Missing data. Please refresh keys for rekey')
       return e
+      
     if ptype == MSG_IGNORE:
       log.warning('================================== MSG_IGNORE')
       return 'MSG_IGNORE'
@@ -167,8 +168,15 @@ class Supervisor(threading.Thread):
     self.selectables.add(socket)
     self.todo=True
     self.lock.release()
-    return 
-
+    return
+  
+  def sub(self, socket):
+    self.lock.acquire()
+    del self.readables[socket]
+    self.todo=True
+    self.lock.release()
+    return
+    
   def _syncme(self):
     self.lock.acquire()
     self._readables = dict(self.readables)
@@ -183,14 +191,19 @@ class Supervisor(threading.Thread):
       # check
       if self.todo:
         self._syncme
-      r,w,o=select.select(self.selectables,[],[],2)
+      r,w,o = select.select(self.selectables,[],[],2)
       if len(r) == 0:
         log.debug("select waked up without anything to read... going back to select()")
         continue
       # read them and write them
-      for soket in r:
-        self.readables[soket]()
-        log.debug("read and write done for %s"%(soket))
+      for socket_ in r:
+        try:
+          self.readables[socket_]()
+          log.debug("read and write done for %s"%(socket_))
+        except EOFError, e:
+          log.info('Stream ended')
+          self.sub(socket_)
+          return e
       #loop
     log.info('Supervisor finished running') 
     return

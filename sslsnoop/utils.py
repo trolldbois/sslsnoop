@@ -18,7 +18,7 @@ import network
 import openssh #OpenSSHLiveDecryptatator
 from paramiko_packet import Packetizer
 
-log = logging.getLogger('input')
+log = logging.getLogger('utils')
 
 
 def dumpPcapToFiles(pcapfile, connection, fname='raw'):
@@ -56,7 +56,7 @@ def rawFilesFromPcap(pcapfile, connection, fname='raw'):
   fin,fout = dumpPcapToFiles(pcapfile, connection, fname='raw')
   return file(fin), file(fout)
 
-class C:
+class Connection:
   def __init__(self, src, sport, dst, dport):
     self.local_address = (src,sport)
     self.remote_address = (dst, dport)
@@ -71,79 +71,20 @@ def writeToSocket(socket_,file_):
       break
     socket_.send(data)
 
-class sshPcapDecrypt(openssh.OpenSSHLiveDecryptatator):
-  ''' decrypt ssh traffic from a dumped session_state and a pcap capture '''
-  def __init__(self, pcapfile, connection, ssfile):
-    self.ssfile = ssfile
-    self.pcapfile = pcapfile
-    self.connection = connection
-    self.inbound=dict()
-    self.outbound=dict()
-    self.in_rsocket,self.in_wsocket = socket.socketpair()
-    self.out_rsocket,self.out_wsocket = socket.socketpair()
-    
-  def run(self):
-    inst = pickle.load(self.ssfile)
-    self.session_state,self.session_state_addr = inst[0]
-    self.ciphers = openssh.SessionCiphers(self.session_state)
-
-    if self.ciphers is None:
-      raise ValueError('Struct not found')
-    # make raw data file and sockets
-    self.fin, self.fout = rawFilesFromPcap(self.pcapfile, self.connection, 'raw-%s'%(self.connection))
-    # write data fro raw file in socket, using threads..
-    self.tin = threading.Thread(target=writeToSocket, args=(self.in_wsocket, self.fin))
-    self.tout = threading.Thread(target=writeToSocket, args=(self.out_wsocket, self.fout))
-    self.tin.start()
-    self.tout.start()
-    
-    self.init()
-    self.loop()
-    log.info("done ")
-    return
-
-  def init(self):
-    ''' plug sockets, packetizer and outputs together '''
-    receiveCtx,sendCtx = self.ciphers.getCiphers()
-    # Inbound
-    log.info('activate INBOUND receive')
-    self.inbound['context'] = receiveCtx
-    self.inbound['socket'] = self.in_rsocket
-    self.inbound['packetizer'] = Packetizer( self.inbound['socket'] )
-    self.inbound['packetizer'].set_log(logging.getLogger('inbound.packetizer'))
-    self.inbound['engine'] = self.activate_cipher(self.inbound['packetizer'], receiveCtx )
-    name = 'ssh-%s'%( openssh.connectionToString(self.connection) )
-    self.inbound['filewriter'] =  output.SSHStreamToFile(self.inbound['packetizer'], self.inbound, name)
-
-    # out bound
-    log.info('activate OUTBOUND send')
-    self.outbound['context'] = sendCtx
-    self.outbound['socket'] = self.out_rsocket
-    self.outbound['packetizer'] = Packetizer(self.outbound['socket'])
-    self.outbound['packetizer'].set_log(logging.getLogger('outbound.packetizer'))
-    self.outbound['engine'] = self.activate_cipher(self.outbound['packetizer'], self.outbound['context'] )
-    name = 'ssh-%s'%( openssh.connectionToString(self.connection, reverse=True) )
-    self.outbound['filewriter'] =  output.SSHStreamToFile(self.outbound['packetizer'], self.outbound, name)
-    
-    # worker to watch out for data for decryption
-    self.worker = output.Supervisor()
-    self.worker.add( self.inbound['socket'],  self.inbound['filewriter'].process  )
-    self.worker.add( self.outbound['socket'], self.outbound['filewriter'].process )
-    return
 
 
 def dump(args):
-  connection = C(args.src,args.sport, args.dst,args.dport)
+  connection = Connection(args.src,args.sport, args.dst,args.dport)
   fname = 'raw-%s'%(connection)
   args.pcapfile.close()
   dumpPcapToFiles(args.pcapfile.name, connection, fname)
 
 
 def offline(args):
-  connection = C(args.src,args.sport, args.dst,args.dport)
+  connection = Connection(args.src,args.sport, args.dst,args.dport)
   fname = 'raw-%s'%(connection)
   args.pcapfile.close()
-  decrypt = sshPcapDecrypt(args.pcapfile.name, connection, args.sessionstatefile)
+  decrypt = openssh.OpenSSHPcapDecrypt(args.pcapfile.name, connection, args.sessionstatefile)
   decrypt.run()
   log.info('Decrypt done -- ')
 

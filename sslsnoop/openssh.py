@@ -6,33 +6,39 @@
 
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
-import argparse, os, logging, sys, time, pickle, struct, threading
-
+import argparse
 import ctypes
-import ctypes_openssh, ctypes_openssl
-import output
-
-from engine import CIPHERS
-import haystack 
-
-#our impl
-from paramiko_packet import Packetizer
+import os
+import logging
+import pickle
+import struct
+import sys
+import time
+import threading
 
 # todo : replace by one empty shell of ours
 from paramiko.transport import Transport
 
-from output import FileWriter
+import ctypes_openssl
+import ctypes_openssh
+import output
+import haystack 
+import network
+
+from engine import CIPHERS
+#our impl
+from paramiko_packet import Packetizer
 
 log=logging.getLogger('sslsnoop-openssh')
 
 
-class SessionStateFileWriter(FileWriter):
+class SessionStateFileWriter(output.FileWriter):
   def __init__(self,pid,folder='outputs'):
     FileWriter.__init__(self,'session_state',pid,folder)
   def writeToFile(self,instance):
-    prefix=self.prefix
-    filename=self.get_valid_filename()
-    f=open(filename,"w")
+    prefix = self.prefix
+    filename = self.get_valid_filename()
+    f = open(filename,"w")
     pickle.dump(instance,f)
     f.close()
     log.info ("[X] SSH session_state saved to file %s"%filename)
@@ -82,8 +88,6 @@ class SessionCiphers():
     return "<SessionCiphers RECEIVE: '%s/%s' SEND: '%s/%s' >"%(self.receiveCtx.name,self.receiveCtx.mac.name,
                                                   self.sendCtx.name,self.sendCtx.mac.name ) 
 
-
-
 class OpenSSHKeysFinder():
   ''' wrapper around a fork/exec to haystack StructFinder '''
 
@@ -94,14 +98,14 @@ class OpenSSHKeysFinder():
   
   def findActiveSession(self, maxNum=1):
     ''' search for session_state '''
-    outs=haystack.findStruct(self.pid, ctypes_openssh.session_state, debug=False)
+    outs = haystack.findStruct(self.pid, ctypes_openssh.session_state, debug=False)
     if outs is None:
       log.error("The session_state has not been found. maybe it's not OpenSSH ?")
       return None,None
     elif len(outs) > 1:
       log.warning("Mmmh, we found multiple session_state(%d). That is odd. I'll try with the first one."%(len(outs)))
     #
-    session_state,addr=outs[0]
+    session_state,addr = outs[0]
     return session_state, addr
 
   def refreshActiveSession(self, offset):
@@ -148,6 +152,8 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     OpenSSHKeysFinder. __init__(self, pid)
     self.scapy = scapyThread
     self.session_state_addr = sessionStateAddr
+    from finder import getConnectionForPID
+    self.connection = getConnectionForPID(self.pid)
     self.inbound = Dummy()
     self.outbound = Dummy()
     return
@@ -173,9 +179,7 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
   
   def _initStream(self):
     ''' create a stream from scapy thread '''
-    from finder import getConnectionForPID
-    conn = getConnectionForPID(self.pid)
-    self.stream = self.scapy.makeStream(conn)
+    self.stream = self.scapy.makeStream(self.connection)
     return
   
   def _initSockets(self):
@@ -220,7 +224,8 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     ''' run streams '''
     self.stream.getInbound().setActiveMode()
     self.stream.getOutbound().setActiveMode()
-    threading.Thread(target=self.stream.run).start()
+    self.stream_t = threading.Thread(target=self.stream.run,name='stream' )
+    self.stream_t.start()    
     return
     
   def run(self):
@@ -235,7 +240,7 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     log.info('Ready to catch some ssh traffic - please try `ls -l` in ssh if your just playing around...')  
     self._launchStreamProcessing()
     self.loop()
-    log.info("done for pid %d, struct at 0x%lx"%(self.process.pid, self.session_state_addr))
+    log.info("done %s"%(self))
     return
     
   def loop(self):
@@ -277,6 +282,50 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     self.outbound.engine.sync(self.outbound.context)
     pass
 
+  def __str__(self):
+    return "Decryption for pid %d, struct at 0x%lx"%(self.process.pid, self.session_state_addr)
+
+class OpenSSHPcapDecrypt(OpenSSHLiveDecryptatator):
+  ''' 
+  Decrypt ssh traffic from a dumped session_state and a pcap capture.
+  '''
+  def __init__(self, pcapfilename, connection, ssfile):
+    self.scapy = None
+    self.session_state_addr = None
+    self.inbound = Dummy()
+    self.outbound = Dummy()
+    # now...
+    self.ssfile = ssfile
+    self.pcapfilename = pcapfilename
+    self.connection = connection
+
+  def _initSniffer(self):
+    ''' use existing sniffer or create a new one '''
+    self.scapy = network.PcapFileSniffer(self.pcapfilename)
+    sniffer = threading.Thread(target=self.scapy.run, name='scapy')
+    self.scapy.thread = sniffer
+    # do not launch the scapy thread before having made the stream, 
+    # otherwise we are gonna loose packets ...
+    return
+  
+  def _initCiphers(self):
+    ''' ptrace the ssh process to get sessions keys '''
+    inst = pickle.load(self.ssfile)
+    self.session_state,self.session_state_addr = inst[0]
+    self.ciphers = SessionCiphers(self.session_state)
+    if self.ciphers is None:
+      raise ValueError('Struct not found')
+    return  
+  
+  def _launchStreamProcessing(self):
+    OpenSSHLiveDecryptatator._launchStreamProcessing(self)
+    # we can start scapy now, stream are in place
+    self.scapy.thread.start()
+    return
+
+  def __str__(self):
+    return "Decryption of %s, struct at 0x%lx"%(self.pcapfilename, self.session_state_addr)
+
 
 def launchLiveDecryption(pid, sniffer, addr=None): 
   ''' launch a live decryption '''
@@ -284,32 +333,50 @@ def launchLiveDecryption(pid, sniffer, addr=None):
   # when ready, will have to launch tcpstream as a Thread
   decryptatator = OpenSSHLiveDecryptatator(pid, sessionStateAddr=addr, scapyThread=sniffer )
   decryptatator.run()
-  log.info("done for pid %d, struct at 0x%lx"%(pid, decryptatator.session_state_addr))
+  return
+
+def launchPcapDecryption(pcap, connection, ssfile): 
+  ''' launch a decryption fro a pcap file and a session state '''
+  decryptatator = OpenSSHPcapDecrypt(pcap, connection, ssfile)
+  decryptatator.run()
   return
 
 
 def argparser():
   parser = argparse.ArgumentParser(prog='sshsnoop', description='Live decription of Openssh traffic.')
-  parser.add_argument('pid', type=int, help='Target PID')
-  parser.add_argument('--addr', type=str, help='active_context memory address')
-  parser.add_argument('--server', dest='isServer', action='store_const', const=True, help='Use sshd server mode')
   parser.add_argument('--debug', action='store_const', const=True, default=False, help='debug mode')
-  parser.set_defaults(func=search)
+
+  subparsers = parser.add_subparsers(help='sub-command help')
+  live_parser = subparsers.add_parser('live', help='Decrypts traffic from a live PID.')
+  live_parser.add_argument('pid', type=int, help='Target PID')
+  live_parser.add_argument('--addr', type=str, help='active_context memory address')
+  live_parser.set_defaults(func=search)
+
+  offline_parser = subparsers.add_parser('offline', help='Decrypts traffic from a pcap file, given a pickled session state.')
+  offline_parser.add_argument('sessionstatefile', type=argparse.FileType('r'), help='File containing a pickled sessionstate.')
+  offline_parser.add_argument('pcapfile', type=argparse.FileType('r'), help='Pcap file containing ssh traffic.')
+  offline_parser.add_argument('src', type=str, help='SSH local host ip.')
+  offline_parser.add_argument('sport', type=int, help='SSH source port.')
+  offline_parser.add_argument('dst', type=str, help='SSH remote host ip.')
+  offline_parser.add_argument('dport', type=int, help='SSH destination port.')
+  offline_parser.set_defaults(func=searchOffline)
   return parser
 
 def search(args):
-  if args.debug:
-    logging.basicConfig(level=logging.DEBUG)    
-    log.debug("==================- DEBUG MODE -================== ")
   pid = int(args.pid)
   log.info("Target has pid %d"%pid)
   addr = None
   if args.addr != None:
     addr = int(args.addr,16)
-
   launchLiveDecryption(pid, None, addr=addr)
   log.info("done for pid %d, struct at 0x%lx"%(pid,decryptatator.session_state_addr))
+  sys.exit(0)
+  return
 
+def searchOffline(args):
+  import utils 
+  connection = utils.Connection(args.src,args.sport, args.dst,args.dport)
+  launchPcapDecryption(args.pcapfile.name, connection, args.sessionstatefile)
   sys.exit(0)
   return
 
@@ -325,6 +392,9 @@ def main(argv):
   parser = argparser()
   opts = parser.parse_args(argv)
   try:
+    if opts.debug:
+      logging.basicConfig(level=logging.DEBUG)    
+      log.debug("==================- DEBUG MODE -================== ")  
     opts.func(opts)
   except ImportError,e:
     log.error('Struct type does not exists.')
