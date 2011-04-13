@@ -1,6 +1,6 @@
 HOWTO:
 ------
-
+  $ sudo easy_install sslsnoop
   $ mkdir outputs
 
 You really have to. Please.
