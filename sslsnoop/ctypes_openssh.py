@@ -7,7 +7,8 @@
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
 import ctypes
-import logging,sys
+import logging
+import sys
 
 from haystack import model
 from haystack.model import is_valid_address,is_valid_address_value,pointer2bytes,array2bytes,bytes2array,getaddress
@@ -15,7 +16,7 @@ from haystack.model import LoadableMembers,RangeValue,NotNull,CString, IgnoreMem
 from ctypes_openssl import EVP_CIPHER_CTX, EVP_MD, HMAC_CTX
 from ctypes_openssl import AES_KEY, RC4_KEY, CAST_KEY, BF_KEY, DES_key_schedule
 
-log=logging.getLogger('openssh.model')
+log=logging.getLogger('ctypes_openssh')
 
 
 MODE_MAX=2 #kex.h:62
@@ -130,25 +131,9 @@ class CipherContext(OpenSSHStruct):
   'cipher': NotNull
   }
   cipherContexts={ # we could check SSH_CIPHER_XXX in self.cipher.contents.number
-'''
-	 "none": (None,None),
-	 "des": (DES_key_schedule,'cipher_data'),
-	 "3des": (DES_key_schedule,'cipher_data'),
-	 "blowfish": (BF_KEY,'cipher_data'),  # (BF_KEY,'cipher_data'), blowfish is normally ssh1, and a openssh variant... but it seesm aliases to bf-cbc
-	 "3des-cbc": (DES_key_schedule,'cipher_data'),
-	 "blowfish-cbc": (BF_KEY,'cipher_data'),
-	 "cast128-cbc": (CAST_KEY,'cipher_data'),
-	 "arcfour": (RC4_KEY,'cipher_data'),
-	 "arcfour128": (RC4_KEY,'cipher_data'),
-	 "arcfour256": (RC4_KEY,'cipher_data'),
-	 "aes128-cbc": (AES_KEY, 'cipher_data'), # aes*cbc == rijndael
-	 "aes192-cbc": (AES_KEY, 'cipher_data'),
-	 "aes256-cbc": (AES_KEY, 'cipher_data'),
-	 '''
-	 "rijndael-cbc@lysator.liu.se": (ssh_rijndael_ctx, 'cipher_data'),
-	 "aes128-ctr": (ssh_aes_ctr_ctx, 'app_data'),
-	 "aes192-ctr": (ssh_aes_ctr_ctx, 'app_data'),
-	 "aes256-ctr": (ssh_aes_ctr_ctx, 'app_data'),
+	 "aes128-ctr": ssh_aes_ctr_ctx,
+	 "aes192-ctr": ssh_aes_ctr_ctx,
+	 "aes256-ctr": ssh_aes_ctr_ctx,
 	 "acss@openssh.org": None,
   }
   def loadMembers(self, mappings, maxDepth):
@@ -159,55 +144,43 @@ class CipherContext(OpenSSHStruct):
     #log.debug('cipher app_data    attr_obj_address=0x%lx'%(getaddress(self.cipher.contents.cipher_data)) )
     # cast evp.app_data into a valid struct
     if self.cipher.contents.name.string in self.cipherContexts:
-      struct,fieldname=self.cipherContexts[self.cipher.contents.name.string]
-      if(struct is None):
+      # evp.cipher.nid should be 0
+      struct = self.cipherContexts[self.cipher.contents.name.string]
+      if (struct is None):
         log.warning("Unsupported cipher %s"%(self.cipher.contents.name.string))
         return True
-      attr=getattr(self.evp,fieldname)
-      #attr_obj_address=getaddress(attr) or attr  # c_void_p is a basic type.
-      attr_obj_address = attr
-      #print attr
+      attr_obj_address = self.evp.app_data
       memoryMap = is_valid_address_value( attr_obj_address, mappings, struct)
-      log.debug( "CipherContext CAST %s into : %s "%(fieldname, struct) )
+      log.debug( "CipherContext CAST app_data into : %s "%( struct) )
       if not memoryMap:
-        log.warning('On second toughts, %s seems to be at an invalid address. That should not happen (often).'%(fieldname))
+        log.warning('On second toughts, app_data seems to be at an invalid address. That should not happen (often).')
         log.warning('%s addr:0x%lx size:0x%lx addr+size:0x%lx '%(is_valid_address_value( attr_obj_address, mappings), 
                                     attr_obj_address, ctypes.sizeof(struct), attr_obj_address+ctypes.sizeof(struct)))
-        log.warning('%s : %s'%(fieldname, attr))
         return False # DEBUG kill it
-      #st=struct.from_buffer_copy(memoryMap.readStruct(attr_obj_address, struct ) )
-      # XXX CAST do not copy buffer when casting, sinon on perds des bytes
-      ## attr.contents=(type(attr.contents)).from_buffer(st)
-      ### c_void_p -> allocate local_mem and change value
-      ### XXX dangling pointer ?
-      #attr.value = ctypes.addressof(st)
-      #setattr(self.evp, fieldname, ctypes.c_void_p(ctypes.addressof(st)) )
-      st=memoryMap.readStruct(attr_obj_address, struct )
+      # read the void * and keep a ref
+      st = memoryMap.readStruct(attr_obj_address, struct )
       model.keepRef(st)
-      setattr(self.evp, fieldname, ctypes.c_void_p(ctypes.addressof(st)) )
+      self.evp.app_data = ctypes.c_void_p(ctypes.addressof(st)) 
       
-      attr=getattr(self.evp,fieldname)      
-      log.debug('Copied 0x%lx into %s (0x%lx)'%(ctypes.addressof(st), fieldname, attr))      
-      log.debug('LOADED app_data evp.%s as %s from 0x%lx (%s) into 0x%lx'%(fieldname,struct, 
-            attr_obj_address, is_valid_address_value(attr_obj_address,mappings,struct), attr ))
-      log.debug('\t\t---------\n%s\t\t---------'%st.toString())
+      log.debug('Copied 0x%lx into app_data (0x%lx)'%(attr_obj_address, self.evp.app_data) )
+      log.debug('LOADED app_data as %s from 0x%lx (%s) into 0x%lx'%(struct, 
+            attr_obj_address, is_valid_address_value(attr_obj_address,mappings,struct), self.evp.app_data))
+      log.debug('\t\t---------\n%s\t\t---------'%(st.toString() ) )
     else:
-      log.warning("Unknown cipher %s, can't load a data struct for the EVP_CIPHER_CTX->app_data"%(self.cipher.contents.name.string))
+      log.debug("Unknown cipher %s, can't load a data struct for the EVP_CIPHER_CTX->app_data"%(self.cipher.contents.name.string))
     return True
-  # MACRO
+  
   def getEvpAppData(self):
-    
     if self.cipher.contents.name.string in self.cipherContexts:
-      struct,fieldname=self.cipherContexts[self.cipher.contents.name.string]
+      struct = self.cipherContexts[self.cipher.contents.name.string]
       if(struct is None):
         log.warning("Unsupported cipher %s"%(self.cipher.contents.name.string))
         log.warning("%s"%(self.cipher.contents.toString()))
         return None
-      log.debug('CAST evp.%s Into %s'%(fieldname,struct))
-      attr=getattr(self.evp,fieldname)
-      #st=struct.from_address(getaddress(attr))
-      st=struct.from_address(attr)
-      log.debug('%s value is : 0x%lx'%(fieldname,attr))
+      log.debug('CAST evp.app_data Into %s'%(struct))
+      attr = self.evp.app_data
+      st = struct.from_address(attr)
+      log.debug('app_data value is : 0x%lx'%(attr))
       log.debug(st.toString())
       return st
     return None

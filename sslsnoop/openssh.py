@@ -360,12 +360,11 @@ def argparser():
 
 def search(args):
   pid = int(args.pid)
-  log.info("Target has pid %d"%pid)
+  log.debug("Target has pid %d"%pid)
   addr = None
   if args.addr != None:
     addr = int(args.addr,16)
   launchLiveDecryption(pid, None, addr=addr)
-  log.info("done for pid %d, struct at 0x%lx"%(pid,decryptatator.session_state_addr))
   sys.exit(0)
   return
 
