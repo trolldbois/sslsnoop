@@ -7,6 +7,7 @@ You really have to. Please.
   
   $ sudo sslsnoop    # try ssh, sshd and ssh-agent... for various things
   $ sudo sslsnoop-openssh live `pgrep ssh`       # dumps SSH decrypted traffic in outputs/
+  $ sudo sslsnoop-openssh offline --help         # dumps SSH decrypted traffic in outputs/ from a pcap file
   $ sudo sslsnoop-openssl `pgrep ssh-agent` # dumps RSA and DSA keys
 
 and go and check outputs/.
@@ -18,6 +19,8 @@ b) works better on interactive traffic with no traffic at the time of the ptrace
 c) Dumps one file by fd in outputs/
 d) Attaching a process is quickier with --addr 0xb788aa98 as provided by haystack
     INFO:abouchet:found instance <class 'ctypes_openssh.session_state'> @ 0xb788aa98
+e) how to get a pickled session_state file :
+  $ sudo haystack --pid `pgrep ssh` sslsnoop.ctypes_openssh.session_state search > ss.pickled
 
 
 not so FAQ :

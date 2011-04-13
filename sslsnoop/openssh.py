@@ -359,6 +359,12 @@ def argparser():
   return parser
 
 def search(args):
+
+  # we must have big privileges...
+  if os.getuid() + os.geteuid() != 0:
+    log.error("You must be root/using sudo to read memory and sniff traffic.")
+    return
+  
   pid = int(args.pid)
   log.debug("Target has pid %d"%pid)
   addr = None
@@ -379,11 +385,6 @@ def searchOffline(args):
 def main(argv):
   logging.basicConfig(level=logging.INFO)
 
-  # we must have big privileges...
-  if os.getuid() + os.geteuid() != 0:
-    log.error("You must be root/using sudo to read memory and sniff traffic.")
-    return
-  
   parser = argparser()
   opts = parser.parse_args(argv)
   try:
