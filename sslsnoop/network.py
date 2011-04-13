@@ -78,6 +78,11 @@ class Sniffer():
     ''' forget that stream '''
     shost,sport = connection.local_address
     dhost,dport = connection.remote_address
+    if shost.startswith('127.') or shost.startswith('::1'):
+      log.warning('=============================================================')
+      log.warning('scapy is gonna truncate big packet on the loopback interface.')
+      log.warning('please change your test params,or use offline mode with pcap.')
+      log.warning('=============================================================')
     #q = multiprocessing.Queue(QUEUE_SIZE)
     q = Queue.Queue(QUEUE_SIZE)
     st = stream.TCPStream(q, connection)

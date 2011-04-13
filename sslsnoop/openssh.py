@@ -143,13 +143,14 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     Decrypt SSH traffic in live.
     This class only works on Live PID.
   '''
-  def __init__(self, pid, sessionStateAddr=None, scapyThread = None):
+  def __init__(self, pid, sessionStateAddr=None, scapyThread = None, autoalign=True):
     OpenSSHKeysFinder. __init__(self, pid)
     self.scapy = scapyThread
     self.session_state_addr = sessionStateAddr
     self.connection = utils.getConnectionForPID(self.pid)
     self.inbound = Dummy()
     self.outbound = Dummy()
+    self.autoalign = autoalign
     return
   
   def _initSniffer(self):
@@ -248,9 +249,13 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     self._initWorker()
     log.info('Ready to catch some ssh traffic - please try `ls -l` in ssh if your just playing around...')
     self._launchStreamProcessing()
-    if True:
-      self._alignEncryption(self.inbound)
-      self._alignEncryption(self.outbound)
+    if self.autoalign:
+      log.info('trying to auto-align session keys and data')
+      threading.Thread(target=alignEncryption, args=(self.inbound,), name='find inbound').start()
+      threading.Thread(target=alignEncryption, args=(self.outbound,), name='find outbound').start()
+    else:
+      self.inbound.state.setActiveMode()
+      self.outbound.state.setActiveMode()
     self.loop()
     log.info("done %s"%(self))
     return
@@ -259,7 +264,6 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     self.worker.run()
     return
 
-  
   def refresh(self):
     log.warning('Refreshing Engine states')
     self._initCiphers()
@@ -273,33 +277,37 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     self.outbound.engine.sync(self.outbound.context)
     pass
 
-  def _alignEncryption(self, way):
-    ''' 
-      try to align the engine on the stream before activating it. 
-    '''
-    # way.engine way.state
-    log.info('trying to align on data')
-    data = b''
-    while True:
-      #blocking call
-      data += way.state.getFirstPacketData()
-      #blockSize = way.engine.block_size
-      blockSize = 16 
-      # try to find a packetlen
-      for i in range(0, len(data)-blockSize, 4):
-        log.debug('trying index %d'%(i))
-        header = way.engine.decrypt( data[i:i+blockSize] )
-        packet_size = struct.unpack('>I', header[:4])[0]
-        # reset engine to initial state
-        way.engine.sync(way.context)
-        if 0 < packet_size <= PACKET_MAX_SIZE:
-          log.info('We found a acceptable packet size at %d'%(i))
-          way.state.setActiveMode(data[i:])
-          return
 
   def __str__(self):
     return "Decryption for pid %d, struct at 0x%lx"%(self.process.pid, self.session_state_addr)
 
+def alignEncryption(way):
+  ''' 
+    try to align the engine on the stream before activating it. 
+  '''
+  # way.engine way.state
+  log.debug('trying to align on data')
+  data = b''
+  while True:
+    #blocking call
+    log.debug('next packet')
+    data += way.state.getFirstPacketData()
+    log.debug('packet next')
+    #blockSize = way.engine.block_size
+    blockSize = 16 
+    # try to find a packetlen
+    for i in range(0, len(data)-blockSize, len(data) ): # check only start of packet
+      #log.debug('trying index %d'%(i))
+      header = way.engine.decrypt( data[i:i+blockSize] )
+      packet_size = struct.unpack('>I', header[:4])[0]
+      # reset engine to initial state
+      way.engine.sync(way.context)
+      if 0 < packet_size <= PACKET_MAX_SIZE:
+        log.info('Auto align done: We found a acceptable packet size at %d'%(i))
+        way.state.setActiveMode(data[i:])
+        return
+    data = data[len(data)-blockSize:]
+    log.debug('trying next packet ')
 
 
 class OpenSSHPcapDecrypt(OpenSSHLiveDecryptatator):
@@ -311,6 +319,7 @@ class OpenSSHPcapDecrypt(OpenSSHLiveDecryptatator):
     self.session_state_addr = None
     self.inbound = Dummy()
     self.outbound = Dummy()
+    self.autoalign = True
     # now...
     self.ssfile = ssfile
     self.pcapfilename = pcapfilename
@@ -353,7 +362,7 @@ def launchLiveDecryption(pid, sniffer, addr=None):
   return
 
 def launchPcapDecryption(pcap, connection, ssfile): 
-  ''' launch a decryption fro a pcap file and a session state '''
+  ''' launch a decryption from a pcap file and a session state '''
   decryptatator = OpenSSHPcapDecrypt(pcap, connection, ssfile)
   decryptatator.run()
   return
@@ -410,6 +419,8 @@ def searchOffline(args):
 
 def main(argv):
   logging.basicConfig(level=logging.INFO)
+  #logging.getLogger('network').setLevel(level=logging.INFO)
+  #logging.getLogger('stream').setLevel(level=logging.INFO)
 
   parser = argparser()
   opts = parser.parse_args(argv)
