@@ -6,12 +6,19 @@
 
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
-import os,logging,psutil,sys, time
-import openssh, openssl, network
+import os
+import logging
 import subprocess
+import sys
+import time
+
+import psutil
+
+import openssh
+import openssl
+import utils
 
 log=logging.getLogger('finder')
-
 
 class Args:
   pid=None
@@ -19,9 +26,9 @@ class Args:
   memdump=None
   debug=None
 
-def parseSSL(proc, tcpstream, sniffer):
+def parseSSL(pid, sniffer):
   args=Args()
-  args.pid = proc.pid
+  args.pid = pid
   return openssl.search(args)
   
 
@@ -57,23 +64,6 @@ def makeFilter(conn):
                             conn.remote_address[0],conn.remote_address[1]  )
   return pcap_filter
 
-def checkConnections(proc):
-  conns=proc.get_connections()
-  conns = [ c for c in conns if c.status == 'ESTABLISHED']
-  if len(conns) == 0 :
-    return False
-  elif len(conns) > 1 :
-    log.warning(' %s has more than 1 connection ?'%(proc.name))
-    return False
-  elif conns[0].status != 'ESTABLISHED' :
-    log.warning(' %s has no ESTABLISHED connections (1 %s)'%(conn[0].status))
-    return False
-  log.info('Found connection %s for %s'%(conns[0], proc.name))
-  return conns[0]
-
-def getConnectionForPID(pid):
-  proc = psutil.Process(pid)
-  return checkConnections(proc)
 
     
 def runthread(callable, sniffer, proc,conn):
@@ -87,15 +77,6 @@ def runthread(callable, sniffer, proc,conn):
   log.info('Thread launched')
   return 
     
-def launchScapy():
-  from threading import Thread
-  sshfilter = "tcp "
-  soscapy = network.Sniffer(sshfilter)
-  sniffer = Thread(target=soscapy.run)
-  soscapy.thread = sniffer
-  sniffer.start()
-  return soscapy
-
 
 def main(argv):
   logging.basicConfig(level=logging.INFO)
@@ -114,10 +95,10 @@ def main(argv):
   threads=[]
   forked=0
   # get sniffer up
-  sniffer = launchScapy()  
+  sniffer = utils.launchScapy()  
   for pid,proc in options:
     log.info("Searching in %s/%d memory"%(proc.name,proc.pid))
-    conn = checkConnections(proc)
+    conn = utils.checkConnections(proc)
     if not conn and 'ssh-agent' != proc.name:
       continue
     log.info('Adding this pid to watch list')

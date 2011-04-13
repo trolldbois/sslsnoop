@@ -24,6 +24,7 @@ import ctypes_openssh
 import output
 import haystack 
 import network
+import utils
 
 from engine import CIPHERS
 #our impl
@@ -135,13 +136,6 @@ class OpenSSHKeysFinder():
     return
 
 
-def connectionToString(connection, reverse=False):
-  log.debug('make a string for %s'%(repr(connection)))
-  if reverse:
-    return "%s:%d-%s:%d"%(connection.remote_address[0],connection.remote_address[1], connection.local_address[0],connection.local_address[1]) 
-  else:
-    return "%s:%d-%s:%d"%(connection.local_address[0],connection.local_address[1],connection.remote_address[0],connection.remote_address[1]) 
-
 
 class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
   ''' 
@@ -152,8 +146,7 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     OpenSSHKeysFinder. __init__(self, pid)
     self.scapy = scapyThread
     self.session_state_addr = sessionStateAddr
-    from finder import getConnectionForPID
-    self.connection = getConnectionForPID(self.pid)
+    self.connection = utils.getConnectionForPID(self.pid)
     self.inbound = Dummy()
     self.outbound = Dummy()
     return
@@ -161,8 +154,7 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
   def _initSniffer(self):
     ''' use existing sniffer or create a new one '''
     if self.scapy is None:
-      from finder import launchScapy
-      self.scapy = launchScapy()
+      self.scapy = utils.launchScapy()
     elif not self.scapy.thread.isAlive():
       self.scapy.thread.start()
     return
@@ -206,10 +198,10 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
   
   def _initOutputs(self):
     ''' init output engine. File Writers.'''
-    name = 'ssh-%s'%( connectionToString(self.stream.connection) )
+    name = 'ssh-%s'%( utils.connectionToString(self.stream.connection) )
     self.inbound.filewriter = output.SSHStreamToFile(self.inbound.packetizer, self.inbound, name)
 
-    name = 'ssh-%s'%( connectionToString(self.stream.connection, reverse=True) )
+    name = 'ssh-%s'%( utils.connectionToString(self.stream.connection, reverse=True) )
     self.outbound.filewriter =  output.SSHStreamToFile(self.outbound.packetizer, self.outbound, name)
     return 
   
@@ -340,6 +332,10 @@ def launchPcapDecryption(pcap, connection, ssfile):
   decryptatator = OpenSSHPcapDecrypt(pcap, connection, ssfile)
   decryptatator.run()
   return
+
+
+
+# ============== move to scripts/sslsnoop-openssh
 
 
 def argparser():

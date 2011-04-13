@@ -6,12 +6,14 @@
 
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
-import argparse
 import logging
 import pickle
 import sys
 import socket
 import threading
+
+import argparse
+import psutil
 
 import output
 import network
@@ -19,6 +21,56 @@ import openssh #OpenSSHLiveDecryptatator
 from paramiko_packet import Packetizer
 
 log = logging.getLogger('utils')
+
+
+
+def connectionToString(connection, reverse=False):
+  log.debug('make a string for %s'%(repr(connection)))
+  if reverse:
+    return "%s:%d-%s:%d"%(connection.remote_address[0],connection.remote_address[1], connection.local_address[0],connection.local_address[1]) 
+  else:
+    return "%s:%d-%s:%d"%(connection.local_address[0],connection.local_address[1],connection.remote_address[0],connection.remote_address[1]) 
+
+def getConnectionForPID(pid):
+  proc = psutil.Process(pid)
+  return checkConnections(proc)
+
+def checkConnections(proc):
+  conns=proc.get_connections()
+  conns = [ c for c in conns if c.status == 'ESTABLISHED']
+  if len(conns) == 0 :
+    return False
+  elif len(conns) > 1 :
+    log.warning(' %s has more than 1 connection ?'%(proc.name))
+    return False
+  elif conns[0].status != 'ESTABLISHED' :
+    log.warning(' %s has no ESTABLISHED connections (1 %s)'%(conn[0].status))
+    return False
+  log.info('Found connection %s for %s'%(conns[0], proc.name))
+  return conns[0]
+
+class Connection:
+  ''' Mimic psutils connection class '''
+  def __init__(self, src, sport, dst, dport):
+    self.local_address = (src,sport)
+    self.remote_address = (dst, dport)
+    self.status = 'ESTABLISHED'
+  def __str__(self):
+    return "%s:%d-%s:%d"%(self.local_address[0],self.local_address[1],self.remote_address[0],self.remote_address[1]) 
+
+
+
+def launchScapy():
+  from threading import Thread
+  sshfilter = "tcp "
+  soscapy = network.Sniffer(sshfilter)
+  sniffer = Thread(target=soscapy.run)
+  soscapy.thread = sniffer
+  sniffer.start()
+  return soscapy
+
+
+
 
 
 def dumpPcapToFiles(pcapfile, connection, fname='raw'):
@@ -56,13 +108,6 @@ def rawFilesFromPcap(pcapfile, connection, fname='raw'):
   fin,fout = dumpPcapToFiles(pcapfile, connection, fname='raw')
   return file(fin), file(fout)
 
-class Connection:
-  def __init__(self, src, sport, dst, dport):
-    self.local_address = (src,sport)
-    self.remote_address = (dst, dport)
-    self.status = 'ESTABLISHED'
-  def __str__(self):
-    return "%s:%d-%s:%d"%(self.local_address[0],self.local_address[1],self.remote_address[0],self.remote_address[1]) 
 
 def writeToSocket(socket_,file_):
   while True:
@@ -88,30 +133,6 @@ def offline(args):
   decrypt.run()
   log.info('Decrypt done -- ')
 
-def argparser():
-  parser = argparse.ArgumentParser(prog='input', description='Reads a pcapfile to dumps ssh traffic.')
-  parser.add_argument('pcapfile', type=argparse.FileType('r'), help='Pcap source file')
-  parser.add_argument('src', type=str, help='local host ip')
-  parser.add_argument('sport', type=int, help='Source port')
-  parser.add_argument('dst', type=str, help='remote host ip')
-  parser.add_argument('dport', type=int, help='Destination port')
-  parser.add_argument('sessionstatefile', type=argparse.FileType('r'), help='File containing a pickled sessionstate.')
-  parser.set_defaults(func=offline)
-  return parser
 
 
-def main(argv):
-  logging.basicConfig(level=logging.INFO)
-  parser = argparser()
-  opts = parser.parse_args(argv)
-  try:
-    opts.func(opts)
-  except ImportError,e:
-    log.error('Struct type does not exists.')
-    print e
-
-  return 0
-  
-if __name__ == "__main__":
-  main(sys.argv[1:])
 
