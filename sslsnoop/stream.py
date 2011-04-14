@@ -11,7 +11,8 @@ import multiprocessing, Queue
 
 from lrucache import LRUCache
 
-WAIT_RETRANSMIT=10
+WAIT_RETRANSMIT = 10
+QSIZE = 5000
 
 log=logging.getLogger('stream')
 
@@ -72,8 +73,8 @@ class TCPState(State):
   def __init__(self,name):
     self.name=name
     self.rawQueue = {}
-    self.orderedQueue = Queue.Queue()
-    self.packets = LRUCache(1000)
+    self.orderedQueue = Queue.Queue(QSIZE)
+    self.packets = LRUCache(QSIZE)
     self.activeLock   = multiprocessing.Lock()
     # make socket UNIX way. non existent in Windows
     read, write = socket.socketpair()
@@ -104,9 +105,10 @@ class TCPState(State):
     queue = self.rawQueue.values()
     queue.sort(key=lambda p: p.seq)
     # add the first and the next that are in perfect suite.
-    toadd=[queue.pop(0),]
+    toadd = [queue.pop(0),]
+    log.debug('%s: _requeue : Poped packet seq : %s'%(self.name, toadd[0].seq))
     for i in xrange(0,len(queue)):
-      if toadd[-1].seq+len(toadd[-1].payload) == queue[0].seq :
+      if toadd[-1].seq + len(toadd[-1].payload) == queue[0].seq :
         toadd.append(queue.pop(0))
       else:
         log.debug('Stop prequeuing  toadd[-1].seq+len(toadd[-1].payload): %d , queue[0].seq: %d'%(toadd[-1].seq+len(toadd[-1].payload) , queue[0].seq ))
@@ -119,6 +121,9 @@ class TCPState(State):
     log.debug('Prequeued %d packets, remaining %d, queued from %d to %d '%(
                         len(toadd), len(self.rawQueue), toadd[0].seq, (toadd[-1].seq + len(toadd[-1].payload)) 
                         ))
+    # set expected 
+    self.max_seq = toadd[-1].seq
+    self.expected_seq = toadd[-1].seq + len(toadd[-1].payload) 
     # reset time counter
     if len(self.rawQueue) > 0:
       self._setMissing()
@@ -129,7 +134,7 @@ class TCPState(State):
   def _addPacketToOrderedQueue(self, packet ):
     ''' search mode '''
     ''' Ordered packet are added here before their contents gets to socket. '''
-    log.debug('_addPacketToOrderedQueue')
+    log.debug('%s: _addPacketToOrderedQueue'%(self.name))
     self.orderedQueue.put(packet)
     return 1
 
@@ -142,6 +147,9 @@ class TCPState(State):
     self.activeLock.release()
     log.debug('%s: Adding packet to socket - %d bytes added'%(self.name, cnt))
     return True
+
+  def _checkStateFalse(self, packet):
+    return False
 
   def _checkState1(self, packet):
     ''' temp methods to get initial seqnum from first packet '''
@@ -164,7 +172,7 @@ class TCPState(State):
     if payloadLen == 0:
       return False
     seq = packet.seq
-    log.debug('%s: Checking state of packer %s'%(self.name,packet.seq))
+    log.debug('%s: Checking state of packet %d exp: %d len: %d'%(self.name, packet.seq, self.expected_seq, len(packet.payload.load)))
     
     # packet is expected 
     if seq == self.expected_seq: # JIT
@@ -246,8 +254,9 @@ class TCPState(State):
       ret = True
     # waiting for too long
     elif self._isMissing() and  time.time() > ( self.ts_missing + WAIT_RETRANSMIT) : 
-      log.error('Some data is missing. the sniffer losts some packets ? Dying.')      
-      raise MissingDataException()
+      log.error('%s: Some data is missing. the sniffer losts some packets ? Dying. '%(self.name))      
+      #raise MissingDataException()
+      self.checkState = self._checkStateFalse
     return ret
 
   def getSocket(self):
@@ -261,7 +270,8 @@ class TCPState(State):
     p = self.orderedQueue.get(block=block)
     d = p.payload.load
     self.orderedQueue.task_done()
-    return d
+    #log.info('orderedQueue size : %d'%(self.orderedQueue.qsize()))
+    return d, self.orderedQueue.qsize()
   
   def setSearchMode(self):
     self.addPacket = self._addPacketToOrderedQueue
@@ -287,7 +297,7 @@ class TCPState(State):
       self.packet_count += 1
     # push data
     queue = self.orderedQueue
-    self.orderedQueue = Queue.Queue()
+    self.orderedQueue = Queue.Queue(QSIZE)
     while not queue.empty():
       packet = queue.get()
       self.byte_count   += self.write_socket.send( packet.payload.load )
@@ -302,7 +312,7 @@ class TCPState(State):
     
   def __str__(self):
     return "%s: %d bytes/%d packets max_seq:%d expected_seq:%d q:%d"%(self.name, self.byte_count,self.packet_count,
-                self.max_seq,self.expected_seq, len(self.queue))
+                self.max_seq,self.expected_seq, self.orderedQueue.qsize())
   
 class stack:
   ''' A stream is duplex. '''
