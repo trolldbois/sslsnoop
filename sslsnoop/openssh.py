@@ -253,8 +253,8 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     if self.autoalign:
       log.info('trying to auto-align session keys and data')
       #log.info(self.ciphers.session_state.input.toString())
-      threading.Thread(target=alignEncryption, args=(self.inbound, self.ciphers.session_state.incoming_packet), name='find inbound').start()
-      threading.Thread(target=alignEncryption, args=(self.outbound, self.ciphers.session_state.outgoing_packet), name='find outbound').start()
+      threading.Thread(target=alignEncryption, args=(self.inbound, self.ciphers.session_state.incoming_packet), name='align inbound').start()
+      threading.Thread(target=alignEncryption, args=(self.outbound, self.ciphers.session_state.outgoing_packet), name='align outbound').start()
     else:
       self.inbound.state.setActiveMode()
       self.outbound.state.setActiveMode()
