@@ -16,6 +16,7 @@ import struct
 import sys
 import time
 import threading
+import Queue
 
 # todo : replace by one empty shell of ours
 from paramiko.transport import Transport
@@ -51,7 +52,7 @@ class Dummy:
   pass
 
 class SessionCiphers():
-  def __init__(self,session_state):
+  def __init__(self, session_state):
     self.session_state = session_state
     # two ciphers    
     self.receiveCtx = Dummy()
@@ -233,26 +234,27 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
         
   def _launchStreamProcessing(self):
     ''' run streams '''
-    #self.stream.getInbound().setActiveMode()
-    #self.stream.getOutbound().setActiveMode()
     self.stream_t = threading.Thread(target=self.stream.run,name='stream' )
     self.stream_t.start()    
     return
     
   def run(self):
     ''' launch sniffer and decrypter threads '''
+    # capure network before keys
     self._initSniffer()
-    self._initCiphers()
     self._initStream()
+    self._launchStreamProcessing()
+    # we can get keys now
+    self._initCiphers()
     self._initSSH()
     self._initOutputs()
     self._initWorker()
     log.info('Ready to catch some ssh traffic - please try `ls -l` in ssh if your just playing around...')
-    self._launchStreamProcessing()
     if self.autoalign:
       log.info('trying to auto-align session keys and data')
-      threading.Thread(target=alignEncryption, args=(self.inbound,), name='find inbound').start()
-      threading.Thread(target=alignEncryption, args=(self.outbound,), name='find outbound').start()
+      #log.info(self.ciphers.session_state.input.toString())
+      threading.Thread(target=alignEncryption, args=(self.inbound, self.ciphers.session_state.incoming_packet), name='find inbound').start()
+      threading.Thread(target=alignEncryption, args=(self.outbound, self.ciphers.session_state.outgoing_packet), name='find outbound').start()
     else:
       self.inbound.state.setActiveMode()
       self.outbound.state.setActiveMode()
@@ -281,33 +283,71 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
   def __str__(self):
     return "Decryption for pid %d, struct at 0x%lx"%(self.process.pid, self.session_state_addr)
 
-def alignEncryption(way):
+def alignEncryption(way, packet_state):
   ''' 
     try to align the engine on the stream before activating it. 
+    
+    Question is: how do we know, at what offset of a packet the session keys state are.
+    If there is no traffic beween the sniffer's start and alignTest(), the offset is 0 and obvious.
+    but we need a full packet from headers to be able to decrypt it...
+    
+    I don't have a clue on how to align cipher state and data offset. Except 'brute force' _all_ offset.
+    
+    Best guess : try each packet and test first 4 bytes for a correct packet_size.
+    That doesn't solve the problem for any 'active' ssh stream.
+    Only solves offline pcap processing, if openssh was processing a packet.
+    
+    how do we know it's the start of a SSH Message ?
+    well, msg[0:4] is the packet_size.  and a SSH Packet < PACKET_MAX_SIZE (0x00040000)
+    that already gives us first byte 0x00 (1/255) * second byte (4/255) = 4/65335 . good odds.
+    Still, not enough.
+    the packet size must have :  (packet_size - (blocksize-4)) % blocksize ) = 0.
+    Odds of that ? 1 / blocksize. 
+    so odds are 1/262140 . Nice.  0.00038 %. 1/0x3fffc. 
+    So basically, it's possible the alignement is made wrong. 
+    But knowing that we _infer_ that the cipher state is 'before message {en,de}cryption'
+    and that PACKET_MAX_SIZE == 0x40000, odds of 1/0x3fffc, for a message of maximum len 0x40000 
+    means, there is no way in hell i got that wrong. 
+      IF the cipher state has been captured between two messages.
+
+    => reality kills theory - occurence of bad offset with valid tests has been seen in tests 
   '''
   # way.engine way.state
-  log.debug('trying to align on data')
+  name = threading.currentThread().name
+  #import time # debug
+  #time.sleep(5)
+  log.debug('%s: trying to align on data'%(name))
+  nbp = 0
   data = b''
   while True:
-    #blocking call
-    log.debug('next packet')
-    data += way.state.getFirstPacketData()
-    log.debug('packet next')
-    #blockSize = way.engine.block_size
-    blockSize = 16 
+    log.debug('%s: next packet'%(name))
+    try:
+      data += way.state.getFirstPacketData(block=False)
+      nbp += 1
+    except Queue.Empty,e:
+      if nbp != 0:
+        log.warning('%s: no packets waiting for us after %d tries, offset is long gone... alignEncryption failed'%(name, nbp))
+      way.state.setActiveMode() # it's gonna fail...
+      return
+    log.debug('%s: packet next'%(name))
+    blocksize = way.engine.block_size
     # try to find a packetlen
-    for i in range(0, len(data)-blockSize, len(data) ): # check only start of packet
+    #for i in range(0, len(data)-blocksize, len(data) ): # check only start of packet
+    for i in range(0, len(data)-blocksize, 1 ): # check all offsets
       #log.debug('trying index %d'%(i))
-      header = way.engine.decrypt( data[i:i+blockSize] )
+      header = way.engine.decrypt( data[i:i+blocksize] )
       packet_size = struct.unpack('>I', header[:4])[0]
       # reset engine to initial state
       way.engine.sync(way.context)
-      if 0 < packet_size <= PACKET_MAX_SIZE:
-        log.info('Auto align done: We found a acceptable packet size at %d'%(i))
-        way.state.setActiveMode(data[i:])
-        return
-    data = data[len(data)-blockSize:]
-    log.debug('trying next packet ')
+      if  0 < packet_size <= PACKET_MAX_SIZE:
+        log.info('%s: Auto align done: We found a acceptable packet size(%d) at %d on packet num %d'%(name, packet_size, i, nbp))
+        if (packet_size - (blocksize-4)) % blocksize == 0 :
+          log.info('%s: ITS FOR REAL'%(name))
+          way.state.setActiveMode(data[i:])
+          return
+        log.info('%s: bad blocking packetsize %d is not correct for blocksize'%(name, (packet_size - (blocksize-4)) % blocksize))
+    data = data[len(data)-blocksize:]
+    log.debug('%s: trying next packet '%(name))
 
 
 class OpenSSHPcapDecrypt(OpenSSHLiveDecryptatator):
@@ -418,16 +458,19 @@ def searchOffline(args):
 
 
 def main(argv):
-  logging.basicConfig(level=logging.INFO)
   #logging.getLogger('network').setLevel(level=logging.INFO)
   #logging.getLogger('stream').setLevel(level=logging.INFO)
+  #logging.getLogger('sslsnoop-openssh').setLevel(level=logging.DEBUG)
+
+  if '--debug' in argv:
+    logging.basicConfig(level=logging.DEBUG)    
+    log.debug("==================- DEBUG MODE -================== ")  
+  else:
+    logging.basicConfig(level=logging.INFO)
 
   parser = argparser()
   opts = parser.parse_args(argv)
   try:
-    if opts.debug:
-      logging.basicConfig(level=logging.DEBUG)    
-      log.debug("==================- DEBUG MODE -================== ")  
     opts.func(opts)
   except ImportError,e:
     log.error('Struct type does not exists.')
