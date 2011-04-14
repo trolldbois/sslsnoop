@@ -246,18 +246,20 @@ class TCPState(State):
       ret = True
     # waiting for too long
     elif self._isMissing() and  time.time() > ( self.ts_missing + WAIT_RETRANSMIT) : 
-        raise MissingDataException()
+      log.error('Some data is missing. the sniffer losts some packets ? Dying.')      
+      raise MissingDataException()
     return ret
 
   def getSocket(self):
     return self.read_socket
 
-  def getFirstPacketData(self):
+  def getFirstPacketData(self, block=False):
     ''' pop the first packet '''
     if not self.searchMode:
       raise BadStateError('State %s is in Active Mode. Not poping allowed')
-    # wait for it     if self.orderedQueue.qsize() == 0:
-    d = self.orderedQueue.get().payload.load
+    # wait for it     if self.orderedQueue.qsize() == 0: or except Queue.Empty
+    p = self.orderedQueue.get(block=block)
+    d = p.payload.load
     self.orderedQueue.task_done()
     return d
   
