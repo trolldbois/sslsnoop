@@ -311,25 +311,29 @@ def alignEncryption(way, packet_state, block=True):
       IF the cipher state has been captured between two messages.
 
     => reality kills theory - occurence of bad offset with valid tests has been seen in tests 
+    so much for the stats. On big packets (1500) , 10 occurrences on 1100 packets . 
   '''
   # way.engine way.state
   name = threading.currentThread().name
-  import time # debug
-  time.sleep(5)
+  #import time # debug
+  #time.sleep(5)
   log.debug('%s: trying to align on data'%(name))
   if packet_state.offset != packet_state.end:
-    log.warning('%s: packet_state was in process '%(name))
+    log.error("%s: openssh was in the middle of processing a packet. I can't deal with that "%(name))
+    log.warning(packet_state.toString())
+    way.state.setActiveMode() # it's gonna fail...
+    return
   # head 
   try:
     data, qsize = way.state.getFirstPacketData(block=block)
     nbp = 1
-    if qsize > 100: # crowded traffic, lets cut to the point.
-      for i in xrange(1, 124): #qsize/3):
-        way.state.getFirstPacketData(block=block)
-        nbp += 1
-      log.info('dropping %d packets'%(qsize/2))
-      data, qsize = way.state.getFirstPacketData(block=block)
-      nbp += 1
+    #if qsize > 1: # crowded traffic, lets cut to the point.
+    #  for i in xrange(1, 768): #qsize/3):
+    #    way.state.getFirstPacketData(block=block)
+    #    nbp += 1
+    #  log.info('dropping %d packets'%(qsize/2))
+    #  data, qsize = way.state.getFirstPacketData(block=block)
+    #  nbp += 1
   except Queue.Empty,e:
     way.state.setActiveMode() # it's on...
     return
@@ -349,12 +353,14 @@ def alignEncryption(way, packet_state, block=True):
       # reset engine to initial state
       way.engine.sync(way.context)
       if  0 < packet_size <= PACKET_MAX_SIZE:
-        log.info('%s: Auto align done: We found a acceptable packet size(%d) at %d on packet num %d'%(name, packet_size, i, nbp))
+        log.debug('%s: Auto align done: We found a acceptable packet size(%d) at %d on packet num %d'%(name, packet_size, i, nbp))
         if (packet_size - (blocksize-4)) % blocksize == 0 :
-          log.info('%s: ITS FOR REAL'%(name))
+          log.info('%s: Auto align found : packet size(%d) at %d on packet num %d'%(name, packet_size, i, nbp))
           way.state.setActiveMode(data[i:])
           return
-        log.info('%s: bad blocking packetsize %d is not correct for blocksize'%(name, (packet_size - (blocksize-4)) % blocksize))
+          # continue for test debug
+        else:
+          log.debug('%s: bad blocking packetsize %d is not correct for blocksize'%(name, (packet_size - (blocksize-4)) % blocksize))
     data = data[len(data)-blocksize:]
     #data = ''
     log.debug('%s: trying next packet '%(name))
