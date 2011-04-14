@@ -92,7 +92,7 @@ class SSHStreamToFile():
         self.decrypt_errors = 0
     except SSHException,e:  # only size errror... no sense. should be only one exception. 
       #self.decrypt_errors+=1
-      #log.debug('SSH exception catched on %s - %s - will try to find next good Message'%(self.fname,e))
+      log.error('SSH exception catched on %s - %s - killing this channel'%(self.fname,e))
       #return
       raise EOFError(e)
 
@@ -174,6 +174,7 @@ class Supervisor(threading.Thread):
   def sub(self, socket):
     self.lock.acquire()
     del self.readables[socket]
+    self.selectables.discard(socket)
     self.todo=True
     self.lock.release()
     return
@@ -202,9 +203,9 @@ class Supervisor(threading.Thread):
           self.readables[socket_]()
           log.debug("read and write done for %s"%(socket_))
         except EOFError, e:
-          log.info('Stream ended')
+          log.debug('forgetting about this output engine')
           self.sub(socket_)
-          return e
+          continue
       #loop
     log.info('Supervisor finished running') 
     return
