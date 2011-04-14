@@ -47,6 +47,17 @@ Monitoring ssh traffic on honeypots ?
 Monitoring encrypted traffic on honeypots ?
 Monitoring encrypted traffic on ... somewhere your are root ?
 
+It does not work on my openssh ? :
+-----------------------------------
+tested on OpenSSH 5.5.
+Should work on most recent version.. I didn't check for structure modification. but that would explain a lot.
+It work really good on intereactive session with no traffic at the time of execution. (clean cipher state in memory)
+It can work on a busy ssh stream, *IF* a) the cipher state is clean, b) scapy doesn't loose packets (CPU ?).
+-> yeah the GIL really sucks
+
+How can i decrypt a pcap file ? :
+----------------------------------
+Use the offline mode.
  
 Where does the idea comes from ? :
 -----------------------------------
