@@ -24,7 +24,8 @@ libopenssl=cdll.LoadLibrary(_libssl)
 
 
 class Engine:
-
+  block_size = 16
+  
   def decrypt(self,block):
     ''' decrypts '''
     bLen=len(block)
@@ -72,6 +73,7 @@ class StatefulAES_CBC_Engine(Engine):
   
   def sync(self, context):
     ''' refresh the crypto state '''
+    self.block_size = context.block_size
     self.key = AES_KEY().fromPyObj(context.evpCtx.cipher_data) # 
     #print self.key
     # copy counter content
@@ -119,6 +121,7 @@ class StatefulAES_Ctr_Engine(Engine):
   
   def sync(self, context):
     ''' refresh the crypto state '''
+    self.block_size = context.block_size
     self.aes_key_ctx = ssh_aes_ctr_ctx().fromPyObj(context.app_data)
     # we need nothing else
     self.key = self.aes_key_ctx.aes_ctx
@@ -166,6 +169,7 @@ class StatefulBlowfish_CBC_Engine(Engine):
   
   def sync(self, context):
     ''' refresh the crypto state '''
+    self.block_size = context.block_size
     self.key = BF_KEY().fromPyObj(context.evpCtx.cipher_data) # 
     log.debug('BF Key: %s'%self.key)
     # copy counter content
@@ -190,6 +194,7 @@ class StatefulCAST_CBC_Engine(Engine):
   
   def sync(self, context):
     ''' refresh the crypto state '''
+    self.block_size = context.block_size
     self.key = CAST_KEY().fromPyObj(context.evpCtx.cipher_data) # 
     log.debug('CAST Key: %s'%self.key)
     # copy counter content
@@ -214,6 +219,7 @@ class StatefulDES_CBC_Engine(Engine):
   
   def sync(self, context):
     ''' refresh the crypto state '''
+    self.block_size = context.block_size
     self.key = CAST_KEY().fromPyObj(context.evpCtx.cipher_data) # 
     log.debug('CAST Key: %s'%self.key)
     # copy counter content
@@ -238,6 +244,7 @@ class StatefulRC4_Engine(Engine):
   
   def sync(self, context):
     ''' refresh the crypto state '''
+    self.block_size = context.block_size
     self.key = RC4_KEY().fromPyObj(context.evpCtx.cipher_data) # 
     log.debug('RC4 Key: %s'%self.key)
 
