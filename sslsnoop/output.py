@@ -91,9 +91,10 @@ class SSHStreamToFile():
         log.info("But we made it : to %s"%(str(m) ) )
         self.decrypt_errors = 0
     except SSHException,e:  # only size errror... no sense. should be only one exception. 
-      self.decrypt_errors+=1
-      log.debug('SSH exception catched on %s - %s - will try to find next good Message'%(self.fname,e))
-      return
+      #self.decrypt_errors+=1
+      #log.debug('SSH exception catched on %s - %s - will try to find next good Message'%(self.fname,e))
+      #return
+      raise EOFError(e)
 
 
   def _process(self):
@@ -106,7 +107,7 @@ class SSHStreamToFile():
       #log.error("now  message was (%d) : %s"%(len(str(m)),repr(str(m))) )
       #self.lastCounter=self.engine.getCounter()
       if ptype != 94:
-        log.warning("===================== ptype:%d len:%d "%(ptype, len(str(m)) ) )
+        log.debug("===================== ptype:%d len:%d "%(ptype, len(str(m)) ) )
     except NeedRekeyException,e:
       log.warning('=============================== Please refresh keys for rekey')
       return e
