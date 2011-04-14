@@ -11,7 +11,7 @@ import multiprocessing, Queue
 
 from lrucache import LRUCache
 
-WAIT_RETRANSMIT = 10
+WAIT_RETRANSMIT = 20
 QSIZE = 5000
 
 log=logging.getLogger('stream')
@@ -308,7 +308,13 @@ class TCPState(State):
     return 
   
   def finish(self):
+    ''' use current data to the best of it's knowledge .. '''
+    self.orderedQueue.join()
+    # if orderedQueue is empty, data is in socket.
+    # no more data in coming up from stream/network we can close the socket.
+    self.activeLock.acquire()
     self.write_socket.close()
+    self.activeLock.release()
     
   def __str__(self):
     return "%s: %d bytes/%d packets max_seq:%d expected_seq:%d q:%d"%(self.name, self.byte_count,self.packet_count,
