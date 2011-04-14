@@ -281,9 +281,9 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
 
 
   def __str__(self):
-    return "Decryption for pid %d, struct at 0x%lx"%(self.process.pid, self.session_state_addr)
+    return "Decryption for pid %d, struct at 0x%lx"%(self.pid, self.session_state_addr)
 
-def alignEncryption(way, packet_state):
+def alignEncryption(way, packet_state, block=True):
   ''' 
     try to align the engine on the stream before activating it. 
     
@@ -314,26 +314,35 @@ def alignEncryption(way, packet_state):
   '''
   # way.engine way.state
   name = threading.currentThread().name
-  #import time # debug
-  #time.sleep(5)
+  import time # debug
+  time.sleep(5)
   log.debug('%s: trying to align on data'%(name))
-  nbp = 0
-  data = b''
-  while True:
-    log.debug('%s: next packet'%(name))
-    try:
-      data += way.state.getFirstPacketData(block=False)
+  if packet_state.offset != packet_state.end:
+    log.warning('%s: packet_state was in process '%(name))
+  # head 
+  try:
+    data, qsize = way.state.getFirstPacketData(block=block)
+    nbp = 1
+    if qsize > 100: # crowded traffic, lets cut to the point.
+      for i in xrange(1, 124): #qsize/3):
+        way.state.getFirstPacketData(block=block)
+        nbp += 1
+      log.info('dropping %d packets'%(qsize/2))
+      data, qsize = way.state.getFirstPacketData(block=block)
       nbp += 1
-    except Queue.Empty,e:
-      if nbp != 0:
-        log.warning('%s: no packets waiting for us after %d tries, offset is long gone... alignEncryption failed'%(name, nbp))
-      way.state.setActiveMode() # it's gonna fail...
-      return
-    log.debug('%s: packet next'%(name))
+  except Queue.Empty,e:
+    way.state.setActiveMode() # it's on...
+    return
+  # rest
+  while True:
+    log.info('%s: packet next %d'%(name, nbp))
     blocksize = way.engine.block_size
     # try to find a packetlen
     #for i in range(0, len(data)-blocksize, len(data) ): # check only start of packet
     for i in range(0, len(data)-blocksize, 1 ): # check all offsets
+    # tests shows Message are often data[blocksize:] 
+    # is that because data = data[len(data)-blocksize:] ???
+    #for i in range(0, len(data)-blocksize, blocksize ): 
       #log.debug('trying index %d'%(i))
       header = way.engine.decrypt( data[i:i+blocksize] )
       packet_size = struct.unpack('>I', header[:4])[0]
@@ -347,8 +356,17 @@ def alignEncryption(way, packet_state):
           return
         log.info('%s: bad blocking packetsize %d is not correct for blocksize'%(name, (packet_size - (blocksize-4)) % blocksize))
     data = data[len(data)-blocksize:]
+    #data = ''
     log.debug('%s: trying next packet '%(name))
-
+    try:
+      d, qsize = way.state.getFirstPacketData(block=False)
+      data += d
+      nbp += 1
+    except Queue.Empty,e:
+      log.warning('%s: no packets waiting for us after %d tries, offset is long gone... alignEncryption failed'%(name, nbp))
+      way.state.setActiveMode() # it's gonna fail...
+      return
+    pass
 
 class OpenSSHPcapDecrypt(OpenSSHLiveDecryptatator):
   ''' 
