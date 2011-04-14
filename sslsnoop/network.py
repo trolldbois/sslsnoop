@@ -16,7 +16,7 @@ import stream
 
 log = logging.getLogger('network')
 
-QUEUE_SIZE = 1500
+QUEUE_SIZE = 15000
 
 def hexify(data):
   s=''
@@ -110,7 +110,7 @@ class Sniffer():
       log.debug('Queuing a packet from %s:%s\t-> %s:%s'%(getConnectionTuple(packet)))
       q.put_nowait(packet)
     except Queue.Full:
-      log.warning('a Queue is Full. lost packet.')
+      log.warning('a Queue is Full (%d). lost packet for %s'%(q.qsize(), repr(st.connection)))
       self.dropStream( packet )
     except Exception,e:
       log.error(e)
