@@ -69,10 +69,6 @@ class SSHStreamToFile():
     self.decrypt_errors=0
     return
 
-  def process(self):
-    data=self._in.read(self.BUFSIZE)
-    self._out.write(data2)
-  
   def _outputStream(self, channel):
     name="%s.%s.%d"%(self.fname, self.datename, channel )
     if name in self.outs:
@@ -126,7 +122,7 @@ class SSHStreamToFile():
       log.info( "==================================== DISCONNECT MESSAGE")
       log.info( m)
       self.packetizer.close()
-      return 'MSG_DISCONNECT'
+      raise EOFError('MSG_DISCONNECT')
     elif ptype == MSG_DEBUG:
       always_display = m.get_boolean()
       msg = m.get_string()
@@ -146,6 +142,32 @@ class SSHStreamToFile():
     out.flush() # beuahhh
     log.debug("%d bytes written for channel %d"%(ret, ptype))
     return m
+
+class pcapWriter():
+  ''' Use scapy to write a data packet to a pcap file '''
+  def __init__(self,fname,src,sport,dst,dport):
+    self.fname = fname
+    from scapy.all import IP,TCP
+    self.pkt = IP(src=src,dst=dst)/TCP(sport=sport,dport=dport)
+  def write(self,data):
+    from scapy.utils import wrpcap
+    pkt = self.pkt / data
+    return wrpcap(filename, pkt)
+  def flush(self):
+    pass
+
+class SSHStreamToPcap(SSHStreamToFile):
+  ''' Write a decoded packet to a pcap file
+  '''
+  pcapwriter = None
+  def __init__(self, packetizer, ctx, basename, folder='outputs', fmt="%Y%m%d-%H%M%S"):
+    SSHStreamToFile.__init__(self, packetizer, ctx, basename, folder='outputs', fmt="%Y%m%d-%H%M%S")
+    self.fname = os.path.sep.join([self.fname,'pcap'])
+    self.pcapwriter = pcapWriter(name, src,sport,dst,dport)
+  def _outputStream(self, channel):
+    name="%s.%s.%d"%(self.fname, self.datename, channel )
+    log.debug("Output Filename is %s"%(name))
+    return self.pcapwriter
 
   
 class Supervisor(threading.Thread):
@@ -187,9 +209,12 @@ class Supervisor(threading.Thread):
     self.lock.release()
     return 
 
+  def runCheck(self):
+    return not self.stopSwitch.isSet() 
+
   def run(self):
      # thread inbound reads and writes  
-    while not self.stopSwitch.isSet():
+    while self.runCheck():
       # check
       if self.todo:
         self._syncme
@@ -203,7 +228,7 @@ class Supervisor(threading.Thread):
           self.readables[socket_]()
           log.debug("read and write done for %s"%(socket_))
         except EOFError, e:
-          log.debug('forgetting about this output engine')
+          log.debug('forgetting about this output engine: %s'%(e))
           self.sub(socket_)
           continue
       #loop
