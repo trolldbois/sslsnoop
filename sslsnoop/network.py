@@ -72,6 +72,7 @@ class Sniffer():
     ''' returns the queue for that stream '''
     if self.hasStream(packet):
       return self.streams[getConnectionTuple(packet)]
+    #log.debug('Packet with no such connection %s %s %s %s'%(getConnectionTuple(packet)))
     return None,None
 
   def addStream(self, connection):
