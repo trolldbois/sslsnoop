@@ -24,5 +24,5 @@ setup(name="sslsnoop",
     author_email="loic.jaquemet+python@gmail.com",
     packages = ['sslsnoop'],
     scripts = ['scripts/sslsnoop-openssh', 'scripts/sslsnoop-openssl', 'scripts/sslsnoop'],
-    install_requires = [ "haystack >= 0.7, psutil"], # python-scapy, pypcap neither are in pypi... deadlink
+    install_requires = [ "haystack >= 0.7","psutil >= 0.1"], # python-scapy, pypcap neither are in pypi... deadlink
 )
