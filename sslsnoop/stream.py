@@ -412,7 +412,7 @@ class Stream:
     log.info('Closing Stream - closing both sockets')
 
   def __str__(self):
-    return "<TCPStream %s>"%repr(self.connection)
+    return "<TCPStream %s>"%str(self.connection)
 
 
 class TCPStream(Stream):
