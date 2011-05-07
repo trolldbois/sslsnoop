@@ -170,6 +170,7 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
       self.ciphers,self.session_state_addr = self.findActiveKeys(offset=self.session_state_addr)
     if self.ciphers is None:
       raise ValueError('Struct not found')
+    log.debug('Ciphers loaded : %s %s'%(self.ciphers.receiveCtx.name,self.ciphers.sendCtx.name))
     return  
   
   def _initStream(self):
@@ -177,6 +178,7 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     self.stream = self.scapy.makeStream(self.connection)
     self.inbound.state = self.stream.getInbound()
     self.outbound.state = self.stream.getOutbound()
+    log.debug('Streams loaded')
     return
     
   def _initSSH(self):
@@ -187,7 +189,7 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     self.inbound.context = receiveCtx
     self.inbound.packetizer = Packetizer( self.inbound.state.getSocket() )
     self.inbound.packetizer.set_log(logging.getLogger('inbound.packetizer'))
-    self.inbound.engine = self._attachEngine(self.inbound.packetizer, receiveCtx )
+    self.inbound.engine = self._attachEngine(self.inbound.packetizer, self.inbound.context )
     # Outbound
     log.debug('activate OUTBOUND packetizer')
     self.outbound.context = sendCtx
@@ -218,11 +220,12 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     
   def _initOutputs(self):
     ''' init output engine. File Writers.'''
-    name = 'ssh-%s'%( utils.connectionToString(self.stream.connection) )
+    name = 'ssh-%s'%( utils.connectionToString(self.stream.connection, reverse=True) )
     self.inbound.filewriter = output.SSHStreamToFile(self.inbound.packetizer, self.inbound, name)
 
-    name = 'ssh-%s'%( utils.connectionToString(self.stream.connection, reverse=True) )
+    name = 'ssh-%s'%( utils.connectionToString(self.stream.connection) )
     self.outbound.filewriter =  output.SSHStreamToFile(self.outbound.packetizer, self.outbound, name)
+    log.debug('Outputs created')
     return 
 
   def _initWorker(self):
@@ -230,12 +233,14 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     self.worker = output.Supervisor()
     self.worker.add( self.inbound.state.getSocket() ,  self.inbound.filewriter.process  )
     self.worker.add( self.outbound.state.getSocket(), self.outbound.filewriter.process )
+    log.debug('Worker created')
     return
         
   def _launchStreamProcessing(self):
     ''' run streams '''
     self.stream_t = threading.Thread(target=self.stream.run,name='stream' )
-    self.stream_t.start()    
+    self.stream_t.start()
+    log.debug('Stream thread started.')
     return
     
   def run(self):
@@ -328,7 +333,7 @@ def alignEncryption(way, packet_state, block=True):
     data, qsize = way.state.getFirstPacketData(block=block)
     nbp = 1
     #if qsize > 1: # crowded traffic, lets cut to the point.
-    #  for i in xrange(1, 768): #qsize/3):
+    #  for i in xrange(1, qsize/3):
     #    way.state.getFirstPacketData(block=block)
     #    nbp += 1
     #  log.info('dropping %d packets'%(qsize/2))
@@ -339,7 +344,7 @@ def alignEncryption(way, packet_state, block=True):
     return
   # rest
   while True:
-    log.info('%s: packet next %d'%(name, nbp))
+    log.debug('%s: packet next %d'%(name, nbp))
     blocksize = way.engine.block_size
     # try to find a packetlen
     #for i in range(0, len(data)-blocksize, len(data) ): # check only start of packet
@@ -396,6 +401,7 @@ class OpenSSHPcapDecrypt(OpenSSHLiveDecryptatator):
     self.scapy.thread = sniffer
     # do not launch the scapy thread before having made the stream, 
     # otherwise we are gonna loose packets ...
+    log.debug('sniffer created: %s'%(self.scapy))
     return
   
   def _initCiphers(self):
@@ -405,12 +411,14 @@ class OpenSSHPcapDecrypt(OpenSSHLiveDecryptatator):
     self.ciphers = SessionCiphers(self.session_state)
     if self.ciphers is None:
       raise ValueError('Struct not found')
+    log.debug('Ciphers loaded : %s %s'%(self.ciphers.receiveCtx.name,self.ciphers.sendCtx.name))
     return  
   
   def _launchStreamProcessing(self):
     OpenSSHLiveDecryptatator._launchStreamProcessing(self)
     # we can start scapy now, stream are in place
     self.scapy.thread.start()
+    log.debug('sniffer thread started')
     return
 
   def __str__(self):
