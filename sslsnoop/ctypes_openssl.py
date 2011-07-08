@@ -56,12 +56,16 @@ model.registerModule(sys.modules[__name__])
 
 NIDs = dict( [(getattr(gen, s), s) for s in gen.__dict__ if s.startswith('NID_') ])
 def getCipherName(nid):
+  if nid not in NIDs:
+    return None
   nidname = NIDs[nid]
   LNattr = 'SN'+nidname[3:] # del prefix 'NID'
   return getattr(gen, LNattr)
 
 def getCipherDataType(nid):
   name = getCipherName(nid)
+  if name is None:
+    return None
   for t in EVP_CIPHER.CIPHER_DATA:
     if name.startswith( t ):
       return EVP_CIPHER.CIPHER_DATA[t]
