@@ -77,19 +77,19 @@ class OpenSSLStructFinder(StructFinder):
   # interesting structs
   rsaw=RSAFileWriter()
   dsaw=DSAFileWriter()  
-  def __init__(self,pid):
-    StructFinder.__init__(self,pid)
+  def __init__(self, mappings, targetmapping):
+    StructFinder.__init__(self, mappings, targetmapping)
     self.OPENSSL_STRUCTS={     # name, ( struct, callback)
       'RSA': (ctypes_openssl.RSA, self.rsaw.writeToFile ),
       'DSA': (ctypes_openssl.DSA, self.dsaw.writeToFile )
       }
   def findAndSave(self, maxNum=1, fullScan=False, nommap=False):
     log.debug('look for RSA keys')
-    outs=self.find_struct(ctypes_openssl.RSA, maxNum=maxNum, fullScan=fullScan )
+    outs=self.find_struct(ctypes_openssl.RSA, maxNum=maxNum )
     for rsa,addr in outs:
       self.save(rsa)    
     log.debug('look for DSA keys')
-    outs=self.find_struct(ctypes_openssl.DSA, maxNum=maxNum, fullScan=fullScan )
+    outs=self.find_struct(ctypes_openssl.DSA, maxNum=maxNum)
     for dsa,addr in outs:
       self.save(dsa)    
     return
@@ -121,7 +121,11 @@ def search(args):
     logging.basicConfig(level=logging.DEBUG)    
   log.info("Target has pid %d"%args.pid)
   mappings = MemoryMapper(args).getMappings()
-  finder = OpenSSLStructFinder(mappings )
+  targetMapping = [m for m in mappings if m.pathname == '[heap]']
+  if len(targetMapping) == 0:
+    log.warning('No [heap] memorymapping found. Searching everywhere.')
+    targetMapping = mappings
+  finder = OpenSSLStructFinder(mappings, targetMapping)
   outs=finder.findAndSave()
   return
 
