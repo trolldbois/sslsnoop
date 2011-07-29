@@ -1,5 +1,6 @@
 HOWTO:
 ------
+https://github.com/trolldbois/sslsnoop/wiki/Screencast
 
   $ sudo easy_install sslsnoop
   $ mkdir outputs
