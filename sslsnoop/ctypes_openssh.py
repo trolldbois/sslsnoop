@@ -159,7 +159,7 @@ class CipherContext(OpenSSHStruct):
         return False # DEBUG kill it
       # read the void * and keep a ref
       st = memoryMap.readStruct(attr_obj_address, struct )
-      model.keepRef(st)
+      model.keepRef(st, struct, attr_obj_address)
       self.evp.app_data = ctypes.c_void_p(ctypes.addressof(st)) 
       
       log.debug('Copied 0x%lx into app_data (0x%lx)'%(attr_obj_address, self.evp.app_data) )

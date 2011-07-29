@@ -345,7 +345,7 @@ def EVP_CIPHER_CTX_loadMembers(self, mappings, maxDepth):
     return True
   #ok
   st = memoryMap.readStruct(attr_obj_address, struct )
-  model.keepRef(st)
+  model.keepRef(st, struct, attr_obj_address)
   self.cipher_data = ctypes.c_void_p(ctypes.addressof(st)) 
   # check debug
   attr=getattr(self, 'cipher_data')      
