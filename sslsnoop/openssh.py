@@ -19,7 +19,7 @@ import threading
 import Queue
 
 # todo : replace by one empty shell of ours
-from paramiko.transport import Transport
+#from paramiko.transport import Transport
 
 import ctypes_openssl
 import ctypes_openssh
@@ -210,6 +210,7 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
 
   def _attachEngine(self, packetizer, context):
     ''' activate the packetizer with a cipher engine '''
+    from paramiko.transport import Transport
     # find Engine from engine.ciphers
     engine = CIPHERS[context.name](context) 
     log.debug( 'cipher:%s block_size: %d key_len: %d '%(context.name, context.block_size, context.key_len ) )
@@ -473,6 +474,11 @@ def argparser():
   offline_parser.add_argument('dst', type=str, help='SSH remote host ip.')
   offline_parser.add_argument('dport', type=int, help='SSH destination port.')
   offline_parser.set_defaults(func=searchOffline)
+
+  dump_parser = subparsers.add_parser('dump', help='Dump openssh session_state to a file for later use by offline mode.')
+  dump_parser.add_argument('pid', type=int, help='Target PID')
+  dump_parser.add_argument('sessionstatefile', type=argparse.FileType('w'), help='Output File for the pickled session_state.')
+  dump_parser.set_defaults(func=dumpToFile)
   return parser
 
 def search(args):
@@ -497,6 +503,26 @@ def searchOffline(args):
   launchPcapDecryption(args.pcapfile.name, connection, args.sessionstatefile)
   sys.exit(0)
   return
+
+def dumpToFile(args):
+  from haystack import memory_mapper, abouchet, model
+  mappings = memory_mapper.MemoryMapper(args).getMappings() #args.pid /args.memfile
+  targetMapping = [m for m in mappings if m.pathname == '[heap]']
+  if len(targetMapping) == 0:
+    log.warning('No [heap] memorymapping found. Searching everywhere.')
+    targetMapping = mappings
+  finder = abouchet.StructFinder(mappings, targetMapping)
+  outs = finder.find_struct( ctypes_openssh.session_state, maxNum=1) # 1 is awaited
+  if len(outs) == 0 :
+    log.error('openssh session_state not found')
+    return
+  ss, addr = outs[0]
+  res = ss.toPyObject()
+  if model.findCtypesInPyObj(res):
+    log.error('=========************======= CTYPES STILL IN pyOBJ !!!! ')
+  args.sessionstatefile.write(pickle.dumps(res))
+  return
+
 
 
 def main(argv):

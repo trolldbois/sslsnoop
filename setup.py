@@ -3,7 +3,7 @@ from setuptools import setup
 from glob import glob
 
 setup(name="sslsnoop",
-    version="0.9",
+    version="0.9.1",
     description="Dumps the live traffic of an ssl-encrypted stream.",
     long_description=open('README').read(),
 
@@ -23,6 +23,6 @@ setup(name="sslsnoop",
     author="Loic Jaquemet",
     author_email="loic.jaquemet+python@gmail.com",
     packages = ['sslsnoop'],
-    scripts = ['scripts/sslsnoop-openssh', 'scripts/sslsnoop-openssl', 'scripts/sslsnoop'],
+    scripts = ['scripts/sslsnoop-openssh', 'scripts/sslsnoop-openssl', 'scripts/sslsnoop', 'scripts/sslsnoop-openssh-dump'],
     install_requires = [ "haystack == 0.9","psutil >= 0.1"], # python-scapy, pypcap neither are in pypi... deadlink
 )
