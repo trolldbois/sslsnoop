@@ -34,6 +34,15 @@ from paramiko_packet import Packetizer, PACKET_MAX_SIZE
 
 log=logging.getLogger('sslsnoop-openssh')
 
+W  = "\033[0m";  # white (normal)
+BLA= "\033[30m"; # black
+R  = "\033[31m"; # red
+G  = "\033[32m"; # green
+O  = "\033[33m"; # orange
+B  = "\033[34m"; # blue
+P  = "\033[35m"; # purple
+C  = "\033[36m"; # cyan
+GR = "\033[37m"; # gray
 
 class SessionStateFileWriter(output.FileWriter):
   def __init__(self,pid,folder='outputs'):
@@ -101,7 +110,7 @@ class OpenSSHKeysFinder():
   
   def findActiveSession(self, maxNum=1):
     ''' search for session_state '''
-    outs = haystack.findStruct(self.pid, ctypes_openssh.session_state, debug=False)
+    outs = haystack.findStruct(self.pid, ctypes_openssh.session_state, debug=False, quiet=True)
     if outs is None:
       log.error("The session_state has not been found. maybe it's not OpenSSH ?")
       return None,None
@@ -129,7 +138,7 @@ class OpenSSHKeysFinder():
       return None,None # raise Exception ... 
     log.debug('received session_state %s'%(session_state))
     ciphers = SessionCiphers(session_state)
-    log.info('Active state ciphers : %s at 0x%lx'%(ciphers,addr))
+    log.debug('Active state ciphers : %s at 0x%lx'%(ciphers,addr))
     return ciphers,addr
 
   def save(self, instance):
@@ -160,6 +169,7 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
       self.scapy = utils.launchScapy()
     elif not self.scapy.thread.isAlive():
       self.scapy.thread.start()
+    log.info(G+'[+] Sniffer online'+W)
     return
   
   def _initCiphers(self):
@@ -170,7 +180,7 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
       self.ciphers,self.session_state_addr = self.findActiveKeys(offset=self.session_state_addr)
     if self.ciphers is None:
       raise ValueError('Struct not found')
-    log.debug('Ciphers loaded : %s %s'%(self.ciphers.receiveCtx.name,self.ciphers.sendCtx.name))
+    log.info(G+'[+] Ciphers loaded: in:%s out:%s'%(self.ciphers.receiveCtx.name,self.ciphers.sendCtx.name)+W)
     return  
   
   def _initStream(self):
@@ -254,9 +264,9 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     self._initSSH()
     self._initOutputs()
     self._initWorker()
-    log.info('Ready to catch some ssh traffic - please try `ls -l` in ssh if your just playing around...')
+    log.info(G+'[+] Ready to catch some ssh traffic - please try `ls -l` in ssh if your just playing around...'+W)
     if self.autoalign:
-      log.info('trying to auto-align session keys and data')
+      log.debug('trying to auto-align session keys and data')
       #log.info(self.ciphers.session_state.input.toString())
       threading.Thread(target=alignEncryption, args=(self.inbound, self.ciphers.session_state.incoming_packet), name='align inbound').start()
       threading.Thread(target=alignEncryption, args=(self.outbound, self.ciphers.session_state.outgoing_packet), name='align outbound').start()
@@ -264,7 +274,7 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
       self.inbound.state.setActiveMode()
       self.outbound.state.setActiveMode()
     self.loop()
-    log.info("done %s"%(self))
+    log.info("[+] done %s"%(self))
     return
     
   def loop(self):
@@ -360,7 +370,7 @@ def alignEncryption(way, packet_state, block=True):
       if  0 < packet_size <= PACKET_MAX_SIZE:
         log.debug('%s: Auto align done: We found a acceptable packet size(%d) at %d on packet num %d'%(name, packet_size, i, nbp))
         if (packet_size - (blocksize-4)) % blocksize == 0 :
-          log.info('%s: Auto align found : packet size(%d) at %d on packet num %d'%(name, packet_size, i, nbp))
+          log.debug('%s: Auto align found : packet size(%d) at %d on packet num %d'%(name, packet_size, i, nbp))
           way.state.setActiveMode(data[i:])
           return
           # continue for test debug
@@ -446,12 +456,13 @@ def launchPcapDecryption(pcap, connection, ssfile):
 
 def argparser():
   parser = argparse.ArgumentParser(prog='sshsnoop', description='Live decription of Openssh traffic.')
+  parser.add_argument('--debug', action='store_const', const=True, default=False, help='debug mode')
+  parser.add_argument('--quiet', action='store_const', const=True, default=False, help='quiet mode')
 
   subparsers = parser.add_subparsers(help='sub-command help')
   live_parser = subparsers.add_parser('live', help='Decrypts traffic from a live PID.')
   live_parser.add_argument('pid', type=int, help='Target PID')
   live_parser.add_argument('--addr', type=str, help='active_context memory address')
-  live_parser.add_argument('--debug', action='store_const', const=True, default=False, help='debug mode')
   live_parser.set_defaults(func=search)
 
   offline_parser = subparsers.add_parser('offline', help='Decrypts traffic from a pcap file, given a pickled session state.')
@@ -461,7 +472,6 @@ def argparser():
   offline_parser.add_argument('sport', type=int, help='SSH source port.')
   offline_parser.add_argument('dst', type=str, help='SSH remote host ip.')
   offline_parser.add_argument('dport', type=int, help='SSH destination port.')
-  offline_parser.add_argument('--debug', action='store_const', const=True, default=False, help='debug mode')
   offline_parser.set_defaults(func=searchOffline)
   return parser
 
@@ -494,14 +504,21 @@ def main(argv):
   #logging.getLogger('stream').setLevel(level=logging.INFO)
   #logging.getLogger('sslsnoop-openssh').setLevel(level=logging.DEBUG)
 
-  if '--debug' in argv:
+  parser = argparser()
+  opts = parser.parse_args(argv)
+  if opts.debug:
     logging.basicConfig(level=logging.DEBUG)    
     log.debug("==================- DEBUG MODE -================== ")  
+  elif opts.quiet:
+    logging.basicConfig(level=logging.INFO)
+    logging.getLogger('sslsnoop-openssh').setLevel(logging.INFO)
+    logging.getLogger('scapy.runtime').setLevel(logging.ERROR)
+    logging.getLogger('network').setLevel(logging.ERROR)
+    logging.getLogger('output').setLevel(logging.WARNING)
+    logging.getLogger('utils').setLevel(logging.WARNING)
   else:
     logging.basicConfig(level=logging.INFO)
 
-  parser = argparser()
-  opts = parser.parse_args(argv)
   try:
     opts.func(opts)
   except ImportError,e:
