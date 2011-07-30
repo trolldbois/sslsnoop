@@ -520,7 +520,7 @@ def dumpToFile(args):
   res = ss.toPyObject()
   if model.findCtypesInPyObj(res):
     log.error('=========************======= CTYPES STILL IN pyOBJ !!!! ')
-  args.sessionstatefile.write(pickle.dumps(res))
+  args.sessionstatefile.write(pickle.dumps((res,addr)))
   return
 
 
