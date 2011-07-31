@@ -327,7 +327,7 @@ def alignEncryption(way, packet_state, block=True):
       IF the cipher state has been captured between two messages.
 
     => reality kills theory - occurence of bad offset with valid tests has been seen in tests 
-    so much for the stats. On big packets (1500) , 10 occurrences on 1100 packets . 
+    so much for the stats. On big packets (1500) , 10 occurrences on 1100 packets . @see packet truncation by scapy.
   '''
   # way.engine way.state
   name = threading.currentThread().name
@@ -417,6 +417,7 @@ class OpenSSHPcapDecrypt(OpenSSHLiveDecryptatator):
   
   def _initCiphers(self):
     ''' ptrace the ssh process to get sessions keys '''
+    import sslsnoop.ctypes_openssh
     inst = pickle.load(self.ssfile)
     self.session_state,self.session_state_addr = inst[0]
     self.ciphers = SessionCiphers(self.session_state)
@@ -470,9 +471,9 @@ def argparser():
   offline_parser.add_argument('sessionstatefile', type=argparse.FileType('r'), help='File containing a pickled sessionstate.')
   offline_parser.add_argument('pcapfile', type=argparse.FileType('r'), help='Pcap file containing ssh traffic.')
   offline_parser.add_argument('src', type=str, help='SSH local host ip.')
-  offline_parser.add_argument('sport', type=int, help='SSH source port.')
+  offline_parser.add_argument('sport', type=int, help='SSH source port. If you dumped the ssh client this is probably > 40000.')
   offline_parser.add_argument('dst', type=str, help='SSH remote host ip.')
-  offline_parser.add_argument('dport', type=int, help='SSH destination port.')
+  offline_parser.add_argument('dport', type=int, help='SSH destination port. If you dumped the ssh client this is == 22.')
   offline_parser.set_defaults(func=searchOffline)
 
   dump_parser = subparsers.add_parser('dump', help='Dump openssh session_state to a file for later use by offline mode.')
@@ -520,7 +521,7 @@ def dumpToFile(args):
   res = ss.toPyObject()
   if model.findCtypesInPyObj(res):
     log.error('=========************======= CTYPES STILL IN pyOBJ !!!! ')
-  args.sessionstatefile.write(pickle.dumps((res,addr)))
+  args.sessionstatefile.write(pickle.dumps([(res,addr)]))
   return
 
 
