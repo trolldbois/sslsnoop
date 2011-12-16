@@ -333,12 +333,14 @@ def alignEncryption(way, packet_state, block=True):
   name = threading.currentThread().name
   #import time # debug
   #time.sleep(5)
+  # the index of the alignement
+  index = 0
   log.debug('%s: trying to align on data'%(name))
-  if packet_state.offset != packet_state.end:
+  if packet_state.offset != packet_state.end: # the session_state has been captured while encryption was taking place
     log.error("%s: openssh was in the middle of processing a packet. I can't deal with that "%(name))
     log.warning(packet_state.toString())
     way.state.setActiveMode() # it's gonna fail...
-    return
+    return -1
   # head 
   try:
     data, qsize = way.state.getFirstPacketData(block=block)
@@ -352,14 +354,15 @@ def alignEncryption(way, packet_state, block=True):
     #  nbp += 1
   except Queue.Empty,e:
     way.state.setActiveMode() # it's on...
-    return
+    return -1
   # rest
   while True:
     log.debug('%s: packet next %d'%(name, nbp))
     blocksize = way.engine.block_size
     # try to find a packetlen
+    read_offset = 1 # len(data) # check only start of packet
     #for i in range(0, len(data)-blocksize, len(data) ): # check only start of packet
-    for i in range(0, len(data)-blocksize, 1 ): # check all offsets
+    for i in range(0, len(data)-blocksize, read_offset ): # check all offsets
     # tests shows Message are often data[blocksize:] 
     # is that because data = data[len(data)-blocksize:] ???
     #for i in range(0, len(data)-blocksize, blocksize ): 
@@ -371,12 +374,17 @@ def alignEncryption(way, packet_state, block=True):
       if  0 < packet_size <= PACKET_MAX_SIZE:
         log.debug('%s: Auto align done: We found a acceptable packet size(%d) at %d on packet num %d'%(name, packet_size, i, nbp))
         if (packet_size - (blocksize-4)) % blocksize == 0 :
-          log.debug('%s: Auto align found : packet size(%d) at %d on packet num %d'%(name, packet_size, i, nbp))
+          log.debug('%s: Auto align found : packet size(%d) at %d on packet num %d '%(name, packet_size, i, nbp))
+          log.info('Alignement made on index %d'%(index))
           way.state.setActiveMode(data[i:])
-          return
+          # saving the index
+          way.offset = index
+          return index
           # continue for test debug
         else:
-          log.debug('%s: bad blocking packetsize %d is not correct for blocksize'%(name, (packet_size - (blocksize-4)) % blocksize))
+          log.debug('%s: bad blocking packetsize %d is not correct for blocksize'%(name, (packet_size - (blocksize-4)) % blocksize))    
+      # goto next byte
+      index += read_offset
     data = data[len(data)-blocksize:]
     #data = ''
     log.debug('%s: trying next packet '%(name))
@@ -387,7 +395,7 @@ def alignEncryption(way, packet_state, block=True):
     except Queue.Empty,e:
       log.warning('%s: no packets waiting for us after %d tries, offset is long gone... alignEncryption failed'%(name, nbp))
       way.state.setActiveMode() # it's gonna fail...
-      return
+      return -1
     pass
 
 class OpenSSHPcapDecrypt(OpenSSHLiveDecryptatator):
@@ -507,6 +515,7 @@ def searchOffline(args):
 
 def dumpToFile(args):
   from haystack import memory_mapper, abouchet, model
+  args.mmap=True
   mappings = memory_mapper.MemoryMapper(args).getMappings() #args.pid /args.memfile
   targetMapping = [m for m in mappings if m.pathname == '[heap]']
   if len(targetMapping) == 0:
