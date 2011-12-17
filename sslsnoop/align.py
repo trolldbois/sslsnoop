@@ -123,12 +123,12 @@ class RawFileDumper:
     self.socket = socket
   
   def process(self):
+    #log.debug('Processing stuff')
     ok = True
     while ok:
       data = self.socket.recv(16)
       if data is None or len(data) <= 0:
-        print 'dumpToFile dead'
-        return
+        raise EOFError('end of stream')
       self.fout.write(data)  
       self.fout.flush()
 
@@ -141,7 +141,7 @@ class PrevDecrypt(OpenSSHPcapDecrypt):
     # capure network before keys
     self._initSniffer()
     self._initStream()
-    #self._launchStreamProcessing()
+    self._launchStreamProcessing()
     # we can get keys now
     self._initCiphers()
     self._initSSH()
@@ -154,7 +154,7 @@ class PrevDecrypt(OpenSSHPcapDecrypt):
   def _initSniffer(self):
     self.scapy = PcapFileSniffer2(self.pcapfilename)
     self.scapy.thread = threading.Thread(target=self.scapy.run, )
-    self.scapy.thread.start()
+    #self.scapy.thread.start()
     log.info('[+] read pcap online')
 
   def _initOutputs(self):
