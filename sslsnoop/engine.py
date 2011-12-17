@@ -29,7 +29,7 @@ class Engine:
   def decrypt(self,block):
     ''' decrypts '''
     bLen=len(block)
-    data=(ctypes.c_ubyte*bLen )()
+    data=(ctypes.c_ubyte*bLen )() ## TODO string_at should work here
     for i in range(0, bLen ):
       #print i, block[i] 
       data[i]=ord(block[i])
@@ -57,8 +57,8 @@ class StatefulAES_CBC_Engine(Engine):
     if bLen % AES_BLOCK_SIZE:
       log.error("Sugar, why do you give me a block the wrong size: %d not modulo of %d"%(bLen, AES_BLOCK_SIZE))
       return None
-    buf=(ctypes.c_ubyte*AES_BLOCK_SIZE)()
-    dest=(ctypes.c_ubyte*bLen)()
+    buf=(ctypes.c_ubyte*AES_BLOCK_SIZE)() # TODO string_at + from_address
+    dest=(ctypes.c_ubyte*bLen)() # TODO string_at + from_address
     enc=ctypes.c_uint(0)  ## 0 is decrypt for inbound traffic
     ##log.debug('BEFORE %s'%( myhex(self.aes_key_ctx.getCounter())) )
     #void AES_cbc_encrypt(
@@ -143,10 +143,36 @@ class StatefulAES_Ctr_Engine(Engine):
   def decCounter(self):
     ctr=self.counter
     for i in range(len(ctr)-1,-1,-1):
-      old = ctr[i]         
       ctr[i] -= 1
-      if old != 0: # underflow
+      if ctr[i] != 0xff: # underflow
         return
+
+'''
+# reverse aes ...
+
+so forward AES is :
+	while ((len--) > 0) {
+		if (n == 0) {
+			AES_encrypt(c->aes_counter, buf, &c->aes_ctx);
+			ssh_ctr_inc(c->aes_counter, AES_BLOCK_SIZE);
+		}
+		*(dest++) = *(src++) ^ buf[n];
+		n = (n + 1) % AES_BLOCK_SIZE;
+	}
+
+that means backwards AES is :
+	while ((len--) > 0) {
+		if (n == 0) {
+      src-=AES_BLOCK_SIZE
+			ssh_ctr_dec(c->aes_counter, AES_BLOCK_SIZE);
+			AES_encrypt(c->aes_counter, buf, &c->aes_ctx);
+		}
+		*(dest++) = *(src++) ^ buf[n];
+		n = (n + 1) % AES_BLOCK_SIZE;
+	}
+
+'''
+
 
 
 class StatefulBlowfish_CBC_Engine(Engine):
