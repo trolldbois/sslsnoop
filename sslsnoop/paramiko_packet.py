@@ -249,10 +249,14 @@ class Packetizer (object):
         """
         header = self.read_all(self.__block_size_in, check_rekey=True)
         if self.__block_engine_in != None:
+            self._log(DEBUG, 'read %d header in paramiko before decrypt: %s '%(self.__block_size_in, repr(header) ));
             header = self.__block_engine_in.decrypt(header)
+            self._log(ERROR, 'DECRYPTING HEADER : %s'%( repr(header) ));
         if self.__dump_packets:
             self._log(DEBUG, util.format_binary(header, 'IN: '));
+
         packet_size = struct.unpack('>I', header[:4])[0]
+        self._log(DEBUG, 'packet_size: %d max:%d'%(packet_size,PACKET_MAX_SIZE));
         if (packet_size > PACKET_MAX_SIZE):
             self._log(DEBUG, 'packet_size: %d max:%d'%(packet_size,PACKET_MAX_SIZE));
             raise SSHException2('Invalid packet size')
@@ -261,12 +265,15 @@ class Packetizer (object):
         if (packet_size - len(leftover)) % self.__block_size_in != 0:
             raise SSHException('Invalid packet blocking')
         buf = self.read_all(packet_size + self.__mac_size_in - len(leftover))
-        self._log(DEBUG,"self.read_all(packet_size(%d) + self.__mac_size_in(%d) - len(leftover)(%d))"%(packet_size,self.__mac_size_in,len(leftover)) )
+        self._log(DEBUG,"%d self.read_all(packet_size(%d) + self.__mac_size_in(%d) - len(leftover)(%d))"%( len(buf),
+                    packet_size,self.__mac_size_in,len(leftover)) )
         
         packet = buf[:packet_size - len(leftover)]
         post_packet = buf[packet_size - len(leftover):]
         if self.__block_engine_in != None:
+            self._log(DEBUG, 'body in paramiko before decrypt: %s '%( repr(buf) ));
             packet = self.__block_engine_in.decrypt(packet)
+            self._log(ERROR, 'DECRYPTING PACKET %s'%( repr(packet) ));
         if self.__dump_packets:
             self._log(DEBUG, util.format_binary(packet, 'IN: '));
         packet = leftover + packet
@@ -285,6 +292,7 @@ class Packetizer (object):
 
         if self.__compress_engine_in is not None:
             payload = self.__compress_engine_in(payload)
+            self._log(DEBUG, 'Decompressed payload ')
 
         msg = Message(payload[1:])
         msg.seqno = self.__sequence_number_in
@@ -296,6 +304,8 @@ class Packetizer (object):
         if self.__need_rekey:
             # we've asked to rekey -- give them 20 packets to comply before
             # dropping the connection
+            self._log(DEBUG, 'Rekey needed')
+
             self.__received_packets_overflow += 1
             if self.__received_packets_overflow >= 20:
                 raise SSHException('Remote transport is ignoring rekey requests')
