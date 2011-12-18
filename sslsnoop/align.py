@@ -272,6 +272,7 @@ class FakeState():
 def decrypt(engine, data, block_size, mac_len):
   #logging.getLogger('align').setLevel(logging.DEBUG)
   #logging.getLogger('engine').setLevel(logging.DEBUG)
+
   i = 0
   ret = ''
   remainder=''
@@ -292,7 +293,10 @@ def decrypt(engine, data, block_size, mac_len):
     #log.debug('read packet (%d+%d-%d)=%d i:%d \n body = %s'%(packet_size, mac_len, len(leftover), 
     #          packet_size+mac_len-len(leftover), i , repr(data[i:i+packet_size+mac_len-len(leftover)]) ))
     packet = engine.decrypt( data[i:i+packet_size-len(leftover)] ) # do not decrypt +mac_len
-    i += packet_size+mac_len-len(leftover)  # but we read +mac_len
+    i += packet_size-len(leftover)  
+    # but we read +mac_len
+    mac = data[i:i+mac_len]
+    i += mac_len
 
     packet = leftover+packet
     padding = ord(packet[0])
@@ -302,7 +306,7 @@ def decrypt(engine, data, block_size, mac_len):
 
     log.debug('read packet_size:%d padding:%d mac:%d total:%d'%(packet_size,padding, mac_len, packet_size+mac_len+padding ))
 
-    ret += packet
+    ret += packet+mac
   return ret
 
 
@@ -310,7 +314,7 @@ def parseProtocol(way, data_clear, outfilename):
   way.state = FakeState(data_clear)
   way.packetizer = Packetizer( way.state.getSocket() )
   way.packetizer.set_log(logging.getLogger('packetizer'))
-  logging.getLogger('packetizer').setLevel(logging.DEBUG)
+  #logging.getLogger('packetizer').setLevel(logging.DEBUG)
   #use a null block_engine
   way.packetizer.set_inbound_cipher(None, way.context.block_size, None, way.context.mac.mac_len , None)
   if way.context.comp.enabled != 0:
@@ -325,7 +329,7 @@ def parseProtocol(way, data_clear, outfilename):
     while True:
       ssh_decrypt.process()
   except EOFError,e:
-    log.warning('offset in socket %d'%(way.state.getSocket().offset))
+    log.debug('offset in socket offset:%d/%d'%(way.state.getSocket().offset, len(way.state.getSocket().buf)))
     pass
 
 def dec(way, basename):
@@ -341,27 +345,32 @@ def dec(way, basename):
   log.info('Memdump was done at index %d with cipher %s'%(index, way.context.name))
 
   # decrypt the next part to file
+  log.info('Decrypting data POST memdump ')
   way.engine.sync(way.context)
   fout = file('%s.raw'%postfilename,'w')
   data_clear = decrypt( way.engine, post , way.context.block_size, way.context.mac.mac_len )
   fout.write(data_clear)
   fout.close()
   log.info('POST memdump - decryption completed in %s'%(fout.name))
-  packet_size = struct.unpack('>I', data_clear[:4])[0]
-  padding_l = struct.unpack('>b', data_clear[4:5])[0]
-  cmd = struct.unpack('>b', data_clear[5:6])[0]
-  log.info('after decrypt packet_size:%d padding_l:%d cmd:%d'%(packet_size,padding_l,cmd) )
+  #packet_size = struct.unpack('>I', data_clear[:4])[0]
+  #padding_l = struct.unpack('>b', data_clear[4:5])[0]
+  #cmd = struct.unpack('>b', data_clear[5:6])[0]
+  #log.debug('after decrypt packet_size:%d padding_l:%d cmd:%d'%(packet_size,padding_l,cmd) )
   
+  #logging.getLogger('align').setLevel(logging.DEBUG)
+  #logging.getLogger('engine').setLevel(logging.DEBUG)
+
   # parse the ssh protocol
+  data_clear = file('%s.raw'%postfilename,'r').read()
   parseProtocol(way, data_clear, postfilename)  
 
-
   # rfind backwards alignement with counter in the prev part
+  log.info('Decrypting data BEFORE memdump ')
   prev_index, prev_counter = rfindAlign(way, prev)
   if prev_index == -1:
-    log.info('could not go backwards')
+    log.warning('could not go backwards')
   else:
-    log.info('Last good index is %d'%(prev_index))
+    log.info('Backwards decryption managed up to %d bytes offset:%d'%(len(prev)-prev_index, prev_index))
     fakecontext = Dummy()
     fakecontext.__dict__ = dict(way.context.__dict__)
     way.engine.sync(fakecontext)
@@ -370,10 +379,9 @@ def dec(way, basename):
     data_clear = decrypt( way.engine, prev[prev_index:] , way.context.block_size, way.context.mac.mac_len )
     fout.write(data_clear)
     fout.close()
-    log.info('PREV memdump - decryption completed in %s'%(fout.name))
+    log.info('BEFORE memdump - decryption of %d bytes completed in %s'%(len(data_clear), fout.name))
 
-  logging.getLogger('align').setLevel(logging.DEBUG)
-  logging.getLogger('engine').setLevel(logging.DEBUG)
+  logging.getLogger('output').setLevel(logging.DEBUG)
 
   # parse the ssh protocol
   parseProtocol(way, data_clear, prevfilename)  
