@@ -60,7 +60,7 @@ class StatefulAES_CBC_Engine(Engine):
     buf=(ctypes.c_ubyte*AES_BLOCK_SIZE)() # TODO string_at + from_address
     dest=(ctypes.c_ubyte*bLen)() # TODO string_at + from_address
     enc=ctypes.c_uint(0)  ## 0 is decrypt for inbound traffic
-    ##log.debug('BEFORE %s'%( myhex(self.aes_key_ctx.getCounter())) )
+    #log.debug('BEFORE %s'%( myhex(self.aes_key_ctx.getCounter())) )
     #void AES_cbc_encrypt(
     #      const unsigned char *in, unsigned char *out, const unsigned long length, 
     #           const AES_KEY *key, unsigned char ivec[AES_BLOCK_SIZE], const int enc
@@ -68,7 +68,7 @@ class StatefulAES_CBC_Engine(Engine):
     self._AES_cbc( ctypes.byref(src), ctypes.byref(dest), bLen, ctypes.byref(self.key), 
               ctypes.byref(self.iv), enc ) 
     ##log.debug('AFTER  %s'%( myhex(self.aes_key_ctx.getCounter())) )
-    print self, repr(model.array2bytes(dest))
+    #print self, repr(model.array2bytes(dest))
     return model.array2bytes(dest)
   
   def sync(self, context):
@@ -98,7 +98,7 @@ class StatefulAES_Ctr_Engine(Engine):
     buf=(ctypes.c_ubyte*AES_BLOCK_SIZE)()
     dest=(ctypes.c_ubyte*bLen)()
     num=ctypes.c_uint()
-    ##log.debug('BEFORE %s'%( myhex(self.aes_key_ctx.getCounter())) )
+    log.debug('BEFORE a %s : decrypt %d bytes'%( repr(self.getCounter()) , bLen ) )
     #void AES_ctr128_encrypt(
     #      const unsigned char *in, unsigned char *out, const unsigned long length, 
     #           const AES_KEY *key, unsigned char ivec[AES_BLOCK_SIZE],     
@@ -116,7 +116,8 @@ class StatefulAES_Ctr_Engine(Engine):
       log.warning('Before %s'%(before))
       log.warning('After  %s'%(after))
     '''
-    ##log.debug('AFTER  %s'%( myhex(self.aes_key_ctx.getCounter())) )
+    log.debug('AFTER a %s'%repr(self.getCounter()))
+    #log.debug('AFTER x %s'%( myhex(self.aes_key_ctx.getCounter())) )
     return model.array2bytes(dest)
   
   def sync(self, context):
@@ -131,7 +132,8 @@ class StatefulAES_Ctr_Engine(Engine):
     #log.debug('Key CTX:%s'%( self.aes_key_ctx.toString() ) )
 
   def getCounter(self):
-    return myhex(self.aes_key_ctx.getCounter())
+    #return myhex(self.aes_key_ctx.getCounter())
+    return model.array2bytes(self.counter)
 
   def incCounter(self):
     ctr=self.counter
