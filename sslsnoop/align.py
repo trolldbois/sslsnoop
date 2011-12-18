@@ -270,7 +270,7 @@ class FakeState():
 
 
 def decrypt(engine, data, block_size, mac_len):
-  logging.getLogger('align').setLevel(logging.DEBUG)
+  #logging.getLogger('align').setLevel(logging.DEBUG)
   #logging.getLogger('engine').setLevel(logging.DEBUG)
   i = 0
   ret = ''
@@ -305,6 +305,29 @@ def decrypt(engine, data, block_size, mac_len):
     ret += packet
   return ret
 
+
+def parseProtocol(way, data_clear, outfilename):
+  way.state = FakeState(data_clear)
+  way.packetizer = Packetizer( way.state.getSocket() )
+  way.packetizer.set_log(logging.getLogger('packetizer'))
+  logging.getLogger('packetizer').setLevel(logging.DEBUG)
+  #use a null block_engine
+  way.packetizer.set_inbound_cipher(None, way.context.block_size, None, way.context.mac.mac_len , None)
+  if way.context.comp.enabled != 0:
+    from paramiko.transport import Transport
+    name = way.context.comp.name
+    compress_in = Transport._compression_info[name][1]
+    way.packetizer.set_inbound_compressor(compress_in())
+  # use output stream
+  ssh_decrypt = output.SSHStreamToFile(way.packetizer, way, '%s.clear'%outfilename, folder=".", fmt='%Y')
+  try:
+    way.engine.sync(way.context)
+    while True:
+      ssh_decrypt.process()
+  except EOFError,e:
+    log.warning('offset in socket %d'%(way.state.getSocket().offset))
+    pass
+
 def dec(way, basename):
   rawfilename = '%s.raw'%(basename)
   postfilename = '%s.post.dec'%(basename)
@@ -323,40 +346,17 @@ def dec(way, basename):
   data_clear = decrypt( way.engine, post , way.context.block_size, way.context.mac.mac_len )
   fout.write(data_clear)
   fout.close()
-  log.info('POST - raw decrypted data written')
+  log.info('POST memdump - decryption completed in %s'%(fout.name))
   packet_size = struct.unpack('>I', data_clear[:4])[0]
   padding_l = struct.unpack('>b', data_clear[4:5])[0]
   cmd = struct.unpack('>b', data_clear[5:6])[0]
   log.info('after decrypt packet_size:%d padding_l:%d cmd:%d'%(packet_size,padding_l,cmd) )
   
+  # parse the ssh protocol
+  parseProtocol(way, data_clear, postfilename)  
 
-  way.state = FakeState(data_clear)
-  way.packetizer = Packetizer( way.state.getSocket() )
-  way.packetizer.set_log(logging.getLogger('packetizer'))
-  logging.getLogger('packetizer').setLevel(logging.DEBUG)
-  #use a null block_engine
-  way.packetizer.set_inbound_cipher(None, way.context.block_size, None, way.context.mac.mac_len , None)
-  if way.context.comp.enabled != 0:
-    from paramiko.transport import Transport
-    name = way.context.comp.name
-    compress_in = Transport._compression_info[name][1]
-    way.packetizer.set_inbound_compressor(compress_in())
-  # use output stream
-  ssh_decrypt = output.SSHStreamToFile(way.packetizer, way, '%s.clear'%postfilename, folder=".", fmt='%Y')
-  try:
-    way.engine.sync(way.context)
-    while True:
-      log.info('header in biatch %s'%( repr(post[:96] ) ))
-      ssh_decrypt.process()
-  except EOFError,e:
-    log.warning('offset in socket %d'%(way.state.getSocket().offset))
-    pass
-  
-  #return 
+
   # rfind backwards alignement with counter in the prev part
-
-  logging.getLogger('align').setLevel(logging.DEBUG)
-
   prev_index, prev_counter = rfindAlign(way, prev)
   if prev_index == -1:
     log.info('could not go backwards')
@@ -364,31 +364,20 @@ def dec(way, basename):
     log.info('Last good index is %d'%(prev_index))
     fakecontext = Dummy()
     fakecontext.__dict__ = dict(way.context.__dict__)
-    fakecontext.counter = prev_counter
     way.engine.sync(fakecontext)
+    way.engine.counter = prev_counter
     fout = file('%s.raw'%prevfilename,'w')
     data_clear = decrypt( way.engine, prev[prev_index:] , way.context.block_size, way.context.mac.mac_len )
     fout.write(data_clear)
     fout.close()
-    log.info('PREV - raw decrypted data written')
+    log.info('PREV memdump - decryption completed in %s'%(fout.name))
 
-  if False:
-    nbBlocks = 2
+  logging.getLogger('align').setLevel(logging.DEBUG)
+  logging.getLogger('engine').setLevel(logging.DEBUG)
 
-    socket = SimpleBufferSocket(prev[-(16*nbBlocks):] )
-    way.packetizer = Packetizer( socket )
-    way.packetizer.set_log(logging.getLogger('inbound.packetizer'))
-    way.engine = decrypt._attachEngine(way.packetizer, way.context )
-    ssh_decrypt = output.SSHStreamToFile(way.packetizer, way, prevfilename, folder=".", fmt='%Y')
-    try:
-      while True:
-        ssh_decrypt.process()
-    except EOFError,e:
-      pass
+  # parse the ssh protocol
+  parseProtocol(way, data_clear, prevfilename)  
 
-    #next_decrypted = way.engine.decrypt( next )
-
-    #file(postfilename,'w').write(next_decrypted)
   return
 
 def attachEngine(way):
