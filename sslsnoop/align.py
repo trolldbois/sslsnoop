@@ -128,15 +128,12 @@ def rfindAlign(way, data):
           break # go to search the previous packet
         else:
           log.debug('bad blocking packetsize %d is not correct for blocksize'%((packet_size - (blocksize-4)) % blocksize))    
-      ##
-      #if i < len(data) - 200:
-      #  log.warning('breaking out')
-      #  return -1
       # clean and reset
       way.engine.counter = (ctypes.c_ubyte*blocksize).from_buffer_copy( counter )
 
   if lastGoodIndex == len(data):
     return -1, None
+
   return lastGoodIndex, lastGoodCounter
 
 
@@ -336,55 +333,56 @@ def dec(way, basename):
   rawfilename = '%s.raw'%(basename)
   postfilename = '%s.post.dec'%(basename)
   prevfilename = '%s.prev.dec'%(basename)
+  decodedfilename = '%s.dec'%(basename)
 
   attachEngine(way)
 
-  # open the raw file
+  ## STEP 1 : open the raw file, and find the point of alignement 
   prev, post = alignEncryption(way, file(rawfilename).read())
   index = len(prev)
   log.info('Memdump was done at index %d with cipher %s'%(index, way.context.name))
 
-  # decrypt the next part to file
+  ## STEP 2 : decrypt data
   log.info('Decrypting data POST memdump ')
   way.engine.sync(way.context)
   fout = file('%s.raw'%postfilename,'w')
-  data_clear = decrypt( way.engine, post , way.context.block_size, way.context.mac.mac_len )
-  fout.write(data_clear)
+  post_data = decrypt( way.engine, post , way.context.block_size, way.context.mac.mac_len )
+  fout.write(post_data)
   fout.close()
   log.info('POST memdump - decryption completed in %s'%(fout.name))
-  #packet_size = struct.unpack('>I', data_clear[:4])[0]
-  #padding_l = struct.unpack('>b', data_clear[4:5])[0]
-  #cmd = struct.unpack('>b', data_clear[5:6])[0]
-  #log.debug('after decrypt packet_size:%d padding_l:%d cmd:%d'%(packet_size,padding_l,cmd) )
   
-  #logging.getLogger('align').setLevel(logging.DEBUG)
-  #logging.getLogger('engine').setLevel(logging.DEBUG)
+  ## STEP 2b : parse the ssh protocol of data after the
+  #data_clear = file('%s.raw'%postfilename,'r').read()
+  #parseProtocol(way, data_clear, postfilename)  
 
-  # parse the ssh protocol
-  data_clear = file('%s.raw'%postfilename,'r').read()
-  parseProtocol(way, data_clear, postfilename)  
-
-  # rfind backwards alignement with counter in the prev part
+  ## STEP 3 : go backwards and find alignement as far as possible
   log.info('Decrypting data BEFORE memdump ')
   prev_index, prev_counter = rfindAlign(way, prev)
   if prev_index == -1:
     log.warning('could not go backwards')
-  else:
+    prev_data = ''
+  else:  
     log.info('Backwards decryption managed up to %d bytes offset:%d'%(len(prev)-prev_index, prev_index))
+
+    ## STEP 4 : decrypt backwards data
     fakecontext = Dummy()
     fakecontext.__dict__ = dict(way.context.__dict__)
     way.engine.sync(fakecontext)
     way.engine.counter = prev_counter
     fout = file('%s.raw'%prevfilename,'w')
-    data_clear = decrypt( way.engine, prev[prev_index:] , way.context.block_size, way.context.mac.mac_len )
-    fout.write(data_clear)
+    prev_data = decrypt( way.engine, prev[prev_index:] , way.context.block_size, way.context.mac.mac_len )
+    fout.write(prev_data)
     fout.close()
-    log.info('BEFORE memdump - decryption of %d bytes completed in %s'%(len(data_clear), fout.name))
+    log.info('BEFORE memdump - decryption of %d bytes completed in %s'%(len(prev_data), fout.name))
 
-  logging.getLogger('output').setLevel(logging.DEBUG)
+    ## STEP 4b : parse the ssh protocol of data after the
+    #parseProtocol(way, data_clear, prevfilename)  
 
-  # parse the ssh protocol
-  parseProtocol(way, data_clear, prevfilename)  
+  #logging.getLogger('output').setLevel(logging.DEBUG)
+
+  ## STEP 5 : parse the ssh protocol of as many data as possible
+  data_clear = prev_data + post_data
+  parseProtocol(way, data_clear, decodedfilename)  
 
   return
 
@@ -422,8 +420,8 @@ base_out = '%s.outbound'%(pcapfilename)
 
 
 dec(inbound, base_in)
+dec(outbound, base_out)
 
-#dec(decrypt.outbound, base_out)
 
 
 
