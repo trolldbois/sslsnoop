@@ -6,35 +6,74 @@
 #lines=f.readlines()
 
 import logging,sys,os
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
-import abouchet,ctypes_openssl,ctypes_openssh
-import ctypes
-from ptrace.debugger.debugger import PtraceDebugger
-from ptrace.debugger.memory_mapping import readProcessMappings
-from ctypes import *
-from ptrace.ctypes_libc import libc
+import haystack
+from haystack.reverse import reversers
 
+import math 
 
 log=logging.getLogger('test')
+
+context = reversers.getContext('skype.1.i')
+heap = context.heap
+#bytes = heap.mmap().getByteBuffer()
+
+def H(data):
+  if not data:
+    return 0
+  entropy = 0
+  for x in range(256):
+    p_x = float(data.count(chr(x)))/len(data)
+    if p_x > 0:
+      entropy += - p_x*math.log(p_x, 2)
+  return entropy
+
+def entropy_scan (data, block_size) :
+  # creates blocks of block_size for all possible offsets ('x'):
+  blocks = (data[x : block_size + x] for x in range (len (data) - block_size))
+  i = 0
+  for block in (blocks) :
+    i += 1
+    yield H (block)
+
+
+results = []
+for vaddr,s in zip(context._malloc_addresses, context._malloc_sizes):
+  #print vaddr,
+  vals = heap.readBytes(int(vaddr), int(s))
+  ent = H(vals)
+  results.append( (ent, vaddr) )
+  
+results.sort()
+#print results
+  
+for i in range(1,6):
+  ent,addr = results[-i]
+  st = context.getStructureForAddr(addr)
+  st.decodeFields()
+  print st.toString()
+  print '## # ', ent
+  print '----------------'
+
+# it actually works....
+# so multiple previous work on google.
+
+
+
+
+
+
+
+
+
+
+
 
 def printBytes(data):
   for i in range(0,len(data)/8,8):
     print "0x%lx"%data[i],
     
-
-PID=27477
-ADDR=0xb835b4e8
-
-
-#dbg=PtraceDebugger()
-#process=dbg.addProcess(pid,is_attached=False)
-#if process is None:
-#  log.error("Error initializing Process debugging for %d"% pid)
-#  sys.exit(-1)
-
-#maps=readProcessMappings(process)
-#stack=process.findStack()
 
 
 
@@ -194,43 +233,43 @@ def testScapyThread():
 
 
 
+def testwatwever():
+  #rsa=readRsa(addr)
 
-#rsa=readRsa(addr)
+  #writeWithLibRSA(addr)
+  #print '---------------'
+  #abouchet.find_keys(process,stack)
 
-#writeWithLibRSA(addr)
-#print '---------------'
-#abouchet.find_keys(process,stack)
+  #dsa=readDsa(0xb835b4e8)
+  #print dsa
+  #rsa=readRsa(0xb835c9a0)
+  #writeWithLibDSA(addr)
 
-#dsa=readDsa(0xb835b4e8)
-#print dsa
-#rsa=readRsa(0xb835c9a0)
-#writeWithLibDSA(addr)
+  #printSize()
 
-#printSize()
+  #x pourPEM_write_RSAPrivateKey
 
-#x pourPEM_write_RSAPrivateKey
+  class B(ctypes.Structure):
+    _fields_=[("b1",ctypes.c_ulong),('b2',ctypes.c_ulonglong)]
 
-class B(ctypes.Structure):
-  _fields_=[("b1",ctypes.c_ulong),('b2',ctypes.c_ulonglong)]
+  class A(ctypes.Structure):
+    _fields_=[("a1",ctypes.c_ulong),('b',ctypes.POINTER(B)),('a2',ctypes.c_ulonglong)]
 
-class A(ctypes.Structure):
-  _fields_=[("a1",ctypes.c_ulong),('b',ctypes.POINTER(B)),('a2',ctypes.c_ulonglong)]
+  myaddr=0xb7c16884
+  # rsa-> n
+  myaddr=0xb8359148
+  pid=12563
+  if len(sys.argv) == 2:
+    myaddr=int(sys.argv[1],16)
+    if isMemOf(myaddr, pid ):
+      print "isMemOf(0x%lx, 8831) - python"%myaddr
+    if isMemOf(myaddr, PID):
+      print "isMemOf(0x%lx, 27477) - ssh-agent"%myaddr
 
-myaddr=0xb7c16884
-# rsa-> n
-myaddr=0xb8359148
-pid=12563
-if len(sys.argv) == 2:
-  myaddr=int(sys.argv[1],16)
-  if isMemOf(myaddr, pid ):
-    print "isMemOf(0x%lx, 8831) - python"%myaddr
-  if isMemOf(myaddr, PID):
-    print "isMemOf(0x%lx, 27477) - ssh-agent"%myaddr
-
-#findCipherContext()
+  #findCipherContext()
 
 
-soscapy=testScapyThread()
+  soscapy=testScapyThread()
 
 
 
