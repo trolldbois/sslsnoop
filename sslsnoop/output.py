@@ -100,9 +100,12 @@ class SSHStreamToFile():
     try:
       ptype, m = self.packetizer.read_message()
       self.lastMessage=m
+      chanid = m.get_int()
+      log.debug('Got msg:%d for channel:%d value:%s'%(ptype, chanid, repr(m)))
+      m.rewind()
       #log.error("now  message was (%d) : %s"%(len(str(m)),repr(str(m))) )
       #self.lastCounter=self.engine.getCounter()
-      if ptype != 94:
+      if ptype != MSG_CHANNEL_DATA: # MSG_CHANNEL_DATA
         log.debug("===================== ptype:%d len:%d "%(ptype, len(str(m)) ) )
     except NeedRekeyException,e:
       log.warning('=============================== Please refresh keys for rekey')
@@ -119,8 +122,9 @@ class SSHStreamToFile():
       log.warning('================================== MSG_IGNORE')
       return 'MSG_IGNORE'
     elif ptype == MSG_DISCONNECT:
-      log.info( "==================================== DISCONNECT MESSAGE")
-      log.info( m)
+      chan = m.get_int()
+      log.info( "==================================== DISCONNECT MESSAGE chan %d"%(chan))
+      log.info( m.get_string())
       self.packetizer.close()
       raise EOFError('MSG_DISCONNECT')
     elif ptype == MSG_DEBUG:
@@ -129,18 +133,21 @@ class SSHStreamToFile():
       lang = m.get_string()
       log.warning('Debug msg: ' + util.safe_string(msg))
       return 'MSG_DEBUG'
-    if len(_expected_packet) > 0:
-      if ptype not in _expected_packet:
-        raise SSHException('Expecting packet from %r, got %d' % (_expected_packet, ptype))
-      _expected_packet = tuple()
-      if (ptype >= 30) and (ptype <= 39):
-        log.info("KEX Message, we need to rekey")
-        return 'KEX'
+    else:
+      if len(_expected_packet) > 0:
+        if ptype not in _expected_packet:
+          raise SSHException('Expecting packet from %r, got %d' % (_expected_packet, ptype))
+        _expected_packet = tuple()
+        if (ptype >= 30) and (ptype <= 39):
+          log.info("KEX Message, we need to rekey")
+          return 'KEX'
     #
-    out=self._outputStream(ptype)
-    ret=out.write( str(m) )
-    out.flush() # beuahhh
-    log.debug("%d bytes written for channel %d"%(ret, ptype))
+    if ptype == MSG_CHANNEL_DATA:
+      chanid = m.get_int()
+      out=self._outputStream(chanid)
+      ret=out.write( str(m.get_string()) ) # TODO: as this is a PoC we assume its printable characters by default on channel_data
+      out.flush() # beuahhh
+      log.debug("%d bytes written for channel %d"%(ret, ptype))
     return m
 
 class pcapWriter():
@@ -212,15 +219,20 @@ class Supervisor(threading.Thread):
   def runCheck(self):
     return not self.stopSwitch.isSet() 
 
+  def pleaseStop(self):
+    return self.stopSwitch.set() 
+
   def run(self):
      # thread inbound reads and writes  
-    while self.runCheck():
+    while True:
       # check
       if self.todo:
         self._syncme
       r,w,o = select.select(self.selectables,[],[],2)
       if len(r) == 0:
         log.debug("select waked up without anything to read... going back to select()")
+        if not self.runCheck():
+          return # quit
         continue
       # read them and write them
       for socket_ in r:

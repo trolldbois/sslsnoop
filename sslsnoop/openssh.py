@@ -208,7 +208,8 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
     self.outbound.engine = self._attachEngine(self.outbound.packetizer, self.outbound.context )
     return 
 
-  def _attachEngine(self, packetizer, context):
+  @classmethod
+  def _attachEngine(cls, packetizer, context):
     ''' activate the packetizer with a cipher engine '''
     from paramiko.transport import Transport
     # find Engine from engine.ciphers
@@ -335,6 +336,7 @@ def alignEncryption(way, packet_state, block=True):
   #time.sleep(5)
   # the index of the alignement
   index = 0
+  way.encrypted_flow = ''
   log.debug('%s: trying to align on data'%(name))
   if packet_state.offset != packet_state.end: # the session_state has been captured while encryption was taking place
     log.error("%s: openssh was in the middle of processing a packet. I can't deal with that "%(name))
@@ -379,12 +381,16 @@ def alignEncryption(way, packet_state, block=True):
           way.state.setActiveMode(data[i:])
           # saving the index
           way.offset = index
+          # save previous data
+          way.encrypted_flow+=data[:i]
           return index
           # continue for test debug
         else:
           log.debug('%s: bad blocking packetsize %d is not correct for blocksize'%(name, (packet_size - (blocksize-4)) % blocksize))    
       # goto next byte
       index += read_offset
+    # save previous data
+    way.encrypted_flow+=data[:len(data)-blocksize]
     data = data[len(data)-blocksize:]
     #data = ''
     log.debug('%s: trying next packet '%(name))
@@ -444,6 +450,10 @@ class OpenSSHPcapDecrypt(OpenSSHLiveDecryptatator):
   def __str__(self):
     return "Decryption of %s, struct at 0x%lx"%(self.pcapfilename, self.session_state_addr)
 
+  def loop(self):
+    #self.worker.pleaseStop()
+    self.worker.run()
+    return
 
 def launchLiveDecryption(pid, sniffer, addr=None): 
   ''' launch a live decryption '''

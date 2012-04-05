@@ -81,6 +81,9 @@ def rfindAlign(way, data):
         And this is only to find a valid packet_size
     and find a value x for which  x+prev_i < index # packet_size is not in clear stoupid..
   '''
+  logging.getLogger('align').setLevel(logging.DEBUG)
+  #logging.getLogger('engine').setLevel(logging.DEBUG)
+
   log.debug('trying to backwards align on data ')
   blocksize = way.engine.block_size
   # try to find a packetlen
@@ -98,6 +101,7 @@ def rfindAlign(way, data):
   
   #for i in range(0, len(data)-blocksize, len(data) ): # check only start of packet
   #for i in range(len(data)-blocksize, -1 , -1 ): # check all offsets
+  two = True
   i = len(data)
   while i>0:
 
@@ -118,7 +122,8 @@ def rfindAlign(way, data):
       header = way.engine.decrypt( data[i:i+blocksize] ) # read from end to start
       #log.debug('after    decrypt %s'%repr(way.engine.getCounter()))
       packet_size = struct.unpack('>I', header[:4])[0]
-      if  0 < packet_size <= PACKET_MAX_SIZE:
+      #log.debug('packet_size %d'%( packet_size ))
+      if  0 <= packet_size <= PACKET_MAX_SIZE:
         log.debug('Auto align done: We found a acceptable packet size(%d) at %d '%(packet_size, i))
         if (packet_size - (blocksize-4)) % blocksize == 0 :
           log.debug('Auto align found : packet size(%d) at %d  '%(packet_size, i))
@@ -130,6 +135,9 @@ def rfindAlign(way, data):
           log.debug('bad blocking packetsize %d is not correct for blocksize'%((packet_size - (blocksize-4)) % blocksize))    
       # clean and reset
       way.engine.counter = (ctypes.c_ubyte*blocksize).from_buffer_copy( counter )
+
+      #if lastGoodIndex-i > 20000:
+      #  raise IndexError('did not find a valid offset')
 
   if lastGoodIndex == len(data):
     return -1, None
@@ -346,17 +354,34 @@ def dec(way, basename):
   log.info('Decrypting data POST memdump ')
   way.engine.sync(way.context)
   fout = file('%s.raw'%postfilename,'w')
+
+  log.info('before post decrypt %s'%repr(way.engine.getCounter()))
+
   post_data = decrypt( way.engine, post , way.context.block_size, way.context.mac.mac_len )
   fout.write(post_data)
   fout.close()
   log.info('POST memdump - decryption completed in %s'%(fout.name))
-  
+
+  #logging.getLogger('align').setLevel(logging.DEBUG)
+  # debug
+  way.engine.sync(way.context)
+  log.debug('before test decrypt %s'%repr(way.engine.getCounter()))
+  header = way.engine.decrypt( post[:way.context.block_size] ) 
+  log.debug('after    decrypt %s'%repr(way.engine.getCounter()))
+  packet_size = struct.unpack('>I', header[:4])[0]
+  log.debug('packet_size %d'%( packet_size ))
+
   ## STEP 2b : parse the ssh protocol of data after the
   #data_clear = file('%s.raw'%postfilename,'r').read()
   #parseProtocol(way, data_clear, postfilename)  
 
+  #logging.getLogger('align').setLevel(logging.DEBUG)
   ## STEP 3 : go backwards and find alignement as far as possible
   log.info('Decrypting data BEFORE memdump ')
+
+  way.engine.sync(way.context)
+  log.debug('before ralign decrypt %s'%repr(way.engine.getCounter()))
+
   prev_index, prev_counter = rfindAlign(way, prev)
   if prev_index == -1:
     log.warning('could not go backwards')
@@ -395,15 +420,23 @@ logging.basicConfig(level=logging.INFO)
 logging.getLogger('align').setLevel(logging.INFO)
 logging.getLogger('engine').setLevel(logging.INFO)
 
+'''
 ssfilename='test1.ss'
 pcapfilename='test1.pcap'
 connection = Dummy()
 connection.remote_address = ('::1', 44204)
 connection.local_address = ('::1', 22)
+'''
+ssfilename='test2.ss'
+pcapfilename='test2.pcap'
+connection = Dummy()
+connection.remote_address = ('::1', 53373)
+connection.local_address = ('::1', 22)
+
 
 ## work for separating streams
-##decryptor = PrevDecrypt(pcapfilename, connection, file(ssfilename))
-##decryptor.run()
+# decryptor = PrevDecrypt(pcapfilename, connection, file(ssfilename))
+# decryptor.run()
 
 #import sys
 #sys.exit()
@@ -419,12 +452,35 @@ base_out = '%s.outbound'%(pcapfilename)
 
 
 
-dec(inbound, base_in)
+#dec(inbound, base_in)
 dec(outbound, base_out)
 
+'''
+invoke_shell
+'\x00\x00\x00\x1c\x0cb\x00\x00\x00\x00\x00\x00\x00\x05shell\x01'
+
+b \x00\x00\x00\x00  \x00\x00\x00\x05  shell \x01'
+channel_request of channel.invoke_shell()
+
+'\x00\x00\x00\x1c\x0c    
+get_pty tronque  ?
+
+si, c'est completement impossible que 0x1c et 0x0c soit width et height
+
+channel.get_pty
+        m.add_byte(chr(MSG_CHANNEL_REQUEST))
+        m.add_int(self.remote_chanid)
+        m.add_string('pty-req')
+        m.add_boolean(True)
+        m.add_string(term)
+        m.add_int(width)
+        m.add_int(height)
+        # pixel height, width (usually useless)
+        m.add_int(0).add_int(0)
+        m.add_string('')
 
 
-
+'''
 
 
 

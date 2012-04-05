@@ -15,8 +15,8 @@ import math
 
 log=logging.getLogger('test')
 
-context = reversers.getContext('skype.1.i')
-heap = context.heap
+#context = reversers.getContext('skype.1.i')
+#heap = context.heap
 #bytes = heap.mmap().getByteBuffer()
 
 def H(data):
@@ -39,16 +39,33 @@ def entropy_scan (data, block_size) :
 
 
 results = []
-for vaddr,s in zip(context._malloc_addresses, context._malloc_sizes):
-  #print vaddr,
-  vals = heap.readBytes(int(vaddr), int(s))
-  ent = H(vals)
-  results.append( (ent, vaddr) )
+if False:
+  for vaddr,s in zip(context._malloc_addresses, context._malloc_sizes):
+    #print vaddr,
+    vals = heap.readBytes(int(vaddr), int(s))
+    ent = H(vals)
+    results.append( (ent, vaddr) )
+else:
+  from haystack.reverse.win32 import win7heapwalker
+  from haystack import dump_loader
+  mappings = dump_loader.load('test/dumps/putty/putty.1.dump')
+  for vaddr,s in win7heapwalker.getUserAllocations(mappings, mappings.getMmapForAddr(0x5c0000) ):
+    #print vaddr,
+    heap = mappings.getMmapForAddr(vaddr)
+    vals = heap.readBytes(int(vaddr), int(s))
+    ent = H(vals)
+    results.append( (ent, int(vaddr), int(s)) )
   
 results.sort()
 #print results
   
 for i in range(1,6):
+  ent,addr,size = results[-i]
+  print '%2.2f @%x size:%d'%(results[-i])
+  heap = mappings.getMmapForAddr(addr)
+  vals = heap.readBytes(int(addr), int(size))
+  print repr(vals)
+  continue # need fscking context
   ent,addr = results[-i]
   st = context.getStructureForAddr(addr)
   st.decodeFields()

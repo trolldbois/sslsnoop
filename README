@@ -105,6 +105,9 @@ from ptrace.debugger.memory_mapping import readProcessMappings
 
 openssl.py is passe-partout.py - OK - 04/03/2011
 
+there is a 2008 paper on aes keys + software in debian
+https://citp.princeton.edu/research/memory/
+
 OpenSSH, testing ciphers
 ========================
      Ciphers
