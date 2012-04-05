@@ -13,7 +13,7 @@ import logging, sys
 from haystack import model
 
 from haystack.model import is_valid_address,is_valid_address_value,getaddress,array2bytes,bytes2array
-from haystack.model import LoadableMembers,RangeValue,NotNull,CString
+from haystack.model import LoadableMembersStructure,RangeValue,NotNull,CString
 
 import ctypes_openssl_generated as gen
 
@@ -31,7 +31,7 @@ RIJNDAEL_MAXNR=14
 # ============== Internal type defs ==============
 
 
-class OpenSSLStruct(LoadableMembers):
+class OpenSSLStruct(LoadableMembersStructure):
   ''' defines classRef '''
   pass
 
@@ -169,7 +169,7 @@ def BIGNUM_loadMembers(self, mappings, maxDepth):
 def BIGNUM_isValid(self,mappings):
   if ( self.dmax < 0 or self.top < 0 or self.dmax < self.top ):
     return False
-  return LoadableMembers.isValid(self,mappings)
+  return LoadableMembersStructure.isValid(self,mappings)
 
 def BIGNUM___str__(self):
   d= getaddress(self.d)
@@ -186,12 +186,12 @@ BIGNUM.__str__     = BIGNUM___str__
 def CRYPTO_EX_DATA_loadMembers(self, mappings, maxDepth):
   ''' erase self.sk'''
   #self.sk=ctypes.POINTER(STACK)()
-  return LoadableMembers.loadMembers(self, mappings, maxDepth)
+  return LoadableMembersStructure.loadMembers(self, mappings, maxDepth)
 def CRYPTO_EX_DATA_isValid(self,mappings):
   ''' erase self.sk'''
   # TODO why ?
   #self.sk=ctypes.POINTER(STACK)()
-  return LoadableMembers.isValid(self,mappings)
+  return LoadableMembersStructure.isValid(self,mappings)
 
 CRYPTO_EX_DATA.loadMembers = CRYPTO_EX_DATA_loadMembers 
 CRYPTO_EX_DATA.isValid     = CRYPTO_EX_DATA_isValid 
@@ -232,7 +232,7 @@ def RSA_loadMembers(self, mappings, maxDepth):
   #self.blinding = 0
   #self.mt_blinding = 0
 
-  if not LoadableMembers.loadMembers(self, mappings, maxDepth):
+  if not LoadableMembersStructure.loadMembers(self, mappings, maxDepth):
     log.debug('RSA not loaded')
     return False
   return True
@@ -268,7 +268,7 @@ def DSA_loadMembers(self, mappings, maxDepth):
   self._method_mod_p = None
   #self.engine = None
   
-  if not LoadableMembers.loadMembers(self, mappings, maxDepth):
+  if not LoadableMembersStructure.loadMembers(self, mappings, maxDepth):
     log.debug('DSA not loaded')
     return False
 
@@ -347,6 +347,7 @@ def EVP_CIPHER_CTX_loadMembers(self, mappings, maxDepth):
   st = memoryMap.readStruct(attr_obj_address, struct )
   model.keepRef(st, struct, attr_obj_address)
   self.cipher_data = ctypes.c_void_p(ctypes.addressof(st)) 
+  ###print 'self.cipher_data in loadmembers',self.cipher_data
   # check debug
   attr=getattr(self, 'cipher_data')      
   log.debug('Copied 0x%lx into %s (0x%lx)'%(ctypes.addressof(st), 'cipher_data', attr))      

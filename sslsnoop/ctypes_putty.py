@@ -4,6 +4,14 @@
 # Copyright (C) 2011 Loic Jaquemet loic.jaquemet+python@gmail.com
 #
 
+'''
+
+h2xml $PWD/myssh.h -o ssh.xml -I$PWD/ -I$PWD/unix/ -I$PWD/charset/  
+ && xml2py ssh.xml -o ctypes_putty_generated.py 
+ && cp ctypes_putty_generated.py ../../sslsnoop/
+
+'''
+
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
 import ctypes
@@ -13,7 +21,7 @@ import logging, sys
 from haystack import model
 
 from haystack.model import is_valid_address,is_valid_address_value,getaddress,array2bytes,bytes2array
-from haystack.model import LoadableMembers,RangeValue,NotNull,CString
+from haystack.model import LoadableMembersStructure,RangeValue,NotNull,CString
 
 import ctypes_putty_generated as gen
 
@@ -23,7 +31,7 @@ log=logging.getLogger('ctypes_putty')
 # ============== Internal type defs ==============
 
 
-class PuttyStruct(LoadableMembers):
+class PuttyStruct(LoadableMembersStructure):
   ''' defines classRef '''
   pass
 
@@ -163,7 +171,7 @@ def BIGNUM_loadMembers(self, mappings, maxDepth):
 def BIGNUM_isValid(self,mappings):
   if ( self.dmax < 0 or self.top < 0 or self.dmax < self.top ):
     return False
-  return LoadableMembers.isValid(self,mappings)
+  return LoadableMembersStructure.isValid(self,mappings)
 
 def BIGNUM___str__(self):
   d= getaddress(self.d)
@@ -180,9 +188,9 @@ BIGNUM.__str__     = BIGNUM___str__
 '''
 # CRYPTO_EX_DATA crypto.h:158:
 def CRYPTO_EX_DATA_loadMembers(self, mappings, maxDepth):
-  return LoadableMembers.loadMembers(self, mappings, maxDepth)
+  return LoadableMembersStructure.loadMembers(self, mappings, maxDepth)
 def CRYPTO_EX_DATA_isValid(self,mappings):
-  return LoadableMembers.isValid(self,mappings)
+  return LoadableMembersStructure.isValid(self,mappings)
 
 CRYPTO_EX_DATA.loadMembers = CRYPTO_EX_DATA_loadMembers 
 CRYPTO_EX_DATA.isValid     = CRYPTO_EX_DATA_isValid 
@@ -193,7 +201,7 @@ CRYPTO_EX_DATA.isValid     = CRYPTO_EX_DATA_isValid
 
 ######## RSA key
 RSAKey.expectedValues={
-    'bits': [NotNull],
+    'bits': [1024,2048,4096],
     'bytes': [NotNull],
     'modulus': [NotNull],
     'exponent': [NotNull],
@@ -210,12 +218,150 @@ def RSAKey_loadMembers(self, mappings, maxDepth):
   #self.blinding = 0
   #self.mt_blinding = 0
 
-  if not LoadableMembers.loadMembers(self, mappings, maxDepth):
+  if not LoadableMembersStructure.loadMembers(self, mappings, maxDepth):
     log.debug('RSA not loaded')
     return False
   return True
 
 RSAKey.loadMembers = RSAKey_loadMembers
+
+
+config_tag.expectedValues={
+  'sshprot': [ 0,2,3],
+  #'version': [ 0,1,2], # mostly 1,2
+  }
+
+tree234_Tag.expectedValues={
+  'root': [ NotNull],
+  }
+node234_Tag.expectedValues={
+  'parent': [ NotNull],
+  }
+
+
+######## ssh_tag main context
+ssh_tag.expectedValues={
+#  'fn': [NotNull],
+  'state': [	gen.SSH_STATE_PREPACKET,
+              gen.SSH_STATE_BEFORE_SIZE,
+              gen.SSH_STATE_INTERMED,
+              gen.SSH_STATE_SESSION,
+              gen.SSH_STATE_CLOSED
+      ],
+  'agentfwd_enabled': [0,1],
+  'X11_fwd_enabled': [0,1],
+  }
+
+'''
+    ('v_c', STRING),
+    ('v_s', STRING),
+    ('exhash', c_void_p),
+    ('s', Socket),
+    ('ldisc', c_void_p),
+    ('logctx', c_void_p),
+    ('session_key', c_ubyte * 32),
+    ('v1_compressing', c_int),
+    ('v1_remote_protoflags', c_int),
+    ('v1_local_protoflags', c_int),
+    ('remote_bugs', c_int),
+    ('cipher', POINTER(ssh_cipher)),
+    ('v1_cipher_ctx', c_void_p),
+    ('crcda_ctx', c_void_p),
+    ('cscipher', POINTER(ssh2_cipher)),
+    ('sccipher', POINTER(ssh2_cipher)),
+    ('cs_cipher_ctx', c_void_p),
+    ('sc_cipher_ctx', c_void_p),
+    ('csmac', POINTER(ssh_mac)),
+    ('scmac', POINTER(ssh_mac)),
+    ('cs_mac_ctx', c_void_p),
+    ('sc_mac_ctx', c_void_p),
+    ('cscomp', POINTER(ssh_compress)),
+    ('sccomp', POINTER(ssh_compress)),
+    ('cs_comp_ctx', c_void_p),
+    ('sc_comp_ctx', c_void_p),
+    ('kex', POINTER(ssh_kex)),
+    ('hostkey', POINTER(ssh_signkey)),
+    ('v2_session_id', c_ubyte * 32),
+    ('v2_session_id_len', c_int),
+    ('kex_ctx', c_void_p),
+    ('savedhost', STRING),
+    ('savedport', c_int),
+    ('send_ok', c_int),
+    ('echoing', c_int),
+    ('editing', c_int),
+    ('frontend', c_void_p),
+    ('ospeed', c_int),
+    ('ispeed', c_int),
+    ('term_width', c_int),
+    ('term_height', c_int),
+    ('channels', POINTER(tree234)),
+    ('mainchan', POINTER(ssh_channel)),
+    ('ncmode', c_int),
+    ('exitcode', c_int),
+    ('close_expected', c_int),
+    ('clean_exit', c_int),
+    ('rportfwds', POINTER(tree234)),
+    ('portfwds', POINTER(tree234)),
+    
+    
+    ('size_needed', c_int),
+    ('eof_needed', c_int),
+    ('queue', POINTER(POINTER(Packet))),
+    ('queuelen', c_int),
+    ('queuesize', c_int),
+    ('queueing', c_int),
+    ('deferred_send_data', POINTER(c_ubyte)),
+    ('deferred_len', c_int),
+    ('deferred_size', c_int),
+    ('fallback_cmd', c_int),
+    ('banner', bufchain),
+    ('pkt_kctx', Pkt_KCtx),
+    ('pkt_actx', Pkt_ACtx),
+    ('x11disp', POINTER(X11Display)),
+    ('version', c_int),
+    ('conn_throttle_count', c_int),
+    ('overall_bufsize', c_int),
+    ('throttled_all', c_int),
+    ('v1_stdout_throttling', c_int),
+    ('v2_outgoing_sequence', c_ulong),
+    ('ssh1_rdpkt_crstate', c_int),
+    ('ssh2_rdpkt_crstate', c_int),
+    ('do_ssh_init_crstate', c_int),
+    ('ssh_gotdata_crstate', c_int),
+    ('do_ssh1_login_crstate', c_int),
+    ('do_ssh1_connection_crstate', c_int),
+    ('do_ssh2_transport_crstate', c_int),
+    ('do_ssh2_authconn_crstate', c_int),
+    ('do_ssh_init_state', c_void_p),
+    ('do_ssh1_login_state', c_void_p),
+    ('do_ssh2_transport_state', c_void_p),
+    ('do_ssh2_authconn_state', c_void_p),
+    ('rdpkt1_state', rdpkt1_state_tag),
+    ('rdpkt2_state', rdpkt2_state_tag),
+    ('protocol_initial_phase_done', c_int),
+    ('protocol', CFUNCTYPE(None, Ssh, c_void_p, c_int, POINTER(Packet))),
+    ('s_rdpkt', CFUNCTYPE(POINTER(Packet), Ssh, POINTER(POINTER(c_ubyte)), POINTER(c_int))),
+    ('cfg', Config),
+    ('agent_response', c_void_p),
+    ('agent_response_len', c_int),
+    ('user_response', c_int),
+    ('frozen', c_int),
+    ('queued_incoming_data', bufchain),
+    ('packet_dispatch', handler_fn_t * 256),
+    ('qhead', POINTER(queued_handler)),
+    ('qtail', POINTER(queued_handler)),
+    ('pinger', Pinger),
+    ('incoming_data_size', c_ulong),
+    ('outgoing_data_size', c_ulong),
+    ('deferred_data_size', c_ulong),
+    ('max_data_size', c_ulong),
+    ('kex_in_progress', c_int),
+    ('next_rekey', c_long),
+    ('last_rekey', c_long),
+    ('deferred_rekey_reason', STRING),
+    ('fullhostname', STRING),
+    ('gsslibs', POINTER(ssh_gss_liblist)),
+    '''
 
 
 '''
@@ -245,7 +391,7 @@ def DSA_loadMembers(self, mappings, maxDepth):
   self._method_mod_p = None
   #self.engine = None
   
-  if not LoadableMembers.loadMembers(self, mappings, maxDepth):
+  if not LoadableMembersStructure.loadMembers(self, mappings, maxDepth):
     log.debug('DSA not loaded')
     return False
 

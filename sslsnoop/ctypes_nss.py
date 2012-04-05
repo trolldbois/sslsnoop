@@ -13,7 +13,7 @@ import logging, sys
 from haystack import model
 
 from haystack.model import is_valid_address,is_valid_address_value,getaddress,array2bytes,bytes2array
-from haystack.model import LoadableMembers,RangeValue,NotNull,CString, IgnoreMember
+from haystack.model import LoadableMembersStructure,RangeValue,NotNull,CString, IgnoreMember
 
 import ctypes_nss_generated as gen
 
@@ -28,7 +28,7 @@ http://mxr.mozilla.org/firefox/source/security/nss/lib/ssl/sslt.h
 http://mxr.mozilla.org/firefox/source/security/nss/lib/ssl/sslimpl.h#912
 '''
 
-class NSSStruct(LoadableMembers):
+class NSSStruct(LoadableMembersStructure):
   ''' defines classRef '''
   pass
 

@@ -12,7 +12,7 @@ import sys
 
 from haystack import model
 from haystack.model import is_valid_address,is_valid_address_value,pointer2bytes,array2bytes,bytes2array,getaddress
-from haystack.model import LoadableMembers,RangeValue,NotNull,CString, IgnoreMember
+from haystack.model import LoadableMembersStructure,RangeValue,NotNull,CString, IgnoreMember
 from ctypes_openssl import EVP_CIPHER_CTX, EVP_MD, HMAC_CTX
 from ctypes_openssl import AES_KEY, RC4_KEY, CAST_KEY, BF_KEY, DES_key_schedule
 
@@ -37,7 +37,7 @@ UINT8=ctypes.c_uint8
 
 
 
-class OpenSSHStruct(LoadableMembers):
+class OpenSSHStruct(LoadableMembersStructure):
   ''' defines classRef '''
   pass
 
@@ -137,7 +137,7 @@ class CipherContext(OpenSSHStruct):
 	 "acss@openssh.org": None,
   }
   def loadMembers(self, mappings, maxDepth):
-    if not LoadableMembers.loadMembers(self, mappings, maxDepth):
+    if not LoadableMembersStructure.loadMembers(self, mappings, maxDepth):
       return False
     #log.debug('evp    app_data    attr_obj_address=0x%lx'%(self.evp.app_data) )
     #log.debug('evp    cipher_data attr_obj_address=0x%lx'%(self.evp.cipher_data) )  ##none
@@ -197,7 +197,7 @@ class Enc(OpenSSHStruct):
   ("iv",  ctypes.POINTER(ctypes.c_ubyte))
   ]
   def loadMembers(self, mappings, maxDepth):
-    if not LoadableMembers.loadMembers(self, mappings, maxDepth):
+    if not LoadableMembersStructure.loadMembers(self, mappings, maxDepth):
       return False
     # Load and memcopy key and iv
     log.debug('Memcopying a Key with %d bytes'%self.key_len)
@@ -303,7 +303,7 @@ class Mac(OpenSSHStruct):
      We should conditionnally loadMembers on evp_ctx or umac_ctx, but, hey.. poc here...
   '''
   def loadMembers(self, mappings, maxDepth):
-    if not LoadableMembers.loadMembers(self, mappings, maxDepth):
+    if not LoadableMembersStructure.loadMembers(self, mappings, maxDepth):
       return False
     # Load and memcopy key 
     log.debug('Memcopying a Key with %d bytes'%self.key_len)
