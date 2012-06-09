@@ -162,12 +162,12 @@ def BIGNUM_loadMembers(self, mappings, maxDepth):
   memoryMap = is_valid_address_value( attr_obj_address, mappings)
   # TODO - challenge buffer_copy use,
   contents=(BN_ULONG*self.top).from_buffer_copy(memoryMap.readArray(attr_obj_address, BN_ULONG, self.top))
-  keepRef( contents, ctypes.Array, attr_obj_address )
+  keepRef( contents, model.getSubtype(self.d), attr_obj_address )
   log.debug('contents acquired %d'%ctypes.sizeof(contents))
   return True
 
 def BIGNUM_get_d(self):
-  return getRef(ctypes.Array, getaddress(self.d))
+  return getRef( model.getSubtype(self.d), getaddress(self.d))
 
 def BIGNUM_isValid(self,mappings):
   if ( self.dmax < 0 or self.top < 0 or self.dmax < self.top ):
