@@ -22,6 +22,7 @@ __license__ = "GPL"
 __maintainer__ = "Loic Jaquemet"
 __status__ = "Production"
 
+log = logging.getLogger('test_ssh_data')
 
 
 class Test_SSH_1_Data_pickled(unittest.TestCase):
@@ -46,25 +47,45 @@ class Test_SSH_1_Data_pickled(unittest.TestCase):
     #
     addr = int(args.addr,16)
     structType = abouchet.getKlass(args.structName)
-    mappings = memory_mapper.MemoryMapper(args).getMappings()
-    finder = abouchet.StructFinder(mappings)
-    memoryMap = model.is_valid_address_value(addr, finder.mappings)
+    self.mappings = memory_mapper.MemoryMapper(args).getMappings()
+    self.finder = abouchet.StructFinder(self.mappings)
+    memoryMap = model.is_valid_address_value(addr, self.finder.mappings)
     # done          
-    self.session_state, self.found = finder.loadAt( memoryMap, addr, structType)
+    self.session_state, self.found = self.finder.loadAt( memoryMap, addr, structType)
+    # if both None, that dies.
+    #self.mappings = None
+    #self.finder = None
         
          
   @classmethod
   def tearDownClass(self):
+    self.mappings = None
+    self.finder = None
+    self.found = None
+    self.session_state = None
     model.reset()
     pass
   
   def test_session_state(self):
     self.assertTrue(self.found)
+    log.info('hey')
+    log.info(type(self.session_state) )
+    log.info( self.session_state._fields_ )
+    import ctypes
+    log.info( ctypes.addressof(self.session_state) )
+    log.info( self.session_state.connection_in )
+    log.info( self.session_state.incoming_packet )
+    
+    log.info(str(self.session_state) )
+    
+    d=(self.session_state.toPyObject(), self.found)
+    print 'd ok '
 
   def test_session_state2(self):
     self.assertTrue(self.found)
 
 
 if __name__ == '__main__':
+  logging.basicConfig(level=logging.DEBUG)
   unittest.main(verbosity=2)
 
