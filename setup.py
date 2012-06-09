@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from setuptools import setup
+from setuptools import setup, find_packages
 from glob import glob
 
 setup(name="sslsnoop",
@@ -23,6 +23,9 @@ setup(name="sslsnoop",
     author="Loic Jaquemet",
     author_email="loic.jaquemet+python@gmail.com",
     packages = ['sslsnoop'],
+    #exclude=['biblio'],
+    #packages=find_packages(exclude=['biblio', 'build']),
     scripts = ['scripts/sslsnoop-openssh', 'scripts/sslsnoop-openssl', 'scripts/sslsnoop', 'scripts/sslsnoop-openssh-dump'],
     install_requires = [ "haystack >= 0.15","psutil >= 0.1"], # python-scapy, pypcap neither are in pypi... deadlink
+    test_suite= "test.alltests",
 )
