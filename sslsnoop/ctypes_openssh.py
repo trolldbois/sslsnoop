@@ -130,7 +130,7 @@ class CipherContext(OpenSSHStruct):
   'plaintext': [0,1],
   'cipher': NotNull
   }
-  cipherContexts={ # we could check SSH_CIPHER_XXX in self.cipher.contents.number
+  cipherContexts={ # we could check SSH_CIPHER_XXX in self.cipher->number
 	 "aes128-ctr": ssh_aes_ctr_ctx,
 	 "aes192-ctr": ssh_aes_ctr_ctx,
 	 "aes256-ctr": ssh_aes_ctr_ctx,
@@ -141,7 +141,6 @@ class CipherContext(OpenSSHStruct):
       return False
     #log.debug('evp    app_data    attr_obj_address=0x%lx'%(self.evp.app_data) )
     #log.debug('evp    cipher_data attr_obj_address=0x%lx'%(self.evp.cipher_data) )  ##none
-    #log.debug('cipher app_data    attr_obj_address=0x%lx'%(getaddress(self.cipher.contents.cipher_data)) )
     cipher = model.getRef( Cipher, getaddress(self.cipher) )
     ciphername = cipher.name.toString() 
     # cast evp.app_data into a valid struct

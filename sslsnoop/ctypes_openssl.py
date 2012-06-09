@@ -155,16 +155,19 @@ def BIGNUM_loadMembers(self, mappings, maxDepth):
     log.debug('BigNUm tries to load members when its not validated')
     return False
   # Load and memcopy d / BN_ULONG *
-  attr_obj_address=getaddress(self.d)
+  attr_obj_address = getaddress(self.d)
   if not bool(self.d):
     log.debug('BIGNUM has a Null pointer d')
     return True
   memoryMap = is_valid_address_value( attr_obj_address, mappings)
+  # TODO - challenge buffer_copy use,
   contents=(BN_ULONG*self.top).from_buffer_copy(memoryMap.readArray(attr_obj_address, BN_ULONG, self.top))
+  keepRef( contents, ctypes.Array, attr_obj_address )
   log.debug('contents acquired %d'%ctypes.sizeof(contents))
-  self.d.contents=BN_ULONG.from_address(ctypes.addressof(contents))
-  self.d=ctypes.cast(contents, ctypes.POINTER(BN_ULONG) ) 
   return True
+
+def BIGNUM_get_d(self):
+  return getRef(ctypes.Array, getaddress(self.d))
 
 def BIGNUM_isValid(self,mappings):
   if ( self.dmax < 0 or self.top < 0 or self.dmax < self.top ):
@@ -362,7 +365,8 @@ def EVP_CIPHER_CTX_toPyObject(self):
     log.debug('Cast a EVP_CIPHER_CTX into PyObj')
     # cast app_data or cipher_data to right struct
     if bool(self.cipher_data):
-      struct = getCipherDataType( self.cipher.contents.nid)
+      cipher = model.getRef( evp_cipher_st, getaddress(self.cipher) )
+      struct = getCipherDataType( cipher.nid)
       if struct is not None:
         # CAST c_void_p to struct
         d.cipher_data = struct.from_address(self.cipher_data).toPyObject()
