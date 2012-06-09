@@ -17,7 +17,7 @@ from haystack.model import LoadableMembersStructure,RangeValue,NotNull,CString
 
 import ctypes_openssl_generated as gen
 
-log=logging.getLogger('openssl.model')
+log=logging.getLogger('ctypes_openssl')
 
 ''' hmac.h:69 '''
 HMAC_MAX_MD_CBLOCK=128
@@ -324,14 +324,15 @@ def EVP_CIPHER_CTX_loadMembers(self, mappings, maxDepth):
     memcopy( self.cipher_data, cipher_data_addr, self.cipher.ctx_size)
     # cast possible on cipher.nid -> cipherType
   '''
-  if self.cipher.contents.nid == 0: # NID_undef, not openssl doing
+  cipher = model.getRef( evp_cipher_st, getaddress(self.cipher) )
+  if cipher.nid == 0: # NID_undef, not openssl doing
     log.info('The cipher is home made - the cipher context data should be application dependant (app_data)')
     return True
     
-  struct = getCipherDataType( self.cipher.contents.nid) 
-  log.debug('cipher type is %s - loading %s'%( getCipherName(self.cipher.contents.nid), struct ))
+  struct = getCipherDataType( cipher.nid) 
+  log.debug('cipher type is %s - loading %s'%( getCipherName(cipher.nid), struct ))
   if(struct is None):
-    log.warning("Unsupported cipher %s"%(self.cipher.contents.nid))
+    log.warning("Unsupported cipher %s"%(cipher.nid))
     return True
   
   # c_void_p is a basic type.

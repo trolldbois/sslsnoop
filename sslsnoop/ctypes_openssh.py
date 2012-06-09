@@ -142,12 +142,14 @@ class CipherContext(OpenSSHStruct):
     #log.debug('evp    app_data    attr_obj_address=0x%lx'%(self.evp.app_data) )
     #log.debug('evp    cipher_data attr_obj_address=0x%lx'%(self.evp.cipher_data) )  ##none
     #log.debug('cipher app_data    attr_obj_address=0x%lx'%(getaddress(self.cipher.contents.cipher_data)) )
+    cipher = model.getRef( Cipher, getaddress(self.cipher) )
+    ciphername = cipher.name.toString() 
     # cast evp.app_data into a valid struct
-    if self.cipher.contents.name.string in self.cipherContexts:
+    if ciphername in self.cipherContexts:
       # evp.cipher.nid should be 0
-      struct = self.cipherContexts[self.cipher.contents.name.string]
+      struct = self.cipherContexts[ciphername]
       if (struct is None):
-        log.warning("Unsupported cipher %s"%(self.cipher.contents.name.string))
+        log.warning("Unsupported cipher %s"%(ciphername))
         return True
       attr_obj_address = self.evp.app_data
       memoryMap = is_valid_address_value( attr_obj_address, mappings, struct)
@@ -160,27 +162,31 @@ class CipherContext(OpenSSHStruct):
       # read the void * and keep a ref
       st = memoryMap.readStruct(attr_obj_address, struct )
       model.keepRef(st, struct, attr_obj_address)
-      self.evp.app_data = ctypes.c_void_p(ctypes.addressof(st)) 
+      # yeah... no. "self.evp.app_data = xx" means SEGFAULT.
+      evp_app_data = ctypes.c_void_p(ctypes.addressof(st)) 
       
-      log.debug('Copied 0x%lx into app_data (0x%lx)'%(attr_obj_address, self.evp.app_data) )
+      log.debug('Copied 0x%lx into app_data (0x%lx)'%(attr_obj_address, evp_app_data.value) )
       log.debug('LOADED app_data as %s from 0x%lx (%s) into 0x%lx'%(struct, 
-            attr_obj_address, is_valid_address_value(attr_obj_address,mappings,struct), self.evp.app_data))
+            attr_obj_address, is_valid_address_value(attr_obj_address,mappings,struct), evp_app_data.value))
       log.debug('\t\t---------\n%s\t\t---------'%(st.toString() ) )
     else:
-      log.debug("Unknown cipher %s, can't load a data struct for the EVP_CIPHER_CTX->app_data"%(self.cipher.contents.name.string))
+      log.debug("Unknown cipher %s, can't load a data struct for the EVP_CIPHER_CTX->app_data"%(ciphername))
     return True
   
   def getEvpAppData(self):
-    if self.cipher.contents.name.string in self.cipherContexts:
-      struct = self.cipherContexts[self.cipher.contents.name.string]
+    cipher = model.getRef( Cipher, getaddress(self.cipher) )
+    ciphername = cipher.name.toString() 
+    if ciphername in self.cipherContexts:
+      struct = self.cipherContexts[ciphername]
       if(struct is None):
-        log.warning("Unsupported cipher %s"%(self.cipher.contents.name.string))
-        log.warning("%s"%(self.cipher.contents.toString()))
+        log.warning("Unsupported cipher %s"%(ciphername))
+        log.warning("%s"%(cipher.toString()))
         return None
       log.debug('CAST evp.app_data Into %s'%(struct))
-      attr = self.evp.app_data
-      st = struct.from_address(attr)
-      log.debug('app_data value is : 0x%lx'%(attr))
+      attr_obj_address = self.evp.app_data
+      st = model.getRef(struct, attr_obj_address)
+      #st = struct.from_address(attr)
+      log.debug('app_data value is : 0x%lx'%(attr_obj_address))
       log.debug(st.toString())
       return st
     return None
@@ -200,24 +206,38 @@ class Enc(OpenSSHStruct):
     if not LoadableMembersStructure.loadMembers(self, mappings, maxDepth):
       return False
     # Load and memcopy key and iv
-    log.debug('Memcopying a Key with %d bytes'%self.key_len)
-    attr_obj_address=getaddress(self.key)
+    log.debug('Enc Memcopying a Key with %d bytes'%self.key_len)
+    attr_obj_address = getaddress(self.key)
+    log.debug('got key @%x '%(attr_obj_address))
     memoryMap = is_valid_address_value( attr_obj_address, mappings)
+    # DEBUG - I do question the buffer_copy.
+    log.debug('memoryMap is %s - \nmake array '%(memoryMap))
     array=(ctypes.c_ubyte*self.key_len).from_buffer_copy(memoryMap.readArray(attr_obj_address, ctypes.c_ubyte, self.key_len))
-    self.key.contents=ctypes.c_ubyte.from_buffer(array)
+    # save key as bitstream
+    ##key_contents = ctypes.c_ubyte.from_buffer(array)
+    key_contents = array
+    log.debug('keep ref ')
+    model.keepRef(key_contents, ctypes.Array, attr_obj_address)
     
-    log.debug('Memcopying a IV with %d bytes'%( self.block_size) )
+    log.debug('Enc Memcopying a IV with %d bytes'%( self.block_size) )
     attr_obj_address=getaddress(self.iv)
     memoryMap = is_valid_address_value( attr_obj_address, mappings)
+    log.debug('make array ')
     array=(ctypes.c_ubyte*self.block_size).from_buffer_copy(memoryMap.readArray(attr_obj_address, ctypes.c_ubyte,self.block_size))
-    self.iv.contents=ctypes.c_ubyte.from_buffer(array)
+    # save iv contents as bitstream
+    ##iv_contents = ctypes.c_ubyte.from_buffer(array)
+    iv_contents = array
+    log.debug('keep ref')
+    model.keepRef(iv_contents, ctypes.Array, attr_obj_address)
     
     log.debug('ENC KEY(%d bytes) and IV(%d bytes) acquired'%(self.key_len,self.block_size))
     return True
   def getKey(self):
-    return pointer2bytes(self.key, self.key_len)
+    #return pointer2bytes(self.key, self.key_len)
+    return getRef(ctypes.Array, getaddress(self.key))
   def getIV(self):
-    return pointer2bytes(self.iv, self.block_size) 
+    #return pointer2bytes(getRef(ctypes.Array, getaddress(self.iv)), self.block_size) 
+    return getRef(ctypes.Array, getaddress(self.iv))
 
   def toPyObject(self):
     d=OpenSSHStruct.toPyObject(self)
@@ -310,12 +330,14 @@ class Mac(OpenSSHStruct):
     attr_obj_address=getaddress(self.key)
     memoryMap = is_valid_address_value( attr_obj_address, mappings)    
     array=(ctypes.c_ubyte*self.key_len).from_buffer_copy(memoryMap.readArray(attr_obj_address, ctypes.c_ubyte, self.key_len))
-    self.key.contents=ctypes.c_ubyte.from_buffer(array)
+    model.keepRef(array, ctypes.Array, attr_obj_address)
+
     log.debug('unmac_ctx has been nulled and ignored. its not often used by any ssh impl. Not useful for us anyway.')
     log.debug('MAC KEY(%d bytes) acquired'%(self.key_len))
     return True
   def getKey(self):
-    return pointer2bytes(self.key,self.key_len)
+    #return pointer2bytes(self.key,self.key_len)
+    return getRef(ctypes.Array, getaddress(self.key))
 
   def toPyObject(self):
     d=OpenSSHStruct.toPyObject(self)
