@@ -25,82 +25,10 @@ __status__ = "Production"
 log = logging.getLogger('test_ssh_data')
 
 
-class Test_SSH_1_Data_pickled(unittest.TestCase):
-  pass
-
-
-def get_dict_value(root, attrlist):
-  tmp = root
-  for member in attrlist:
-    tmp = tmp[member]
-  return tmp
-
-def get_member_value(root, attrlist):
-  tmp = root
-  for member in attrlist:
-    tmp = getattr(tmp, member)
-  return tmp
-
-def test_tpl(self, attr):
-  expected = get_dict_value( self.expected, attr)
-  found    = get_member_value( self.session_state, attr)
-  print expected
-  print found
-  self.assertEquals( expected, found, '.'.join(attr) )
-  
-#def _gen_attr_tests(cls):
-#  import functools
-#  def action( k, v, attr):
-#    # create class def dynamically
-#    name = 'test_%s'%('_'.join(attr+k))
-#    setattr(cls, name, functools.partial( test_tpl, attr) )
-#  
-#  _gen_recurse_dict( self.expected, action, [] )
-
-def _gen_recurse_dict( d, cb, attr ):
-  for k,v in d:
-    next = attr+k
-    if type(v) == dict:
-      self._gen_recurse_dict( v, fn, next )
-    else:
-      cb(k, v, next)
-
-# generate dynamic value-tests
-#_gen_attr_tests(Test_SSH_1_Data_pickled)
-
-
-class Test_SSH_1_Data_pickled(unittest.TestCase):
-  '''
-  ssh.1
-  session_state is at 0xb84ee318
-  '''
-  
-  @classmethod
-  def setUpClass(self):
-    d = {'pickled': True, 
-        'dumpname': 'test/dumps/ssh/ssh.1/', 
-        'structName': 'sslsnoop.ctypes_openssh.session_state',
-        'addr': '0xb84ee318',
-        'pid': None,
-        'memfile': None,
-        'interactive': None,
-        'human': None,
-        'json': None,
-        }
-    args = type('args', ( object,), d)
-    #
-    addr = int(args.addr,16)
-    structType = abouchet.getKlass(args.structName)
-    self.mappings = memory_mapper.MemoryMapper(args).getMappings()
-    self.finder = abouchet.StructFinder(self.mappings)
-    memoryMap = model.is_valid_address_value(addr, self.finder.mappings)
-    # done          
-    self.session_state, self.found = self.finder.loadAt( memoryMap, addr, structType)
-    # if both None, that dies.
-    #self.mappings = None
-    #self.finder = None
-    
-    self.expected = {        
+class SSH_1_Data(object):
+  ''' dict of expected values.
+  This class will be dynamicaly generated with test_xxx_xxx methods '''
+  expected = {        
 "connection_in": 3, 
 "connection_out": 3, 
 "remote_protocol_flags": 0L, 
@@ -217,7 +145,81 @@ class Test_SSH_1_Data_pickled(unittest.TestCase):
 	"tqh_last": 0xb84ee54c, #(FIELD NOT LOADED)
 },
 }
+  pass
+
+  def get_py_object(self):
+    raise NotImplementedError
+
+def get_dict_value(root, attrlist):
+  tmp = root
+  for member in attrlist:
+    tmp = tmp[member]
+  return tmp
+
+def get_member_value(root, attrlist):
+  tmp = root
+  for member in attrlist:
+    tmp = getattr(tmp, member)
+  return tmp
+
+def test_tpl(self, attr):
+  expected = get_dict_value( self.expected, attr)
+  found    = get_member_value( self.get_py_object(), attr)
+  self.assertEquals( expected, found, '.'.join(attr) )
   
+def _gen_attr_tests(cls):
+  _gen_recurse_dict( cls, cls.expected, [] )
+
+import functools  
+def _gen_recurse_dict( cls, d, attr ):
+  for k,v in d.items():
+    next = attr+[k]
+    if type(v) == dict:
+      _gen_recurse_dict( cls, v, next )
+    else:
+      name = 'test_%s'%('_'.join(next))
+      setattr(cls, name, lambda s: test_tpl(s, next) )
+
+# generate dynamic value-tests function for each members of the structure
+_gen_attr_tests(SSH_1_Data)
+
+
+class Test_SSH_1_Data_pickled(unittest.TestCase, SSH_1_Data):
+  '''
+  ssh.1
+  session_state is at 0xb84ee318
+  
+  test_xxx will be generated in SSH_1_Data
+  '''
+  
+  @classmethod
+  def setUpClass(self):
+    d = {'pickled': True, 
+        'dumpname': 'test/dumps/ssh/ssh.1/', 
+        'structName': 'sslsnoop.ctypes_openssh.session_state',
+        'addr': '0xb84ee318',
+        'pid': None,
+        'memfile': None,
+        'interactive': None,
+        'human': None,
+        'json': None,
+        }
+    args = type('args', ( object,), d)
+    #
+    addr = int(args.addr,16)
+    structType = abouchet.getKlass(args.structName)
+    self.mappings = memory_mapper.MemoryMapper(args).getMappings()
+    self.finder = abouchet.StructFinder(self.mappings)
+    memoryMap = model.is_valid_address_value(addr, self.finder.mappings)
+    # done          
+    self.session_state, self.found = self.finder.loadAt( memoryMap, addr, structType)
+    self.pyobj = self.session_state.toPyObject()
+    # if both None, that dies.
+    #self.mappings = None
+    #self.finder = None
+    
+  def get_py_object(self):
+    return self.pyobj
   
   @classmethod
   def tearDownClass(self):
@@ -232,10 +234,6 @@ class Test_SSH_1_Data_pickled(unittest.TestCase):
     ''' test session_state against expected values'''
     self.assertTrue(self.found)
     
-    obj = self.session_state.toPyObject()
-    self._recurse_expect( obj, self.expected, [])
-    
-    log.debug(obj.connection_in)
 
   def _recurse_expect(self, foundRoot, expectedRoot, attr ):
     ''' gro through the exepected values and compare results '''
