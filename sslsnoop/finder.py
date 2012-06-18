@@ -25,6 +25,7 @@ class Args:
   memfile=None
   memdump=None
   debug=None
+  mmap=True
 
 def parseSSL(pid, sniffer):
   args=Args()
