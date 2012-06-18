@@ -12,6 +12,7 @@ from sslsnoop import ctypes_openssh as cssh
 
 from haystack import dump_loader
 from haystack import model
+from haystack import utils
 from haystack import abouchet
 from haystack import memory_mapper
 
@@ -35,7 +36,21 @@ class SSH_1_Data(object):
 "receive_context": {		 # <CipherContext at @???>
 	"plaintext": 0, 
 	"evp": {			 # <evp_cipher_ctx_st at @???>
-		"cipher": 0xb7832b20, #(FIELD NOT LOADED)
+		"cipher": { #  0xb7832b20, #(FIELD NOT LOADED) 
+      "nid": 0, 
+      "block_size": 16, 
+      "key_len": 16, 
+      "iv_len": 16, 
+      "flags": 58L, 
+      "init": 0x0, #(FIELD NOT LOADED)
+      "do_cipher": 0x0, #(FIELD NOT LOADED)
+      "cleanup": 0x0, #(FIELD NOT LOADED)
+      "ctx_size": 0, 
+      "set_asn1_parameters": 0x0, #(FIELD NOT LOADED)
+      "get_asn1_parameters": 0x0, #(FIELD NOT LOADED)
+      "ctrl": 0x0, #(FIELD NOT LOADED)
+      "app_data": 0x0,
+    },
 		"engine": 0x0,
 		"encrypt": 0, 
 		"buf_len": 0, 
@@ -51,7 +66,15 @@ class SSH_1_Data(object):
 		"block_mask": 15, 
 		"final": b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00',
 	},
-	"cipher": 0xb7832288, #(FIELD NOT LOADED)
+	"cipher": { # 0xb7832288, #(FIELD NOT LOADED)
+		  "name": "aes128-ctr" , #(CString)
+      "number": -3, 
+      "block_size": 16L, 
+      "key_len": 16L, 
+      "discard_len": 0L, 
+      "cbc_mode": 0L, 
+      "evptype": 0xb77f5d40, #(FIELD NOT LOADED)
+    },
 },
 "send_context": {		 # <CipherContext at @???>
 	"plaintext": 0, 
@@ -72,7 +95,15 @@ class SSH_1_Data(object):
 		"block_mask": 15, 
 		"final": b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00',
 	},
-	"cipher": 0xb7832288, #(FIELD NOT LOADED)
+	"cipher": { # 0xb7832288, #(FIELD NOT LOADED)
+		  "name": "aes128-ctr" , #(CString)
+      "number": -3, 
+      "block_size": 16L, 
+      "key_len": 16L, 
+      "discard_len": 0L, 
+      "cbc_mode": 0L, 
+      "evptype": 0xb77f5d40, #(FIELD NOT LOADED)
+    },
 },
 "input": {		 # <Buffer at @???>
 	"buf": 0xb84ee558, #(FIELD NOT LOADED)
@@ -113,9 +144,9 @@ class SSH_1_Data(object):
 "after_authentication": 1, 
 "keep_alive_timeouts": 0, 
 "packet_timeout_ms": -1, 
-"newkeys" :{"0": 0xb84f4240, #(FIELD NOT LOADED)
-"1": 0xb84f4360, #(FIELD NOT LOADED)
-},
+"newkeys" :[ 0xb84f4240, #(FIELD NOT LOADED)
+             0xb84f4360, #(FIELD NOT LOADED)
+],
 "p_read": {		 # <packet_state at @???>
 	"seqnr": 12L, 
 	"packets": 9L, 
@@ -163,9 +194,14 @@ def get_member_value(root, attrlist):
   return tmp
 
 def test_tpl(self, attr):
+  #print 'testing ', attr
   expected = get_dict_value( self.expected, attr)
   found    = get_member_value( self.get_py_object(), attr)
-  self.assertEquals( expected, found, '.'.join(attr) )
+  #print type(found)
+  if utils.isFunctionType(type(found)):
+    print 'nope'
+  else:
+    self.assertEquals( expected, found, '%s expected: %s found: %s'%('.'.join(attr), expected, found) )
   
 def _gen_attr_tests(cls):
   _gen_recurse_dict( cls, cls.expected, [] )
@@ -175,7 +211,14 @@ def _gen_recurse_dict( cls, d, attr ):
   for k,v in d.items():
     next = attr+[k]
     if type(v) == dict:
+      #print type(v), next
       _gen_recurse_dict( cls, v, next )
+    elif type(v) == tuple:
+      print 'tuple', v, k
+      #elif type(v) == list:
+      #  for subel in enumerate(v):
+      #    next = attr
+      #    _gen_recurse_dict( cls, subel, next )
     else:
       name = 'test_%s'%('_'.join(next))
       setattr(cls, name, lambda s: test_tpl(s, next) )
@@ -247,7 +290,7 @@ class Test_SSH_1_Data_pickled(unittest.TestCase, SSH_1_Data):
 
 
 if __name__ == '__main__':
-  logging.basicConfig(level=logging.INFO)
-  log.setLevel(level=logging.DEBUG)
-  unittest.main(verbosity=4)
+  #logging.basicConfig(level=logging.INFO)
+  #log.setLevel(level=logging.DEBUG)
+  unittest.main(verbosity=0)
 
