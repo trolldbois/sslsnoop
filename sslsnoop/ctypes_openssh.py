@@ -216,7 +216,7 @@ class Enc(OpenSSHStruct):
     ##key_contents = ctypes.c_ubyte.from_buffer(array)
     key_contents = array
     log.debug('keep ref ')
-    model.keepRef(key_contents, model.getSubType(self.key), attr_obj_address)
+    model.keepRef(key_contents, model.get_subtype(self.key), attr_obj_address)
     
     log.debug('Enc Memcopying a IV with %d bytes'%( self.block_size) )
     attr_obj_address=getaddress(self.iv)
@@ -227,16 +227,16 @@ class Enc(OpenSSHStruct):
     ##iv_contents = ctypes.c_ubyte.from_buffer(array)
     iv_contents = array
     log.debug('keep ref')
-    model.keepRef(iv_contents, model.getSubType(self.iv), attr_obj_address)
+    model.keepRef(iv_contents, model.get_subtype(self.iv), attr_obj_address)
     
     log.debug('ENC KEY(%d bytes) and IV(%d bytes) acquired'%(self.key_len,self.block_size))
     return True
   def getKey(self):
     #return pointer2bytes(self.key, self.key_len)
-    return model.array2bytes(model.getRef( model.getSubType(self.key), getaddress(self.key)) )
+    return model.array2bytes(model.getRef( model.get_subtype(self.key), getaddress(self.key)) )
   def getIV(self):
     #return pointer2bytes(model.getRef(ctypes.Array, getaddress(self.iv)), self.block_size) 
-    return model.array2bytes(model.getRef( model.getSubType(self.iv), getaddress(self.iv)) )
+    return model.array2bytes(model.getRef( model.get_subtype(self.iv), getaddress(self.iv)) )
 
   def toPyObject(self):
     d=OpenSSHStruct.toPyObject(self)
@@ -329,14 +329,14 @@ class Mac(OpenSSHStruct):
     attr_obj_address=getaddress(self.key)
     memoryMap = is_valid_address_value( attr_obj_address, mappings)    
     array=(ctypes.c_ubyte*self.key_len).from_buffer_copy(memoryMap.readArray(attr_obj_address, ctypes.c_ubyte, self.key_len))
-    model.keepRef(array, model.getSubType(self.key), attr_obj_address)
+    model.keepRef(array, model.get_subtype(self.key), attr_obj_address)
 
     log.debug('unmac_ctx has been nulled and ignored. its not often used by any ssh impl. Not useful for us anyway.')
     log.debug('MAC KEY(%d bytes) acquired'%(self.key_len))
     return True
   def getKey(self):
     #return pointer2bytes(self.key,self.key_len)
-    return model.array2bytes( model.getRef( model.getSubType(self.key), getaddress(self.key)) )
+    return model.array2bytes( model.getRef( model.get_subtype(self.key), getaddress(self.key)) )
 
   def toPyObject(self):
     d=OpenSSHStruct.toPyObject(self)

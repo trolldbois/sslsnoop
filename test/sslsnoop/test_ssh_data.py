@@ -8,10 +8,9 @@ import unittest
 import sys
 
 import sslsnoop
-from sslsnoop import ctypes_openssh as cssh
+#need Config before from sslsnoop import ctypes_openssh as cssh
 
 from haystack import dump_loader
-from haystack import model
 from haystack import utils
 from haystack import abouchet
 from haystack import memory_mapper
@@ -248,12 +247,15 @@ class Test_SSH_1_Data_pickled(unittest.TestCase, SSH_1_Data):
         'json': None,
         }
     args = type('args', ( object,), d)
+    # setup haystack
+    from haystack import config
+    config.make_config_from_memdump(d['dumpname'])
     #
     addr = int(args.addr,16)
     structType = abouchet.getKlass(args.structName)
     self.mappings = memory_mapper.MemoryMapper(args).getMappings()
     self.finder = abouchet.StructFinder(self.mappings)
-    memoryMap = model.is_valid_address_value(addr, self.finder.mappings)
+    memoryMap = utils.is_valid_address_value(addr, self.finder.mappings)
     # done          
     self.session_state, self.found = self.finder.loadAt( memoryMap, addr, structType)
     self.pyobj = self.session_state.toPyObject()
@@ -270,6 +272,7 @@ class Test_SSH_1_Data_pickled(unittest.TestCase, SSH_1_Data):
     self.finder = None
     self.found = None
     self.session_state = None
+    from haystack import model
     model.reset()
     pass
   
