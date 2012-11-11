@@ -21,14 +21,11 @@ import Queue
 # todo : replace by one empty shell of ours
 #from paramiko.transport import Transport
 
-import ctypes_openssl
-import ctypes_openssh
 import output
 import haystack 
 import network
 import utils
 
-from engine import CIPHERS
 #our impl
 from paramiko_packet import Packetizer, PACKET_MAX_SIZE
 
@@ -110,6 +107,7 @@ class OpenSSHKeysFinder():
   
   def findActiveSession(self, maxNum=1):
     ''' search for session_state '''
+    import ctypes_openssh
     outs = haystack.findStruct(self.pid, ctypes_openssh.session_state, debug=False, quiet=True)
     if outs is None:
       log.error("The session_state has not been found. maybe it's not OpenSSH ?")
@@ -122,6 +120,7 @@ class OpenSSHKeysFinder():
 
   def refreshActiveSession(self, offset):
     ''' refresh session_state from a known address '''
+    import ctypes_openssh
     instance,validated = haystack.refreshStruct(self.pid, ctypes_openssh.session_state, offset)
     if not validated:
       log.error("The session_state has not been re-validated. You should look for it again.")
@@ -212,6 +211,7 @@ class OpenSSHLiveDecryptatator(OpenSSHKeysFinder):
   def _attachEngine(cls, packetizer, context):
     ''' activate the packetizer with a cipher engine '''
     from paramiko.transport import Transport
+    from engine import CIPHERS    
     # find Engine from engine.ciphers
     engine = CIPHERS[context.name](context) 
     log.debug( 'cipher:%s block_size: %d key_len: %d '%(context.name, context.block_size, context.key_len ) )
