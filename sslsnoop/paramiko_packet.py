@@ -251,7 +251,7 @@ class Packetizer (object):
         if self.__block_engine_in != None:
             self._log(DEBUG, 'read %d header in paramiko before decrypt: %s '%(self.__block_size_in, repr(header) ));
             header = self.__block_engine_in.decrypt(header)
-            self._log(ERROR, 'DECRYPTING HEADER : %s'%( repr(header) ));
+            self._log(DEBUG, 'DECRYPTING HEADER : %s'%( repr(header) ));
         if self.__dump_packets:
             self._log(DEBUG, util.format_binary(header, 'IN: '));
 
@@ -273,7 +273,7 @@ class Packetizer (object):
         if self.__block_engine_in != None:
             self._log(DEBUG, 'body in paramiko before decrypt: %s '%( repr(buf) ));
             packet = self.__block_engine_in.decrypt(packet)
-            self._log(ERROR, 'DECRYPTING PACKET %s'%( repr(packet) ));
+            self._log(DEBUG, 'DECRYPTING PACKET %s'%( repr(packet) ));
         if self.__dump_packets:
             self._log(DEBUG, util.format_binary(packet, 'IN: '));
         packet = leftover + packet
