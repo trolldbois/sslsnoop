@@ -6,16 +6,17 @@
 
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
-import ctypes
 import logging, sys
 
 ''' insure ctypes basic types are subverted '''
 from haystack import model
 
-from haystack.model import is_valid_address,is_valid_address_value,getaddress,array2bytes,bytes2array
-from haystack.model import LoadableMembersStructure,RangeValue,NotNull,CString
+from haystack.utils import getaddress,array2bytes,bytes2array
+from haystack.constraints import RangeValue,NotNull
 
 import ctypes_openssl_generated as gen
+
+import ctypes
 
 log=logging.getLogger('ctypes_openssl')
 
@@ -31,7 +32,7 @@ RIJNDAEL_MAXNR=14
 # ============== Internal type defs ==============
 
 
-class OpenSSLStruct(LoadableMembersStructure):
+class OpenSSLStruct(ctypes.Structure):
   ''' defines classRef '''
   pass
 
@@ -159,7 +160,7 @@ def BIGNUM_loadMembers(self, mappings, maxDepth):
   if not bool(self.d):
     log.debug('BIGNUM has a Null pointer d')
     return True
-  memoryMap = is_valid_address_value( attr_obj_address, mappings)
+  memoryMap = mappings.is_valid_address_value(attr_obj_address)
   # TODO - challenge buffer_copy use,
   contents=(BN_ULONG*self.top).from_buffer_copy(memoryMap.readArray(attr_obj_address, BN_ULONG, self.top))
   keepRef( contents, model.getSubtype(self.d), attr_obj_address )
@@ -218,14 +219,14 @@ RSA.expectedValues={
 def RSA_printValid(self,mappings):
   log.debug( '----------------------- LOADED: %s'%self.loaded)
   log.debug('pad: %d version %d ref %d'%(self.pad,self.version,self.references) )
-  log.debug(is_valid_address( self.n, mappings)    )
-  log.debug(is_valid_address( self.e, mappings)    )
-  log.debug(is_valid_address( self.d, mappings)    )
-  log.debug(is_valid_address( self.p, mappings)    )
-  log.debug(is_valid_address( self.q, mappings)    )
-  log.debug(is_valid_address( self.dmp1, mappings) ) 
-  log.debug(is_valid_address( self.dmq1, mappings) )
-  log.debug(is_valid_address( self.iqmp, mappings) )
+  log.debug(mappings.is_valid_address( self.n)    )
+  log.debug(mappings.is_valid_address( self.e)    )
+  log.debug(mappings.is_valid_address( self.d)    )
+  log.debug(mappings.is_valid_address( self.p)    )
+  log.debug(mappings.is_valid_address( self.q)    )
+  log.debug(mappings.is_valid_address( self.dmp1) ) 
+  log.debug(mappings.is_valid_address( self.dmq1) )
+  log.debug(mappings.is_valid_address( self.iqmp) )
   return
 def RSA_loadMembers(self, mappings, maxDepth):
   #self.meth = 0 # from_address(0)
@@ -258,11 +259,11 @@ DSA.expectedValues={
   }
 def DSA_printValid(self,mappings):
   log.debug( '----------------------- \npad: %d version %d ref %d'%(self.pad,self.version,self.write_params) )
-  log.debug(is_valid_address( self.p, mappings)    )
-  log.debug(is_valid_address( self.q, mappings)    )
-  log.debug(is_valid_address( self.g, mappings)    )
-  log.debug(is_valid_address( self.pub_key, mappings)    )
-  log.debug(is_valid_address( self.priv_key, mappings)    )
+  log.debug(mappings.is_valid_address( self.p)    )
+  log.debug(mappings.is_valid_address( self.q)    )
+  log.debug(mappings.is_valid_address( self.g)    )
+  log.debug(mappings.is_valid_address( self.pub_key)    )
+  log.debug(mappings.is_valid_address( self.priv_key)    )
   return
 def DSA_loadMembers(self, mappings, maxDepth):
   # clean other structs
@@ -323,7 +324,7 @@ def EVP_CIPHER_CTX_loadMembers(self, mappings, maxDepth):
     return False
   log.debug('trying to load cipher_data Structs.')
   '''
-  if bool(cipher) and bool(self.cipher.nid) and is_valid_address(cipher_data):
+  if bool(cipher) and bool(self.cipher.nid) and mappings.is_valid_address(cipher_data):
     memcopy( self.cipher_data, cipher_data_addr, self.cipher.ctx_size)
     # cast possible on cipher.nid -> cipherType
   '''
@@ -340,11 +341,11 @@ def EVP_CIPHER_CTX_loadMembers(self, mappings, maxDepth):
   
   # c_void_p is a basic type.
   attr_obj_address = self.cipher_data
-  memoryMap = is_valid_address_value( attr_obj_address, mappings, struct)
+  memoryMap = mappings.is_valid_address_value( attr_obj_address, struct)
   log.debug( "cipher_data CAST into : %s "%(struct) )
   if not memoryMap:
     log.warning('in CTX On second toughts, cipher_data seems to be at an invalid address. That should not happen (often).')
-    log.warning('%s addr:0x%lx size:0x%lx addr+size:0x%lx '%(is_valid_address_value( attr_obj_address, mappings), 
+    log.warning('%s addr:0x%lx size:0x%lx addr+size:0x%lx '%(mappings.is_valid_address_value(attr_obj_address), 
                                 attr_obj_address, ctypes.sizeof(struct), attr_obj_address+ctypes.sizeof(struct)))
     return True
   #ok
@@ -356,7 +357,7 @@ def EVP_CIPHER_CTX_loadMembers(self, mappings, maxDepth):
   attr=getattr(self, 'cipher_data')      
   log.debug('Copied 0x%lx into %s (0x%lx)'%(ctypes.addressof(st), 'cipher_data', attr))      
   log.debug('LOADED cipher_data as %s from 0x%lx (%s) into 0x%lx'%(struct, 
-        attr_obj_address, is_valid_address_value(attr_obj_address, mappings, struct), attr ))
+        attr_obj_address, mappings.is_valid_address_value(attr_obj_address, struct), attr ))
   log.debug('\t\t---------\n%s\t\t---------'%st.toString())
   return True
 

@@ -6,15 +6,16 @@
 
 __author__ = "Loic Jaquemet loic.jaquemet+python@gmail.com"
 
-import ctypes
 import logging
 import sys
 
 from haystack import model
-from haystack.model import is_valid_address,is_valid_address_value,pointer2bytes,array2bytes,bytes2array,getaddress
-from haystack.model import LoadableMembersStructure,RangeValue,NotNull,CString, IgnoreMember
+from haystack.utils import pointer2bytes,array2bytes,bytes2array,getaddress
+from haystack.constraints import RangeValue,NotNull,IgnoreMember
 from ctypes_openssl import EVP_CIPHER_CTX, EVP_MD, HMAC_CTX
 from ctypes_openssl import AES_KEY, RC4_KEY, CAST_KEY, BF_KEY, DES_key_schedule
+
+import ctypes
 
 log=logging.getLogger('ctypes_openssh')
 
@@ -37,7 +38,7 @@ UINT8=ctypes.c_uint8
 
 
 
-class OpenSSHStruct(LoadableMembersStructure):
+class OpenSSHStruct(ctypes.Structure):
   ''' defines classRef '''
   pass
 
@@ -106,13 +107,13 @@ class ssh_rijndael_ctx(OpenSSHStruct):
 class Cipher(OpenSSHStruct):
   ''' cipher.c:60 '''
   _fields_ = [
-  ("name",  CString ), # yeah,  c_char_p can't handle us
+  ("name",  ctypes.CString ), # yeah,  c_char_p can't handle us
   ("number",  ctypes.c_int), # for ssh1 only cipher.c and cipher.h:45 // -3 == SSH_CIPHER_SSH2
   ("block_size",  ctypes.c_uint), 
   ("key_len",  ctypes.c_uint), 
   ("discard_len",  ctypes.c_uint), 
   ("cbc_mode",  ctypes.c_uint), 
-  ("evptype",  ctypes.POINTER(ctypes.c_int)) ## fn const EVP_CIPHER * function() qui renvoit & de la structure EVP_CIPHER
+  ("evptype",  ctypes.POINTER(ctypes.c_int)) ## fn const EVP_CIPHER * function() qui renvoit & de la ctypes.Structure EVP_CIPHER
   ]
   expectedValues = {
   'name': NotNull,
@@ -137,7 +138,7 @@ class CipherContext(OpenSSHStruct):
 	 "acss@openssh.org": None,
   }
   def loadMembers(self, mappings, maxDepth):
-    if not LoadableMembersStructure.loadMembers(self, mappings, maxDepth):
+    if not ctypes.Structure.loadMembers(self, mappings, maxDepth):
       return False
     #log.debug('evp    app_data    attr_obj_address=0x%lx'%(self.evp.app_data) )
     #log.debug('evp    cipher_data attr_obj_address=0x%lx'%(self.evp.cipher_data) )  ##none
@@ -151,11 +152,11 @@ class CipherContext(OpenSSHStruct):
         log.warning("Unsupported cipher %s"%(ciphername))
         return True
       attr_obj_address = self.evp.app_data
-      memoryMap = is_valid_address_value( attr_obj_address, mappings, struct)
+      memoryMap = mappings.is_valid_address_value(attr_obj_address, struct)
       log.debug( "CipherContext CAST app_data into : %s "%( struct) )
       if not memoryMap:
         log.warning('On second toughts, app_data seems to be at an invalid address. That should not happen (often).')
-        log.warning('%s addr:0x%lx size:0x%lx addr+size:0x%lx '%(is_valid_address_value( attr_obj_address, mappings), 
+        log.warning('%s addr:0x%lx size:0x%lx addr+size:0x%lx '%(mappings.is_valid_address_value( attr_obj_address), 
                                     attr_obj_address, ctypes.sizeof(struct), attr_obj_address+ctypes.sizeof(struct)))
         return False # DEBUG kill it
       # read the void * and keep a ref
@@ -166,7 +167,7 @@ class CipherContext(OpenSSHStruct):
       
       log.debug('Copied 0x%lx into app_data (0x%lx)'%(attr_obj_address, evp_app_data.value) )
       log.debug('LOADED app_data as %s from 0x%lx (%s) into 0x%lx'%(struct, 
-            attr_obj_address, is_valid_address_value(attr_obj_address,mappings,struct), evp_app_data.value))
+            attr_obj_address, mappings.is_valid_address_value(attr_obj_address,struct), evp_app_data.value))
       log.debug('\t\t---------\n%s\t\t---------'%(st.toString() ) )
     else:
       log.debug("Unknown cipher %s, can't load a data struct for the EVP_CIPHER_CTX->app_data"%(ciphername))
@@ -193,7 +194,7 @@ class CipherContext(OpenSSHStruct):
 class Enc(OpenSSHStruct):
   ''' kex.h:84 '''
   _fields_ = [
-  ("name",  CString ),  
+  ("name",  ctypes.CString ),  
   ("cipher", ctypes.POINTER(Cipher)),
   ("enabled",  ctypes.c_int), 
   ("key_len",  ctypes.c_uint), 
@@ -202,13 +203,13 @@ class Enc(OpenSSHStruct):
   ("iv",  ctypes.POINTER(ctypes.c_ubyte))
   ]
   def loadMembers(self, mappings, maxDepth):
-    if not LoadableMembersStructure.loadMembers(self, mappings, maxDepth):
+    if not ctypes.Structure.loadMembers(self, mappings, maxDepth):
       return False
     # Load and memcopy key and iv
     log.debug('Enc Memcopying a Key with %d bytes'%self.key_len)
     attr_obj_address = getaddress(self.key)
     log.debug('got key @%x '%(attr_obj_address))
-    memoryMap = is_valid_address_value( attr_obj_address, mappings)
+    memoryMap = mappings.is_valid_address_value( attr_obj_address)
     # DEBUG - I do question the buffer_copy.
     log.debug('memoryMap is %s - \nmake array '%(memoryMap))
     array=(ctypes.c_ubyte*self.key_len).from_buffer_copy(memoryMap.readArray(attr_obj_address, ctypes.c_ubyte, self.key_len))
@@ -220,7 +221,7 @@ class Enc(OpenSSHStruct):
     
     log.debug('Enc Memcopying a IV with %d bytes'%( self.block_size) )
     attr_obj_address=getaddress(self.iv)
-    memoryMap = is_valid_address_value( attr_obj_address, mappings)
+    memoryMap = mappings.is_valid_address_value(attr_obj_address)
     log.debug('make array ')
     array=(ctypes.c_ubyte*self.block_size).from_buffer_copy(memoryMap.readArray(attr_obj_address, ctypes.c_ubyte,self.block_size))
     # save iv contents as bitstream
@@ -299,7 +300,7 @@ class umac_ctx(OpenSSHStruct):
 class Mac(OpenSSHStruct):
   ''' kex.h:90 '''
   _fields_ = [
-  ("name",  CString ),  
+  ("name",  ctypes.CString ),  
   ("enabled",  ctypes.c_int), 
   ("mac_len",  ctypes.c_uint), 
   ("key",  ctypes.POINTER(ctypes.c_ubyte)), #u_char ? 
@@ -322,12 +323,12 @@ class Mac(OpenSSHStruct):
      We should conditionnally loadMembers on evp_ctx or umac_ctx, but, hey.. poc here...
   '''
   def loadMembers(self, mappings, maxDepth):
-    if not LoadableMembersStructure.loadMembers(self, mappings, maxDepth):
+    if not ctypes.Structure.loadMembers(self, mappings, maxDepth):
       return False
     # Load and memcopy key 
     log.debug('Memcopying a Key with %d bytes'%self.key_len)
     attr_obj_address=getaddress(self.key)
-    memoryMap = is_valid_address_value( attr_obj_address, mappings)    
+    memoryMap = mappings.is_valid_address_value( attr_obj_address)
     array=(ctypes.c_ubyte*self.key_len).from_buffer_copy(memoryMap.readArray(attr_obj_address, ctypes.c_ubyte, self.key_len))
     model.keepRef(array, model.get_subtype(self.key), attr_obj_address)
 
@@ -359,7 +360,7 @@ class Comp(OpenSSHStruct):
   _fields_ = [
   ("type",  ctypes.c_int), 
   ("enabled",  ctypes.c_int), 
-  ("name",  CString ) 
+  ("name",  ctypes.CString ) 
   ]
 
 class Newkeys(OpenSSHStruct):
@@ -486,20 +487,24 @@ class session_state(OpenSSHStruct):
     #log.info('self.send_context.evp.app_data: 0x%lx'%(self.send_context.evp.app_data))
     
     # populate AppData.
-    if d.receive_context.evp.cipher.nid == 0:
-      d.receive_context.evp.app_data = self.receive_context.getEvpAppData().toPyObject()
-      d.send_context.evp.app_data = self.send_context.getEvpAppData().toPyObject()
+    try:
+      if d.receive_context.evp.cipher.nid == 0:
+        d.receive_context.evp.app_data = self.receive_context.getEvpAppData().toPyObject()
+        d.send_context.evp.app_data = self.send_context.getEvpAppData().toPyObject()
+
+      #log.debug('self.send_context.evp.app_data: %s'%(self.send_context.getEvpAppData()))
+      #log.debug('d.send_context.evp.app_data: %s'%(d.send_context.evp.app_data))
+      ## TODO find a better way to pass a void_p for that cipher data
+      #d.receive_context.evp.cipher_data = self.receive_context.getEvpAppData().toPyObject()
+      #d.send_context.evp.cipher_data = self.send_context.getEvpAppData().toPyObject()
+      if (type(d.send_context.evp.cipher_data) == tuple 
+          and d.send_context.evp.cipher_data[0] is not None
+          and d.send_context.evp.cipher_data[1] is not None ):
+        log.debug("cipher_data has %s"%(d.send_context.evp.cipher_data.toString()) )
+
+    except AttributeError as e:
+      log.error('Error while populating receive/send context')
     
-    
-    #log.debug('self.send_context.evp.app_data: %s'%(self.send_context.getEvpAppData()))
-    #log.debug('d.send_context.evp.app_data: %s'%(d.send_context.evp.app_data))
-    ## TODO find a better way to pass a void_p for that cipher data
-    #d.receive_context.evp.cipher_data = self.receive_context.getEvpAppData().toPyObject()
-    #d.send_context.evp.cipher_data = self.send_context.getEvpAppData().toPyObject()
-    if (type(d.send_context.evp.cipher_data) == tuple 
-        and d.send_context.evp.cipher_data[0] is not None
-        and d.send_context.evp.cipher_data[1] is not None ):
-      log.debug("cipher_data has %s"%(d.send_context.evp.cipher_data.toString()) )
     return d
 
 
