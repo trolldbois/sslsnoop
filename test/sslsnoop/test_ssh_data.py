@@ -193,14 +193,16 @@ def get_member_value(root, attrlist):
   return tmp
 
 def test_tpl(self, attr):
-  #print 'testing ', attr
+  print 'testing ', attr
   expected = get_dict_value( self.expected, attr)
   found    = get_member_value( self.get_py_object(), attr)
-  #print type(found)
+  print type(found)
   if utils.isFunctionType(type(found)):
     print 'nope'
   else:
     self.assertEquals( expected, found, '%s expected: %s found: %s'%('.'.join(attr), expected, found) )
+    import code
+    code.interact(local =locals())
   
 def _gen_attr_tests(cls):
   _gen_recurse_dict( cls, cls.expected, [] )
@@ -253,7 +255,7 @@ class Test_SSH_1_Data_pickled(unittest.TestCase, SSH_1_Data):
     #
     addr = int(args.addr,16)
     structType = abouchet.getKlass(args.structName)
-    self.mappings = memory_mapper.MemoryMapper(args).getMappings()
+    self.mappings = memory_mapper.MemoryMapper(dumpname=args.dumpname).getMappings()
     self.finder = abouchet.StructFinder(self.mappings)
     memoryMap = utils.is_valid_address_value(addr, self.finder.mappings)
     # done          

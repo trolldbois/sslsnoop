@@ -36,7 +36,7 @@ class NSSStruct(LoadableMembersStructure):
 
 # replace c_char_p with our String handler
 if type(gen.STRING) != type(CString):
-  print 'STRING is not model.CString. Please correct ctypes_nss_geenrated with :' 
+  print 'STRING is not model.CString. Please correct ctypes_nss_generated with :' 
   print 'from model import CString' 
   print 'STRING = CString' 
   import sys

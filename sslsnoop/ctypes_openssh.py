@@ -10,6 +10,7 @@ import logging
 import sys
 
 from haystack import model
+from haystack import utils
 from haystack.utils import pointer2bytes,array2bytes,bytes2array,getaddress
 from haystack.constraints import RangeValue,NotNull,IgnoreMember
 from ctypes_openssl import EVP_CIPHER_CTX, EVP_MD, HMAC_CTX
@@ -142,8 +143,8 @@ class CipherContext(OpenSSHStruct):
       return False
     #log.debug('evp    app_data    attr_obj_address=0x%lx'%(self.evp.app_data) )
     #log.debug('evp    cipher_data attr_obj_address=0x%lx'%(self.evp.cipher_data) )  ##none
-    cipher = model.getRef( Cipher, getaddress(self.cipher) )
-    ciphername = cipher.name.toString() 
+    cipher = mappings.getRef( Cipher, getaddress(self.cipher) )
+    ciphername = mappings.getRef(ctypes.CString, getaddress(cipher.name.ptr) )
     # cast evp.app_data into a valid struct
     if ciphername in self.cipherContexts:
       # evp.cipher.nid should be 0
@@ -151,7 +152,7 @@ class CipherContext(OpenSSHStruct):
       if (struct is None):
         log.warning("Unsupported cipher %s"%(ciphername))
         return True
-      attr_obj_address = self.evp.app_data
+      attr_obj_address = getaddress(self.evp.app_data)
       memoryMap = mappings.is_valid_address_value(attr_obj_address, struct)
       log.debug( "CipherContext CAST app_data into : %s "%( struct) )
       if not memoryMap:
@@ -161,33 +162,37 @@ class CipherContext(OpenSSHStruct):
         return False # DEBUG kill it
       # read the void * and keep a ref
       st = memoryMap.readStruct(attr_obj_address, struct )
-      model.keepRef(st, struct, attr_obj_address)
+      mappings.keepRef(st, struct, attr_obj_address)
       # yeah... no. "self.evp.app_data = xx" means SEGFAULT.
-      evp_app_data = ctypes.c_void_p(ctypes.addressof(st)) 
+      address_evp_app_data = ctypes.addressof(st)
       
-      log.debug('Copied 0x%lx into app_data (0x%lx)'%(attr_obj_address, evp_app_data.value) )
+      log.debug('Copied 0x%lx into app_data (0x%lx)'%(attr_obj_address, address_evp_app_data) )
       log.debug('LOADED app_data as %s from 0x%lx (%s) into 0x%lx'%(struct, 
-            attr_obj_address, mappings.is_valid_address_value(attr_obj_address,struct), evp_app_data.value))
-      log.debug('\t\t---------\n%s\t\t---------'%(st.toString() ) )
+            attr_obj_address, mappings.is_valid_address_value(attr_obj_address,struct), address_evp_app_data))
+      from haystack.outputters import text
+      parser = text.RecursiveTextOutputter(mappings)
+      log.debug('\t\t---------\n%s\t\t---------'%(parser.parse(st)))
     else:
       log.debug("Unknown cipher %s, can't load a data struct for the EVP_CIPHER_CTX->app_data"%(ciphername))
     return True
   
-  def getEvpAppData(self):
-    cipher = model.getRef( Cipher, getaddress(self.cipher) )
-    ciphername = cipher.name.toString() 
+  def getEvpAppData(self, mappings):
+    cipher = mappings.getRef( Cipher, getaddress(self.cipher) )
+    ciphername = mappings.getRef(ctypes.CString, getaddress(cipher.name.ptr) )
     if ciphername in self.cipherContexts:
       struct = self.cipherContexts[ciphername]
+      from haystack.outputters import text
+      parser = text.RecursiveTextOutputter(mappings)
       if(struct is None):
         log.warning("Unsupported cipher %s"%(ciphername))
-        log.warning("%s"%(cipher.toString()))
+        log.warning("%s"%(parser.parse(cipher)))
         return None
       log.debug('CAST evp.app_data Into %s'%(struct))
       attr_obj_address = self.evp.app_data
-      st = model.getRef(struct, attr_obj_address)
+      st = mappings.getRef(struct, attr_obj_address)
       #st = struct.from_address(attr)
       log.debug('app_data value is : 0x%lx'%(attr_obj_address))
-      log.debug(st.toString())
+      log.debug(parser.parse(st))
       return st
     return None
 
@@ -217,7 +222,7 @@ class Enc(OpenSSHStruct):
     ##key_contents = ctypes.c_ubyte.from_buffer(array)
     key_contents = array
     log.debug('keep ref ')
-    model.keepRef(key_contents, model.get_subtype(self.key), attr_obj_address)
+    mappings.keepRef(key_contents, utils.get_subtype(self.key), attr_obj_address)
     
     log.debug('Enc Memcopying a IV with %d bytes'%( self.block_size) )
     attr_obj_address=getaddress(self.iv)
@@ -228,16 +233,16 @@ class Enc(OpenSSHStruct):
     ##iv_contents = ctypes.c_ubyte.from_buffer(array)
     iv_contents = array
     log.debug('keep ref')
-    model.keepRef(iv_contents, model.get_subtype(self.iv), attr_obj_address)
+    mappings.keepRef(iv_contents, utils.get_subtype(self.iv), attr_obj_address)
     
     log.debug('ENC KEY(%d bytes) and IV(%d bytes) acquired'%(self.key_len,self.block_size))
     return True
-  def getKey(self):
+  def getKey(self, mappings):
     #return pointer2bytes(self.key, self.key_len)
-    return model.array2bytes(model.getRef( model.get_subtype(self.key), getaddress(self.key)) )
-  def getIV(self):
-    #return pointer2bytes(model.getRef(ctypes.Array, getaddress(self.iv)), self.block_size) 
-    return model.array2bytes(model.getRef( model.get_subtype(self.iv), getaddress(self.iv)) )
+    return mappings.array2bytes(mappings.getRef(mappings.get_subtype(self.key), getaddress(self.key)) )
+  def getIV(self, mappings):
+    #return pointer2bytes(mappings.getRef(ctypes.Array, getaddress(self.iv)), self.block_size) 
+    return mappings.array2bytes(mappings.getRef(mappings.get_subtype(self.iv), getaddress(self.iv)) )
 
   def toPyObject(self):
     d=OpenSSHStruct.toPyObject(self)
@@ -330,14 +335,14 @@ class Mac(OpenSSHStruct):
     attr_obj_address=getaddress(self.key)
     memoryMap = mappings.is_valid_address_value( attr_obj_address)
     array=(ctypes.c_ubyte*self.key_len).from_buffer_copy(memoryMap.readArray(attr_obj_address, ctypes.c_ubyte, self.key_len))
-    model.keepRef(array, model.get_subtype(self.key), attr_obj_address)
+    mappings.keepRef(array, utils.get_subtype(self.key), attr_obj_address)
 
     log.debug('unmac_ctx has been nulled and ignored. its not often used by any ssh impl. Not useful for us anyway.')
     log.debug('MAC KEY(%d bytes) acquired'%(self.key_len))
     return True
   def getKey(self):
     #return pointer2bytes(self.key,self.key_len)
-    return model.array2bytes( model.getRef( model.get_subtype(self.key), getaddress(self.key)) )
+    return utils.array2bytes( mappings.getRef( utils.get_subtype(self.key), getaddress(self.key)) )
 
   def toPyObject(self):
     d=OpenSSHStruct.toPyObject(self)
@@ -497,10 +502,12 @@ class session_state(OpenSSHStruct):
       ## TODO find a better way to pass a void_p for that cipher data
       #d.receive_context.evp.cipher_data = self.receive_context.getEvpAppData().toPyObject()
       #d.send_context.evp.cipher_data = self.send_context.getEvpAppData().toPyObject()
-      if (type(d.send_context.evp.cipher_data) == tuple 
-          and d.send_context.evp.cipher_data[0] is not None
-          and d.send_context.evp.cipher_data[1] is not None ):
-        log.debug("cipher_data has %s"%(d.send_context.evp.cipher_data.toString()) )
+      if ( type(d.send_context.evp.cipher_data) == tuple 
+           and d.send_context.evp.cipher_data[0] is not None
+           and d.send_context.evp.cipher_data[1] is not None ):
+          from haystack.outputters import text
+          parser = text.RecursiveTextOutputter(mappings)
+          log.debug("cipher_data has %s"%(parser.parse(d.send_context.evp.cipher_data)) )
 
     except AttributeError as e:
       log.error('Error while populating receive/send context')

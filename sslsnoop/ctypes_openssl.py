@@ -163,12 +163,12 @@ def BIGNUM_loadMembers(self, mappings, maxDepth):
   memoryMap = mappings.is_valid_address_value(attr_obj_address)
   # TODO - challenge buffer_copy use,
   contents=(BN_ULONG*self.top).from_buffer_copy(memoryMap.readArray(attr_obj_address, BN_ULONG, self.top))
-  keepRef( contents, model.getSubtype(self.d), attr_obj_address )
+  mappings.keepRef( contents, model.getSubtype(self.d), attr_obj_address )
   log.debug('contents acquired %d'%ctypes.sizeof(contents))
   return True
 
 def BIGNUM_get_d(self):
-  return getRef( model.getSubtype(self.d), getaddress(self.d))
+  return self._mapping_.getRef( model.getSubtype(self.d), getaddress(self.d))
 
 def BIGNUM_isValid(self,mappings):
   if ( self.dmax < 0 or self.top < 0 or self.dmax < self.top ):
@@ -291,8 +291,8 @@ EVP_CIPHER.expectedValues={
     "key_len": RangeValue(1,0xff), # key_len *8 bits ..2040 bits for a key is enought ? 
                                    # Default value for variable length ciphers 
     "iv_len": RangeValue(0,0xff), #  rc4 has no IV ?
-    "init": [NotNull], 
-    "do_cipher": [NotNull], 
+    #"init": [NotNull], 
+    #"do_cipher": [NotNull], 
     #"cleanup": [NotNull], # aes-cbc ?
     "ctx_size": RangeValue(0,0xffff), #  app_data struct should not be too big
   }
@@ -328,7 +328,7 @@ def EVP_CIPHER_CTX_loadMembers(self, mappings, maxDepth):
     memcopy( self.cipher_data, cipher_data_addr, self.cipher.ctx_size)
     # cast possible on cipher.nid -> cipherType
   '''
-  cipher = model.getRef( evp_cipher_st, getaddress(self.cipher) )
+  cipher = mappings.getRef( evp_cipher_st, getaddress(self.cipher) )
   if cipher.nid == 0: # NID_undef, not openssl doing
     log.info('The cipher is home made - the cipher context data should be application dependant (app_data)')
     return True
@@ -350,7 +350,7 @@ def EVP_CIPHER_CTX_loadMembers(self, mappings, maxDepth):
     return True
   #ok
   st = memoryMap.readStruct(attr_obj_address, struct )
-  model.keepRef(st, struct, attr_obj_address)
+  mappings.keepRef(st, struct, attr_obj_address)
   self.cipher_data = ctypes.c_void_p(ctypes.addressof(st)) 
   ###print 'self.cipher_data in loadmembers',self.cipher_data
   # check debug
@@ -358,15 +358,17 @@ def EVP_CIPHER_CTX_loadMembers(self, mappings, maxDepth):
   log.debug('Copied 0x%lx into %s (0x%lx)'%(ctypes.addressof(st), 'cipher_data', attr))      
   log.debug('LOADED cipher_data as %s from 0x%lx (%s) into 0x%lx'%(struct, 
         attr_obj_address, mappings.is_valid_address_value(attr_obj_address, struct), attr ))
-  log.debug('\t\t---------\n%s\t\t---------'%st.toString())
+  from haystack.outputters import text
+  parser = text.RecursiveTextOutputter(mappings)        
+  log.debug('\t\t---------\n%s\t\t---------'%(parser.parse(st)))
   return True
 
 def EVP_CIPHER_CTX_toPyObject(self):
-    d=super(EVP_CIPHER_CTX,self).toPyObject()
+    d = super(EVP_CIPHER_CTX,self).toPyObject()
     log.debug('Cast a EVP_CIPHER_CTX into PyObj')
     # cast app_data or cipher_data to right struct
     if bool(self.cipher_data):
-      cipher = model.getRef( evp_cipher_st, getaddress(self.cipher) )
+      cipher = self._mappings_.getRef( evp_cipher_st, getaddress(self.cipher) )
       struct = getCipherDataType( cipher.nid)
       if struct is not None:
         # CAST c_void_p to struct
