@@ -33,8 +33,8 @@ RIJNDAEL_MAXNR=14
 
 
 class OpenSSLStruct(ctypes.Structure):
-  ''' defines classRef '''
-  pass
+    ''' defines classRef '''
+    pass
 
 BN_ULONG = ctypes.c_ulong
 
@@ -48,7 +48,7 @@ model.copyGeneratedClasses(gen, sys.modules[__name__])
 # create plain old python object from ctypes.Structure's, to picke them
 model.registerModule(sys.modules[__name__])
 
-################ END   copy generated classes ##########################
+################ END     copy generated classes ##########################
 
 
 
@@ -57,32 +57,32 @@ model.registerModule(sys.modules[__name__])
 
 NIDs = dict( [(getattr(gen, s), s) for s in gen.__dict__ if s.startswith('NID_') ])
 def getCipherName(nid):
-  if nid not in NIDs:
-    return None
-  nidname = NIDs[nid]
-  LNattr = 'SN'+nidname[3:] # del prefix 'NID'
-  return getattr(gen, LNattr)
+    if nid not in NIDs:
+        return None
+    nidname = NIDs[nid]
+    LNattr = 'SN'+nidname[3:] # del prefix 'NID'
+    return getattr(gen, LNattr)
 
 def getCipherDataType(nid):
-  name = getCipherName(nid)
-  if name is None:
+    name = getCipherName(nid)
+    if name is None:
+        return None
+    for t in EVP_CIPHER.CIPHER_DATA:
+        if name.startswith( t ):
+            return EVP_CIPHER.CIPHER_DATA[t]
     return None
-  for t in EVP_CIPHER.CIPHER_DATA:
-    if name.startswith( t ):
-      return EVP_CIPHER.CIPHER_DATA[t]
-  return None
 
 
 ''' rc4.h:71 '''
 ####### RC4_KEY #######
 def RC4_KEY_getData(self):
-  return array2bytes(self.data)
+    return array2bytes(self.data)
 def RC4_KEY_fromPyObj(self,pyobj):
-  #copy P and S
-  self.data = bytes2array(pyobj.data, ctypes.c_uint)
-  self.x = pyobj.x
-  self.y = pyobj.y
-  return self
+    #copy P and S
+    self.data = bytes2array(pyobj.data, ctypes.c_uint)
+    self.x = pyobj.x
+    self.y = pyobj.y
+    return self
 RC4_KEY.getData = RC4_KEY_getData
 RC4_KEY.fromPyObj = RC4_KEY_fromPyObj
 #######
@@ -90,14 +90,14 @@ RC4_KEY.fromPyObj = RC4_KEY_fromPyObj
 ''' cast.h:80 '''
 ####### CAST_KEY #######
 def CAST_KEY_getData(self):
-  return array2bytes(self.data)
+    return array2bytes(self.data)
 def CAST_KEY_getShortKey(self):
-  return self.short_key
+    return self.short_key
 def CAST_KEY_fromPyObj(self,pyobj):
-  #copy P and S
-  self.data = bytes2array(pyobj.data, ctypes.c_uint)
-  self.short_key = pyobj.short_key
-  return self
+    #copy P and S
+    self.data = bytes2array(pyobj.data, ctypes.c_uint)
+    self.short_key = pyobj.short_key
+    return self
 CAST_KEY.getData = CAST_KEY_getData
 CAST_KEY.getShortKey = CAST_KEY_getShortKey
 CAST_KEY.fromPyObj = CAST_KEY_fromPyObj
@@ -108,15 +108,15 @@ CAST_KEY.fromPyObj = CAST_KEY_fromPyObj
 ''' blowfish.h:101 '''
 ####### BF_KEY #######
 def BF_KEY_getP(self):
-  return array2bytes(self.P)
-  #return ','.join(["0x%lx"%key for key in self.rd_key])
+    return array2bytes(self.P)
+    #return ','.join(["0x%lx"%key for key in self.rd_key])
 def BF_KEY_getS(self):
-  return array2bytes(self.S)
+    return array2bytes(self.S)
 def BF_KEY_fromPyObj(self,pyobj):
-  #copy P and S
-  self.P = bytes2array(pyobj.P, ctypes.c_ulong)
-  self.S = bytes2array(pyobj.S, ctypes.c_ulong)
-  return self
+    #copy P and S
+    self.P = bytes2array(pyobj.P, ctypes.c_ulong)
+    self.S = bytes2array(pyobj.S, ctypes.c_ulong)
+    return self
 BF_KEY.getP = BF_KEY_getP
 BF_KEY.getS = BF_KEY_getS
 BF_KEY.fromPyObj = BF_KEY_fromPyObj
@@ -126,16 +126,16 @@ BF_KEY.fromPyObj = BF_KEY_fromPyObj
 ''' aes.h:78 '''
 ####### AES_KEY #######
 def AES_KEY_getKey(self):
-  #return array2bytes(self.rd_key)
-  return ','.join(["0x%lx"%key for key in self.rd_key])
+    #return array2bytes(self.rd_key)
+    return ','.join(["0x%lx"%key for key in self.rd_key])
 def AES_KEY_getRounds(self):
-  return self.rounds
+    return self.rounds
 def AES_KEY_fromPyObj(self,pyobj):
-  #copy rd_key
-  self.rd_key=bytes2array(pyobj.rd_key,ctypes.c_ulong)
-  #copy rounds
-  self.rounds=pyobj.rounds
-  return self
+    #copy rd_key
+    self.rd_key=bytes2array(pyobj.rd_key,ctypes.c_ulong)
+    #copy rounds
+    self.rounds=pyobj.rounds
+    return self
 AES_KEY.getKey = AES_KEY_getKey
 AES_KEY.getRounds = AES_KEY_getRounds
 AES_KEY.fromPyObj = AES_KEY_fromPyObj
@@ -144,158 +144,158 @@ AES_KEY.fromPyObj = AES_KEY_fromPyObj
 
 ############ BIGNUM
 BIGNUM.expectedValues={
-    "neg": [0,1]
-  }
+        "neg": [0,1]
+    }
 def BIGNUM_loadMembers(self, mappings, maxDepth):
-  ''' 
-  #self._d = process.readArray(attr_obj_address, ctypes.c_ulong, self.top) 
-  ## or    
-  #ulong_array= (ctypes.c_ulong * self.top)    
-  '''
-  if not self.isValid(mappings):
-    log.debug('BigNUm tries to load members when its not validated')
-    return False
-  # Load and memcopy d / BN_ULONG *
-  attr_obj_address = getaddress(self.d)
-  if not bool(self.d):
-    log.debug('BIGNUM has a Null pointer d')
+    ''' 
+    #self._d = process.readArray(attr_obj_address, ctypes.c_ulong, self.top) 
+    ## or        
+    #ulong_array= (ctypes.c_ulong * self.top)        
+    '''
+    if not self.isValid(mappings):
+        log.debug('BigNUm tries to load members when its not validated')
+        return False
+    # Load and memcopy d / BN_ULONG *
+    attr_obj_address = getaddress(self.d)
+    if not bool(self.d):
+        log.debug('BIGNUM has a Null pointer d')
+        return True
+    memoryMap = mappings.is_valid_address_value(attr_obj_address)
+    # TODO - challenge buffer_copy use,
+    contents=(BN_ULONG*self.top).from_buffer_copy(memoryMap.readArray(attr_obj_address, BN_ULONG, self.top))
+    mappings.keepRef( contents, model.getSubtype(self.d), attr_obj_address )
+    log.debug('contents acquired %d'%ctypes.sizeof(contents))
     return True
-  memoryMap = mappings.is_valid_address_value(attr_obj_address)
-  # TODO - challenge buffer_copy use,
-  contents=(BN_ULONG*self.top).from_buffer_copy(memoryMap.readArray(attr_obj_address, BN_ULONG, self.top))
-  mappings.keepRef( contents, model.getSubtype(self.d), attr_obj_address )
-  log.debug('contents acquired %d'%ctypes.sizeof(contents))
-  return True
 
 def BIGNUM_get_d(self):
-  return self._mapping_.getRef( model.getSubtype(self.d), getaddress(self.d))
+    return self._mapping_.getRef( model.getSubtype(self.d), getaddress(self.d))
 
 def BIGNUM_isValid(self,mappings):
-  if ( self.dmax < 0 or self.top < 0 or self.dmax < self.top ):
-    return False
-  return LoadableMembersStructure.isValid(self,mappings)
+    if ( self.dmax < 0 or self.top < 0 or self.dmax < self.top ):
+        return False
+    return LoadableMembersStructure.isValid(self,mappings)
 
 def BIGNUM___str__(self):
-  d= getaddress(self.d)
-  return ("BN { d=0x%lx, top=%d, dmax=%d, neg=%d, flags=%d }"%
-              (d, self.top, self.dmax, self.neg, self.flags) )
+    d= getaddress(self.d)
+    return ("BN { d=0x%lx, top=%d, dmax=%d, neg=%d, flags=%d }"%
+                            (d, self.top, self.dmax, self.neg, self.flags) )
 
 BIGNUM.loadMembers = BIGNUM_loadMembers
-BIGNUM.isValid     = BIGNUM_isValid
-BIGNUM.__str__     = BIGNUM___str__
+BIGNUM.isValid         = BIGNUM_isValid
+BIGNUM.__str__         = BIGNUM___str__
 #################
 
 
 # CRYPTO_EX_DATA crypto.h:158:
 def CRYPTO_EX_DATA_loadMembers(self, mappings, maxDepth):
-  ''' erase self.sk'''
-  #self.sk=ctypes.POINTER(STACK)()
-  return LoadableMembersStructure.loadMembers(self, mappings, maxDepth)
+    ''' erase self.sk'''
+    #self.sk=ctypes.POINTER(STACK)()
+    return LoadableMembersStructure.loadMembers(self, mappings, maxDepth)
 def CRYPTO_EX_DATA_isValid(self,mappings):
-  ''' erase self.sk'''
-  # TODO why ?
-  #self.sk=ctypes.POINTER(STACK)()
-  return LoadableMembersStructure.isValid(self,mappings)
+    ''' erase self.sk'''
+    # TODO why ?
+    #self.sk=ctypes.POINTER(STACK)()
+    return LoadableMembersStructure.isValid(self,mappings)
 
 CRYPTO_EX_DATA.loadMembers = CRYPTO_EX_DATA_loadMembers 
-CRYPTO_EX_DATA.isValid     = CRYPTO_EX_DATA_isValid 
+CRYPTO_EX_DATA.isValid         = CRYPTO_EX_DATA_isValid 
 #################
 
 
 ######## RSA key
 RSA.expectedValues={
-    "pad": [0], 
-    "version": [0], 
-    "references": RangeValue(0,0xfff),
-    "n": [NotNull],
-    "e": [NotNull],
-    "d": [NotNull],
-    "p": [NotNull],
-    "q": [NotNull],
-    "dmp1": [NotNull],
-    "dmq1": [NotNull],
-    "iqmp": [NotNull]
-  }
+        "pad": [0], 
+        "version": [0], 
+        "references": RangeValue(0,0xfff),
+        "n": [NotNull],
+        "e": [NotNull],
+        "d": [NotNull],
+        "p": [NotNull],
+        "q": [NotNull],
+        "dmp1": [NotNull],
+        "dmq1": [NotNull],
+        "iqmp": [NotNull]
+    }
 def RSA_printValid(self,mappings):
-  log.debug( '----------------------- LOADED: %s'%self.loaded)
-  log.debug('pad: %d version %d ref %d'%(self.pad,self.version,self.references) )
-  log.debug(mappings.is_valid_address( self.n)    )
-  log.debug(mappings.is_valid_address( self.e)    )
-  log.debug(mappings.is_valid_address( self.d)    )
-  log.debug(mappings.is_valid_address( self.p)    )
-  log.debug(mappings.is_valid_address( self.q)    )
-  log.debug(mappings.is_valid_address( self.dmp1) ) 
-  log.debug(mappings.is_valid_address( self.dmq1) )
-  log.debug(mappings.is_valid_address( self.iqmp) )
-  return
+    log.debug( '----------------------- LOADED: %s'%self.loaded)
+    log.debug('pad: %d version %d ref %d'%(self.pad,self.version,self.references) )
+    log.debug(mappings.is_valid_address( self.n)        )
+    log.debug(mappings.is_valid_address( self.e)        )
+    log.debug(mappings.is_valid_address( self.d)        )
+    log.debug(mappings.is_valid_address( self.p)        )
+    log.debug(mappings.is_valid_address( self.q)        )
+    log.debug(mappings.is_valid_address( self.dmp1) ) 
+    log.debug(mappings.is_valid_address( self.dmq1) )
+    log.debug(mappings.is_valid_address( self.iqmp) )
+    return
 def RSA_loadMembers(self, mappings, maxDepth):
-  #self.meth = 0 # from_address(0)
-  # ignore bignum_data.
-  #self.bignum_data = 0
-  self.bignum_data.ptr.value = 0
-  #self.blinding = 0
-  #self.mt_blinding = 0
+    #self.meth = 0 # from_address(0)
+    # ignore bignum_data.
+    #self.bignum_data = 0
+    self.bignum_data.ptr.value = 0
+    #self.blinding = 0
+    #self.mt_blinding = 0
 
-  if not LoadableMembersStructure.loadMembers(self, mappings, maxDepth):
-    log.debug('RSA not loaded')
-    return False
-  return True
+    if not LoadableMembersStructure.loadMembers(self, mappings, maxDepth):
+        log.debug('RSA not loaded')
+        return False
+    return True
 
-RSA.printValid  = RSA_printValid
+RSA.printValid    = RSA_printValid
 RSA.loadMembers = RSA_loadMembers
 
 
 
 ########## DSA Key
 DSA.expectedValues={
-    "pad": [0], 
-    "version": [0], 
-    "references": RangeValue(0,0xfff),
-    "p": [NotNull],
-    "q": [NotNull],
-    "g": [NotNull],
-    "pub_key": [NotNull],
-    "priv_key": [NotNull]
-  }
+        "pad": [0], 
+        "version": [0], 
+        "references": RangeValue(0,0xfff),
+        "p": [NotNull],
+        "q": [NotNull],
+        "g": [NotNull],
+        "pub_key": [NotNull],
+        "priv_key": [NotNull]
+    }
 def DSA_printValid(self,mappings):
-  log.debug( '----------------------- \npad: %d version %d ref %d'%(self.pad,self.version,self.write_params) )
-  log.debug(mappings.is_valid_address( self.p)    )
-  log.debug(mappings.is_valid_address( self.q)    )
-  log.debug(mappings.is_valid_address( self.g)    )
-  log.debug(mappings.is_valid_address( self.pub_key)    )
-  log.debug(mappings.is_valid_address( self.priv_key)    )
-  return
+    log.debug( '----------------------- \npad: %d version %d ref %d'%(self.pad,self.version,self.write_params) )
+    log.debug(mappings.is_valid_address( self.p)        )
+    log.debug(mappings.is_valid_address( self.q)        )
+    log.debug(mappings.is_valid_address( self.g)        )
+    log.debug(mappings.is_valid_address( self.pub_key)        )
+    log.debug(mappings.is_valid_address( self.priv_key)        )
+    return
 def DSA_loadMembers(self, mappings, maxDepth):
-  # clean other structs
-  # r and kinv can be null
-  self.meth = None
-  self._method_mod_p = None
-  #self.engine = None
-  
-  if not LoadableMembersStructure.loadMembers(self, mappings, maxDepth):
-    log.debug('DSA not loaded')
-    return False
+    # clean other structs
+    # r and kinv can be null
+    self.meth = None
+    self._method_mod_p = None
+    #self.engine = None
+    
+    if not LoadableMembersStructure.loadMembers(self, mappings, maxDepth):
+        log.debug('DSA not loaded')
+        return False
 
-  return True
+    return True
 
-DSA.printValid  = DSA_printValid
+DSA.printValid    = DSA_printValid
 DSA.loadMembers = DSA_loadMembers
 
 ######### EP_CIPHER
 EVP_CIPHER.expectedValues={
-    #crypto/objects/objects.h 0 is undef .. crypto cipher is a smaller subset :
-    # 1-10 19 29-46 60-70 91-98 104 108-123 166
-    # but for argument sake, we have to keep an open mind
-    "nid": RangeValue( min(NIDs.keys()), max(NIDs.keys()) ), 
-    "block_size": [1,2,4,6,8,16,24,32,48,64,128], # more or less
-    "key_len": RangeValue(1,0xff), # key_len *8 bits ..2040 bits for a key is enought ? 
-                                   # Default value for variable length ciphers 
-    "iv_len": RangeValue(0,0xff), #  rc4 has no IV ?
-    #"init": [NotNull], 
-    #"do_cipher": [NotNull], 
-    #"cleanup": [NotNull], # aes-cbc ?
-    "ctx_size": RangeValue(0,0xffff), #  app_data struct should not be too big
-  }
+        #crypto/objects/objects.h 0 is undef .. crypto cipher is a smaller subset :
+        # 1-10 19 29-46 60-70 91-98 104 108-123 166
+        # but for argument sake, we have to keep an open mind
+        "nid": RangeValue( min(NIDs.keys()), max(NIDs.keys()) ), 
+        "block_size": [1,2,4,6,8,16,24,32,48,64,128], # more or less
+        "key_len": RangeValue(1,0xff), # key_len *8 bits ..2040 bits for a key is enought ? 
+                                                                     # Default value for variable length ciphers 
+        "iv_len": RangeValue(0,0xff), #    rc4 has no IV ?
+        #"init": [NotNull], 
+        #"do_cipher": [NotNull], 
+        #"cleanup": [NotNull], # aes-cbc ?
+        "ctx_size": RangeValue(0,0xffff), #    app_data struct should not be too big
+    }
 EVP_CIPHER.CIPHER_DATA = { 
 	 "DES": DES_key_schedule,
 	 "3DES": DES_key_schedule,
@@ -304,86 +304,86 @@ EVP_CIPHER.CIPHER_DATA = {
 	 "RC4": RC4_KEY,
 	 "ARCFOUR": RC4_KEY,
 	 "AES": AES_KEY,
-  }
+    }
 
 
 ########### EVP_CIPHER_CTX
 EVP_CIPHER_CTX.expectedValues={
-    "cipher": [NotNull], 
-    "encrypt": [0,1], 
-    "buf_len": RangeValue(0,EVP_MAX_BLOCK_LENGTH), ## number we have left, so must be less than buffer_size
-    #"engine": , # can be null
-    #"app_data": , # can be null if cipher_data is not
-    #"cipher_data": , # can be null if app_data is not
-    "key_len": RangeValue(1,0xff), # key_len *8 bits ..2040 bits for a key is enought ? 
-  }
+        "cipher": [NotNull], 
+        "encrypt": [0,1], 
+        "buf_len": RangeValue(0,EVP_MAX_BLOCK_LENGTH), ## number we have left, so must be less than buffer_size
+        #"engine": , # can be null
+        #"app_data": , # can be null if cipher_data is not
+        #"cipher_data": , # can be null if app_data is not
+        "key_len": RangeValue(1,0xff), # key_len *8 bits ..2040 bits for a key is enought ? 
+    }
 
 # loadMembers, if nid & cipher_data-> we can assess cipher_data format to be a XX_KEY
 def EVP_CIPHER_CTX_loadMembers(self, mappings, maxDepth):
-  if not super(EVP_CIPHER_CTX,self).loadMembers(mappings, maxDepth):
-    return False
-  log.debug('trying to load cipher_data Structs.')
-  '''
-  if bool(cipher) and bool(self.cipher.nid) and mappings.is_valid_address(cipher_data):
-    memcopy( self.cipher_data, cipher_data_addr, self.cipher.ctx_size)
-    # cast possible on cipher.nid -> cipherType
-  '''
-  cipher = mappings.getRef( evp_cipher_st, getaddress(self.cipher) )
-  if cipher.nid == 0: # NID_undef, not openssl doing
-    log.info('The cipher is home made - the cipher context data should be application dependant (app_data)')
-    return True
+    if not super(EVP_CIPHER_CTX,self).loadMembers(mappings, maxDepth):
+        return False
+    log.debug('trying to load cipher_data Structs.')
+    '''
+    if bool(cipher) and bool(self.cipher.nid) and mappings.is_valid_address(cipher_data):
+        memcopy( self.cipher_data, cipher_data_addr, self.cipher.ctx_size)
+        # cast possible on cipher.nid -> cipherType
+    '''
+    cipher = mappings.getRef( evp_cipher_st, getaddress(self.cipher) )
+    if cipher.nid == 0: # NID_undef, not openssl doing
+        log.info('The cipher is home made - the cipher context data should be application dependant (app_data)')
+        return True
+        
+    struct = getCipherDataType( cipher.nid) 
+    log.debug('cipher type is %s - loading %s'%( getCipherName(cipher.nid), struct ))
+    if(struct is None):
+        log.warning("Unsupported cipher %s"%(cipher.nid))
+        return True
     
-  struct = getCipherDataType( cipher.nid) 
-  log.debug('cipher type is %s - loading %s'%( getCipherName(cipher.nid), struct ))
-  if(struct is None):
-    log.warning("Unsupported cipher %s"%(cipher.nid))
+    # c_void_p is a basic type.
+    attr_obj_address = self.cipher_data
+    memoryMap = mappings.is_valid_address_value( attr_obj_address, struct)
+    log.debug( "cipher_data CAST into : %s "%(struct) )
+    if not memoryMap:
+        log.warning('in CTX On second toughts, cipher_data seems to be at an invalid address. That should not happen (often).')
+        log.warning('%s addr:0x%lx size:0x%lx addr+size:0x%lx '%(mappings.is_valid_address_value(attr_obj_address), 
+                                                                attr_obj_address, ctypes.sizeof(struct), attr_obj_address+ctypes.sizeof(struct)))
+        return True
+    #ok
+    st = memoryMap.readStruct(attr_obj_address, struct )
+    mappings.keepRef(st, struct, attr_obj_address)
+    self.cipher_data = ctypes.c_void_p(ctypes.addressof(st)) 
+    ###print 'self.cipher_data in loadmembers',self.cipher_data
+    # check debug
+    attr=getattr(self, 'cipher_data')            
+    log.debug('Copied 0x%lx into %s (0x%lx)'%(ctypes.addressof(st), 'cipher_data', attr))            
+    log.debug('LOADED cipher_data as %s from 0x%lx (%s) into 0x%lx'%(struct, 
+                attr_obj_address, mappings.is_valid_address_value(attr_obj_address, struct), attr ))
+    from haystack.outputters import text
+    parser = text.RecursiveTextOutputter(mappings)                
+    log.debug('\t\t---------\n%s\t\t---------'%(parser.parse(st)))
     return True
-  
-  # c_void_p is a basic type.
-  attr_obj_address = self.cipher_data
-  memoryMap = mappings.is_valid_address_value( attr_obj_address, struct)
-  log.debug( "cipher_data CAST into : %s "%(struct) )
-  if not memoryMap:
-    log.warning('in CTX On second toughts, cipher_data seems to be at an invalid address. That should not happen (often).')
-    log.warning('%s addr:0x%lx size:0x%lx addr+size:0x%lx '%(mappings.is_valid_address_value(attr_obj_address), 
-                                attr_obj_address, ctypes.sizeof(struct), attr_obj_address+ctypes.sizeof(struct)))
-    return True
-  #ok
-  st = memoryMap.readStruct(attr_obj_address, struct )
-  mappings.keepRef(st, struct, attr_obj_address)
-  self.cipher_data = ctypes.c_void_p(ctypes.addressof(st)) 
-  ###print 'self.cipher_data in loadmembers',self.cipher_data
-  # check debug
-  attr=getattr(self, 'cipher_data')      
-  log.debug('Copied 0x%lx into %s (0x%lx)'%(ctypes.addressof(st), 'cipher_data', attr))      
-  log.debug('LOADED cipher_data as %s from 0x%lx (%s) into 0x%lx'%(struct, 
-        attr_obj_address, mappings.is_valid_address_value(attr_obj_address, struct), attr ))
-  from haystack.outputters import text
-  parser = text.RecursiveTextOutputter(mappings)        
-  log.debug('\t\t---------\n%s\t\t---------'%(parser.parse(st)))
-  return True
 
 def EVP_CIPHER_CTX_toPyObject(self):
-    d = super(EVP_CIPHER_CTX,self).toPyObject()
-    log.debug('Cast a EVP_CIPHER_CTX into PyObj')
-    # cast app_data or cipher_data to right struct
-    if bool(self.cipher_data):
-      cipher = self._mappings_.getRef( evp_cipher_st, getaddress(self.cipher) )
-      struct = getCipherDataType( cipher.nid)
-      if struct is not None:
-        # CAST c_void_p to struct
-        d.cipher_data = struct.from_address(self.cipher_data).toPyObject()
-    return d
+        d = super(EVP_CIPHER_CTX,self).toPyObject()
+        log.debug('Cast a EVP_CIPHER_CTX into PyObj')
+        # cast app_data or cipher_data to right struct
+        if bool(self.cipher_data):
+            cipher = self._mappings_.getRef( evp_cipher_st, getaddress(self.cipher) )
+            struct = getCipherDataType( cipher.nid)
+            if struct is not None:
+                # CAST c_void_p to struct
+                d.cipher_data = struct.from_address(self.cipher_data).toPyObject()
+        return d
 
 def EVP_CIPHER_CTX_getOIV(self):
-  return array2bytes(self.oiv)
+    return array2bytes(self.oiv)
 def EVP_CIPHER_CTX_getIV(self):
-  return array2bytes(self.iv)
+    return array2bytes(self.iv)
 
 EVP_CIPHER_CTX.loadMembers = EVP_CIPHER_CTX_loadMembers
 EVP_CIPHER_CTX.toPyObject = EVP_CIPHER_CTX_toPyObject
 EVP_CIPHER_CTX.getOIV = EVP_CIPHER_CTX_getOIV
-EVP_CIPHER_CTX.getIV  = EVP_CIPHER_CTX_getIV
+EVP_CIPHER_CTX.getIV    = EVP_CIPHER_CTX_getIV
 
 ##########
 
@@ -393,20 +393,20 @@ EVP_CIPHER_CTX.getIV  = EVP_CIPHER_CTX_getIV
 import sys,inspect
 src=sys.modules[__name__]
 for (name, klass) in inspect.getmembers(src, inspect.isclass):
-  #if klass.__module__ == src.__name__ or klass.__module__.endswith('%s_generated'%(src.__name__) ) :
-  #  #if not klass.__name__.endswith('_py'):
-  print klass, type(klass) #, len(klass.classRef)
+    #if klass.__module__ == src.__name__ or klass.__module__.endswith('%s_generated'%(src.__name__) ) :
+    #    #if not klass.__name__.endswith('_py'):
+    print klass, type(klass) #, len(klass.classRef)
 '''
 
 def printSizeof(mini=-1):
-  for (name,klass) in inspect.getmembers(sys.modules[__name__], inspect.isclass):
-    if type(klass) == type(ctypes.Structure) and klass.__module__.endswith('%s_generated'%(__name__) ) :
-      if ctypes.sizeof(klass) > mini:
-        print '%s:'%name,ctypes.sizeof(klass)
-  #print 'SSLCipherSuiteInfo:',ctypes.sizeof(SSLCipherSuiteInfo)
-  #print 'SSLChannelInfo:',ctypes.sizeof(SSLChannelInfo)
+    for (name,klass) in inspect.getmembers(sys.modules[__name__], inspect.isclass):
+        if type(klass) == type(ctypes.Structure) and klass.__module__.endswith('%s_generated'%(__name__) ) :
+            if ctypes.sizeof(klass) > mini:
+                print '%s:'%name,ctypes.sizeof(klass)
+    #print 'SSLCipherSuiteInfo:',ctypes.sizeof(SSLCipherSuiteInfo)
+    #print 'SSLChannelInfo:',ctypes.sizeof(SSLChannelInfo)
 
 
 if __name__ == '__main__':
-  printSizeof()
+    printSizeof()
 
