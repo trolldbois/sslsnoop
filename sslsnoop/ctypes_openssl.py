@@ -126,15 +126,16 @@ BF_KEY.fromPyObj = BF_KEY_fromPyObj
 ''' aes.h:78 '''
 ####### AES_KEY #######
 def AES_KEY_getKey(self):
-    #return array2bytes(self.rd_key)
-    return ','.join(["0x%lx"%key for key in self.rd_key])
+    #FIXME
+    return array2bytes(self.rd_key)
+    #return ','.join(["0x%lx"%key for key in self.rd_key])
 def AES_KEY_getRounds(self):
     return self.rounds
 def AES_KEY_fromPyObj(self,pyobj):
     #copy rd_key
-    self.rd_key=bytes2array(pyobj.rd_key,ctypes.c_ulong)
+    self.rd_key = bytes2array(pyobj.rd_key,ctypes.c_ulong)
     #copy rounds
-    self.rounds=pyobj.rounds
+    self.rounds = pyobj.rounds
     return self
 AES_KEY.getKey = AES_KEY_getKey
 AES_KEY.getRounds = AES_KEY_getRounds
