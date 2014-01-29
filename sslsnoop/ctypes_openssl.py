@@ -11,7 +11,7 @@ import logging, sys
 ''' insure ctypes basic types are subverted '''
 from haystack import model
 
-from haystack.utils import getaddress,array2bytes,bytes2array
+from haystack.utils import get_pointee_address,array2bytes,bytes2array
 from haystack.constraints import RangeValue,NotNull
 
 import ctypes_openssl_generated as gen
@@ -157,7 +157,7 @@ def BIGNUM_loadMembers(self, mappings, maxDepth):
         log.debug('BigNUm tries to load members when its not validated')
         return False
     # Load and memcopy d / BN_ULONG *
-    attr_obj_address = getaddress(self.d)
+    attr_obj_address = get_pointee_address(self.d)
     if not bool(self.d):
         log.debug('BIGNUM has a Null pointer d')
         return True
@@ -169,7 +169,7 @@ def BIGNUM_loadMembers(self, mappings, maxDepth):
     return True
 
 def BIGNUM_get_d(self):
-    return self._mapping_.getRef( model.getSubtype(self.d), getaddress(self.d))
+    return self._mapping_.getRef( model.getSubtype(self.d), get_pointee_address(self.d))
 
 def BIGNUM_isValid(self,mappings):
     if ( self.dmax < 0 or self.top < 0 or self.dmax < self.top ):
@@ -177,7 +177,7 @@ def BIGNUM_isValid(self,mappings):
     return LoadableMembersStructure.isValid(self,mappings)
 
 def BIGNUM___str__(self):
-    d= getaddress(self.d)
+    d= get_pointee_address(self.d)
     return ("BN { d=0x%lx, top=%d, dmax=%d, neg=%d, flags=%d }"%
                             (d, self.top, self.dmax, self.neg, self.flags) )
 
@@ -329,7 +329,7 @@ def EVP_CIPHER_CTX_loadMembers(self, mappings, maxDepth):
         memcopy( self.cipher_data, cipher_data_addr, self.cipher.ctx_size)
         # cast possible on cipher.nid -> cipherType
     '''
-    cipher = mappings.getRef( evp_cipher_st, getaddress(self.cipher) )
+    cipher = mappings.getRef( evp_cipher_st, get_pointee_address(self.cipher) )
     if cipher.nid == 0: # NID_undef, not openssl doing
         log.info('The cipher is home made - the cipher context data should be application dependant (app_data)')
         return True
@@ -369,7 +369,7 @@ def EVP_CIPHER_CTX_toPyObject(self):
         log.debug('Cast a EVP_CIPHER_CTX into PyObj')
         # cast app_data or cipher_data to right struct
         if bool(self.cipher_data):
-            cipher = self._mappings_.getRef( evp_cipher_st, getaddress(self.cipher) )
+            cipher = self._mappings_.getRef( evp_cipher_st, get_pointee_address(self.cipher) )
             struct = getCipherDataType( cipher.nid)
             if struct is not None:
                 # CAST c_void_p to struct

@@ -11,7 +11,7 @@ import sys
 
 from haystack import model
 from haystack import utils
-from haystack.utils import pointer2bytes,array2bytes,bytes2array,getaddress
+from haystack.utils import pointer2bytes,array2bytes,bytes2array,get_pointee_address
 from haystack.constraints import RangeValue,NotNull,IgnoreMember
 from ctypes_openssl import EVP_CIPHER_CTX, EVP_MD, HMAC_CTX
 from ctypes_openssl import AES_KEY, RC4_KEY, CAST_KEY, BF_KEY, DES_key_schedule
@@ -120,7 +120,7 @@ class Cipher(OpenSSHStruct):
     'name': NotNull,
     }
     def getName(self, mappings):
-        ciphername = mappings.getRef(ctypes.CString, getaddress(self.name.ptr) )
+        ciphername = mappings.getRef(ctypes.CString, get_pointee_address(self.name.ptr) )
         if ciphername is None:
             raise ValueError('ciphername not in cache')
         return ciphername
@@ -148,8 +148,8 @@ class CipherContext(OpenSSHStruct):
             return False
         #log.debug('evp        app_data        attr_obj_address=0x%lx'%(self.evp.app_data) )
         #log.debug('evp        cipher_data attr_obj_address=0x%lx'%(self.evp.cipher_data) )    ##none
-        cipher = mappings.getRef( Cipher, getaddress(self.cipher) )
-        ciphername = mappings.getRef(ctypes.CString, getaddress(cipher.name.ptr) )
+        cipher = mappings.getRef( Cipher, get_pointee_address(self.cipher) )
+        ciphername = mappings.getRef(ctypes.CString, get_pointee_address(cipher.name.ptr) )
         # cast evp.app_data into a valid struct
         if ciphername in self.cipherContexts:
             # evp.cipher.nid should be 0
@@ -157,7 +157,7 @@ class CipherContext(OpenSSHStruct):
             if (struct is None):
                 log.warning("Unsupported cipher %s"%(ciphername))
                 return True
-            attr_obj_address = getaddress(self.evp.app_data)
+            attr_obj_address = get_pointee_address(self.evp.app_data)
             memoryMap = mappings.is_valid_address_value(attr_obj_address, struct)
             log.debug( "CipherContext CAST app_data into : %s "%( struct) )
             if not memoryMap:
@@ -193,7 +193,7 @@ class CipherContext(OpenSSHStruct):
                 log.warning("%s"%(parser.parse(cipher)))
                 return None
             log.debug('CAST evp.app_data Into %s'%(struct))
-            attr_obj_address = getaddress(self.evp.app_data)
+            attr_obj_address = get_pointee_address(self.evp.app_data)
             st = mappings.getRef(struct, attr_obj_address)
             #st = struct.from_address(attr)
             log.debug('app_data value is : 0x%lx'%(attr_obj_address))
@@ -202,7 +202,7 @@ class CipherContext(OpenSSHStruct):
         return None
     
     def getCipher(self, mappings):
-        cipher = mappings.getRef( Cipher, getaddress(self.cipher))
+        cipher = mappings.getRef( Cipher, get_pointee_address(self.cipher))
         return cipher
         
 
@@ -222,7 +222,7 @@ class Enc(OpenSSHStruct):
             return False
         # Load and memcopy key and iv
         log.debug('Enc Memcopying a Key with %d bytes'%self.key_len)
-        attr_obj_address = getaddress(self.key)
+        attr_obj_address = get_pointee_address(self.key)
         log.debug('got key @%x '%(attr_obj_address))
         memoryMap = mappings.is_valid_address_value( attr_obj_address)
         # DEBUG - I do question the buffer_copy.
@@ -235,7 +235,7 @@ class Enc(OpenSSHStruct):
         mappings.keepRef(key_contents, utils.get_subtype(self.key), attr_obj_address)
         
         log.debug('Enc Memcopying a IV with %d bytes'%( self.block_size) )
-        attr_obj_address=getaddress(self.iv)
+        attr_obj_address=get_pointee_address(self.iv)
         memoryMap = mappings.is_valid_address_value(attr_obj_address)
         log.debug('make array ')
         array=(ctypes.c_ubyte*self.block_size).from_buffer_copy(memoryMap.readArray(attr_obj_address, ctypes.c_ubyte,self.block_size))
@@ -249,10 +249,10 @@ class Enc(OpenSSHStruct):
         return True
     def getKey(self, mappings):
         #return pointer2bytes(self.key, self.key_len)
-        return mappings.array2bytes(mappings.getRef(mappings.get_subtype(self.key), getaddress(self.key)) )
+        return mappings.array2bytes(mappings.getRef(mappings.get_subtype(self.key), get_pointee_address(self.key)) )
     def getIV(self, mappings):
-        #return pointer2bytes(mappings.getRef(ctypes.Array, getaddress(self.iv)), self.block_size) 
-        return mappings.array2bytes(mappings.getRef(mappings.get_subtype(self.iv), getaddress(self.iv)) )
+        #return pointer2bytes(mappings.getRef(ctypes.Array, get_pointee_address(self.iv)), self.block_size) 
+        return mappings.array2bytes(mappings.getRef(mappings.get_subtype(self.iv), get_pointee_address(self.iv)) )
 
     def toPyObject(self):
         d=OpenSSHStruct.toPyObject(self)
@@ -342,7 +342,7 @@ class Mac(OpenSSHStruct):
             return False
         # Load and memcopy key 
         log.debug('Memcopying a Key with %d bytes'%self.key_len)
-        attr_obj_address=getaddress(self.key)
+        attr_obj_address=get_pointee_address(self.key)
         memoryMap = mappings.is_valid_address_value( attr_obj_address)
         array=(ctypes.c_ubyte*self.key_len).from_buffer_copy(memoryMap.readArray(attr_obj_address, ctypes.c_ubyte, self.key_len))
         mappings.keepRef(array, utils.get_subtype(self.key), attr_obj_address)
@@ -352,7 +352,7 @@ class Mac(OpenSSHStruct):
         return True
     def getKey(self):
         #return pointer2bytes(self.key,self.key_len)
-        return utils.array2bytes( mappings.getRef( utils.get_subtype(self.key), getaddress(self.key)) )
+        return utils.array2bytes( mappings.getRef( utils.get_subtype(self.key), get_pointee_address(self.key)) )
 
     def toPyObject(self):
         d=OpenSSHStruct.toPyObject(self)
