@@ -7,7 +7,8 @@ sslsnoop.egg-info/
 structures/
 *~
 *.pyc
-test/*
+test/data/
+test/dumps/
 *.xml
 log.*
 log
